@@ -2,67 +2,102 @@
 
 import { cn } from "@/lib/utils";
 import { triggerSync } from "@/app/actions/sync";
-import { RefreshCw, Search, User } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner"; // Assuming I'll add sonner later
+import { 
+  RefreshCw, 
+  Search, 
+  User, 
+  Sun, 
+  Moon, 
+  Bell,
+  Command
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
 export function Header() {
   const [isSyncing, setIsSyncing] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatch
+  useEffect(() => setMounted(true), []);
 
   const handleSync = async () => {
     setIsSyncing(true);
+    const toastId = toast.loading("Syncing with WorkGuru...");
     try {
       const result = await triggerSync();
       if (result.success) {
-        alert("Sync completed successfully!"); // Fallback until sonner is added
+        toast.success("Sync completed successfully!", { id: toastId });
       } else {
-        alert(`Sync failed: ${result.error}`);
+        toast.error(`Sync failed: ${result.error}`, { id: toastId });
       }
     } catch (error) {
-      alert("An unexpected error occurred during sync.");
+      toast.error("An unexpected error occurred during sync.", { id: toastId });
     } finally {
       setIsSyncing(false);
     }
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10 shadow-sm">
-      <div className="flex items-center gap-4 flex-1">
-         <div className="relative max-w-md w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+    <header className="h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 transition-all duration-300 w-full">
+      <div className="flex items-center gap-6 flex-1 max-w-2xl">
+         <div className="relative w-full group">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
+            </div>
             <input 
               type="text" 
-              placeholder="Search projects, clients..." 
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none transition-all"
+              placeholder="Search anything..." 
+              className="w-full pl-11 pr-12 py-2.5 bg-slate-100/50 dark:bg-slate-800/40 border border-transparent focus:border-brand/20 dark:focus:border-brand/30 rounded-2xl text-[13px] font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-brand/5 outline-none transition-all placeholder:text-slate-400"
             />
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] text-slate-400 font-black opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none shadow-sm">
+               <Command className="h-2.5 w-2.5" /> K
+            </div>
          </div>
       </div>
       
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 ml-6">
         <Button 
           variant="outline" 
           size="sm" 
           onClick={handleSync}
           disabled={isSyncing}
-          className="gap-2 border-slate-200 text-slate-600 hover:text-brand hover:border-brand transition-colors"
+          className="gap-2.5 h-10 px-5 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-brand/40 dark:hover:border-brand/40 bg-white dark:bg-slate-900 shadow-sm transition-all active:scale-[0.98]"
         >
-          <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-          {isSyncing ? "Syncing..." : "Sync Now"}
+          <RefreshCw className={cn("h-3.5 w-3.5 text-slate-500", isSyncing && "animate-spin text-brand")} />
+          <span className="text-xs font-black uppercase tracking-widest">{isSyncing ? "Syncing" : "Refresh"}</span>
         </Button>
-        <div className="h-8 w-px bg-slate-200" />
-        <Button variant="ghost" size="icon" className="text-slate-600">
-          <User className="h-5 w-5" />
-        </Button>
+
+        <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
+
+        <div className="flex items-center gap-1.5">
+          <button 
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+          >
+            {mounted && (theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />)}
+          </button>
+
+          <button className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-all relative border border-transparent">
+            <Bell className="h-4.5 w-4.5" />
+            <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-brand border-2 border-white dark:border-slate-900" />
+          </button>
+        </div>
+
+        <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:ring-4 hover:ring-brand/10 hover:border-brand/30 transition-all ml-1 overflow-hidden group">
+          <User className="h-5 w-5 text-slate-400 group-hover:text-brand transition-colors" />
+        </div>
       </div>
     </header>
   );
 }
 
-// Minimal Button component if shadcn is not fully ready
 function Button({ className, variant, size, ...props }: any) {
   const variants: any = {
-    outline: "border border-slate-200 bg-transparent hover:bg-slate-100",
-    ghost: "hover:bg-slate-100",
+    outline: "border border-slate-200 dark:border-slate-700 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100",
+    ghost: "hover:bg-slate-100 dark:hover:bg-slate-800",
   };
   const sizes: any = {
     sm: "px-3 py-1.5 text-xs",
@@ -71,7 +106,7 @@ function Button({ className, variant, size, ...props }: any) {
   return (
     <button 
       className={cn(
-        "inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-50", 
+        "inline-flex items-center justify-center rounded-md font-medium transition-all active:scale-[0.98] disabled:opacity-50", 
         variants[variant || "outline"],
         sizes[size || "sm"],
         className

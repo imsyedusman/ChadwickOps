@@ -13,15 +13,45 @@ export class SyncService {
   async runFullSync() {
     const startTime = new Date();
     try {
-      console.log('Starting full sync...');
-      await this.syncClients();
-      await this.syncProjects();
-      await this.syncTimeEntries();
+      console.log('Starting full sync with validation...');
       
+      const remoteClients = await this.client.getClients();
+      await this.syncClients(remoteClients);
+
+      const remoteProjects = await this.client.getProjects();
+      await this.syncProjects(remoteProjects);
+
+      const remoteEntries = await this.client.getTimeEntries();
+      await this.syncTimeEntries(remoteEntries);
+      
+      // Perform Sanity Check / Validation
+      const localData = await db.select({
+        count: sql<number>`count(*)`,
+        totalBudget: sql<number>`sum(${projects.budgetHours})`,
+        totalActual: sql<number>`sum(${projects.actualHours})`,
+      }).from(projects);
+
+      const remoteTotalBudget = remoteProjects.reduce((acc: number, p: any) => acc + (p.EstimatedHours || 0), 0);
+      const remoteTotalActual = remoteProjects.reduce((acc: number, p: any) => acc + (p.ActualHours || 0), 0);
+      
+      const countMismatch = Number(localData[0].count) !== remoteProjects.length;
+      const hoursMismatch = Math.abs(Number(localData[0].totalBudget) - remoteTotalBudget) > 0.1 || 
+                           Math.abs(Number(localData[0].totalActual) - remoteTotalActual) > 0.1;
+
+      const status = (countMismatch || hoursMismatch) ? 'WARNING' : 'SUCCESS';
+      const details = [
+        `Sync completed in ${Date.now() - startTime.getTime()}ms.`,
+        `Projects: Remote=${remoteProjects.length}, Local=${localData[0].count}.`,
+        `Budget Hours: Remote=${remoteTotalBudget.toFixed(1)}, Local=${Number(localData[0].totalBudget).toFixed(1)}.`,
+        `Actual Hours: Remote=${remoteTotalActual.toFixed(1)}, Local=${Number(localData[0].totalActual).toFixed(1)}.`
+      ].join(' ');
+
       await db.insert(syncLogs).values({
-        status: 'SUCCESS',
-        details: `Full sync completed in ${Date.now() - startTime.getTime()}ms`,
+        status,
+        details,
       });
+
+      console.log('Sync result:', status, details);
     } catch (error) {
       console.error('Sync failed:', error);
       await db.insert(syncLogs).values({
@@ -32,8 +62,7 @@ export class SyncService {
     }
   }
 
-  private async syncClients() {
-    const remoteClients = await this.client.getClients();
+  private async syncClients(remoteClients: any[]) {
     for (const remote of remoteClients) {
       await db.insert(clients).values({
         workguruId: remote.ClientID.toString(),
@@ -45,8 +74,7 @@ export class SyncService {
     }
   }
 
-  private async syncProjects() {
-    const remoteProjects = await this.client.getProjects();
+  private async syncProjects(remoteProjects: any[]) {
     for (const remote of remoteProjects) {
       // Find local client ID
       const localClient = await db.query.clients.findFirst({
@@ -55,16 +83,22 @@ export class SyncService {
 
       if (!localClient) continue;
 
+      // Recalculate derived fields on every sync to prevent drift
+      const budgetHours = remote.EstimatedHours || 0;
+      const actualHours = remote.ActualHours || 0;
+      const remainingHours = Math.max(0, budgetHours - actualHours);
+      const progressPercent = budgetHours > 0 ? (actualHours / budgetHours) * 100 : 0;
+
       const projectData = {
         workguruId: remote.ProjectID.toString(),
         projectNumber: remote.ProjectNumber,
         name: remote.ProjectName,
         clientId: localClient.id,
         rawStatus: remote.Status || 'UNKNOWN',
-        budgetHours: remote.EstimatedHours || 0,
-        actualHours: remote.ActualHours || 0,
-        remainingHours: (remote.EstimatedHours || 0) - (remote.ActualHours || 0),
-        progressPercent: remote.EstimatedHours > 0 ? (remote.ActualHours / remote.EstimatedHours) * 100 : 0,
+        budgetHours,
+        actualHours,
+        remainingHours,
+        progressPercent,
         deliveryDate: remote.DueDate ? new Date(remote.DueDate) : null,
         updatedAt: new Date(),
       };
@@ -104,8 +138,7 @@ export class SyncService {
     }
   }
 
-  private async syncTimeEntries() {
-    const remoteEntries = await this.client.getTimeEntries();
+  private async syncTimeEntries(remoteEntries: any[]) {
     for (const remote of remoteEntries) {
       const localProject = await db.query.projects.findFirst({
         where: eq(projects.workguruId, remote.ProjectID.toString()),
@@ -113,7 +146,6 @@ export class SyncService {
 
       if (!localProject) continue;
 
-      // Task is optional in my schema
       let localTaskId = null;
       if (remote.TaskID) {
         const localTask = await db.query.tasks.findFirst({

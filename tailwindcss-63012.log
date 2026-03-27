@@ -1,0 +1,66 @@
+2026-03-27T13:35:02.922360Z  INFO tailwindcss_oxide::scanner: Provided sources:
+2026-03-27T13:35:02.922530Z  INFO tailwindcss_oxide::scanner: Source: PublicSourceEntry { base: "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard", pattern: "**/*", negated: false }
+2026-03-27T13:35:02.922867Z  INFO tailwindcss_oxide::scanner: Optimized sources:
+2026-03-27T13:35:02.922905Z  INFO tailwindcss_oxide::scanner: Source: Auto { base: "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard" }
+2026-03-27T13:35:02.926231Z  INFO discover_sources: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.926301Z  INFO discover_sources:walk_synchronous: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.933133Z  INFO discover_sources:walk_synchronous: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.933642Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\AGENTS.md"
+2026-03-27T13:35:02.933696Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\actions\\sync.ts"
+2026-03-27T13:35:02.933790Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\ARCHITECTURE.md"
+2026-03-27T13:35:02.933803Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\prisma\\schema.prisma"
+2026-03-27T13:35:02.933819Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\admin\\page.tsx"
+2026-03-27T13:35:02.933900Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\CLAUDE.md"
+2026-03-27T13:35:02.933898Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\next.svg"
+2026-03-27T13:35:02.933918Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\file.svg"
+2026-03-27T13:35:02.933934Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\layout.tsx"
+2026-03-27T13:35:02.933967Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\drizzle.config.ts"
+2026-03-27T13:35:02.933997Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\components.json"
+2026-03-27T13:35:02.934012Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\vercel.svg"
+2026-03-27T13:35:02.934025Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\globe.svg"
+2026-03-27T13:35:02.934032Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\logs\\page.tsx"
+2026-03-27T13:35:02.934077Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\eslint.config.mjs"
+2026-03-27T13:35:02.934086Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\next.config.ts"
+2026-03-27T13:35:02.934106Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\db\\schema.ts"
+2026-03-27T13:35:02.934137Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\window.svg"
+2026-03-27T13:35:02.934168Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\page.tsx"
+2026-03-27T13:35:02.934176Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\sync.ts"
+2026-03-27T13:35:02.934181Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\package.json"
+2026-03-27T13:35:02.934190Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\public\\logo.svg"
+2026-03-27T13:35:02.934222Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\crypto.ts"
+2026-03-27T13:35:02.934310Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\components\\layout\\sidebar.tsx"
+2026-03-27T13:35:02.934337Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\components\\layout\\header.tsx"
+2026-03-27T13:35:02.934359Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\utils.ts"
+2026-03-27T13:35:02.934385Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\postcss.config.mjs"
+2026-03-27T13:35:02.934397Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\workguru.ts"
+2026-03-27T13:35:02.934411Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\risk.ts"
+2026-03-27T13:35:02.934431Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\components\\theme-provider.tsx"
+2026-03-27T13:35:02.934431Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\tailwind.config.ts"
+2026-03-27T13:35:02.934229Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\README.md"
+2026-03-27T13:35:02.934466Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\tsconfig.json"
+2026-03-27T13:35:02.934430Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\actions\\project.ts"
+2026-03-27T13:35:02.934477Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\db\\index.ts"
+2026-03-27T13:35:02.934498Z  INFO tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\lib\\stages.ts"
+2026-03-27T13:35:02.934691Z  INFO discover_sources: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.934715Z  INFO extract_candidates: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.934725Z  INFO extract_candidates:parse_all_blobs: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.934738Z  INFO extract_candidates:parse_all_blobs:extract: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.936425Z  INFO extract_candidates:parse_all_blobs:extract: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.936473Z  INFO extract_candidates:parse_all_blobs: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.936487Z  INFO extract_candidates:read_all_files: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.936494Z  INFO extract_candidates:read_all_files: tailwindcss_oxide::scanner: Reading 1 file(s)
+2026-03-27T13:35:02.936666Z  INFO extract_candidates:read_all_files: tailwindcss_oxide::scanner: Reading "D:\\Work\\1. Projects\\3. My Projects\\Chadwick\\WorkGuru Migration\\05 - WG Dashboard\\src\\app\\globals.css"
+2026-03-27T13:35:02.936756Z  INFO extract_candidates:read_all_files: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.936775Z  INFO extract_candidates:extract_css_variables: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.936783Z  INFO extract_candidates:extract_css_variables:extract: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.936923Z  INFO extract_candidates:extract_css_variables:extract: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.936938Z  INFO extract_candidates:extract_css_variables: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.937291Z  INFO extract_candidates: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.938116Z  INFO get_files: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.938142Z  INFO get_files:discover_sources: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.938151Z  INFO get_files:discover_sources: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.938286Z  INFO get_files: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.939024Z  INFO get_globs: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.939042Z  INFO get_globs:discover_sources: tailwindcss_oxide::scanner: enter
+2026-03-27T13:35:02.939050Z  INFO get_globs:discover_sources: tailwindcss_oxide::scanner: exit
+2026-03-27T13:35:02.945275Z  INFO get_globs: tailwindcss_oxide::scanner: exit

@@ -1,22 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Albert_Sans } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { ThemeProvider } from "@/components/theme-provider";
+import { SidebarProvider } from "@/components/layout/sidebar-provider";
+import { Toaster } from "sonner";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const albertSans = Albert_Sans({
+  variable: "--font-albert-sans",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "Chadwick Operations Dashboard",
-  description: "WorkGuru Integration & Production Planning",
+  title: "WorkGuru Operations Dashboard | Chadwick Switchboards",
+  description: "Real-time production planning and delivery risk management.",
 };
 
 export default function RootLayout({
@@ -25,17 +24,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <Sidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <Header />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-              {children}
-            </main>
-          </div>
-        </div>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${albertSans.variable} antialiased font-sans flex items-stretch min-h-screen bg-background text-foreground transition-colors duration-300`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SidebarProvider>
+            <div className="grid grid-cols-[var(--sidebar-width)_1fr] h-screen w-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out">
+              <Sidebar />
+              <div className="flex flex-col h-full overflow-hidden relative border-l border-slate-200/60 dark:border-slate-800/60">
+                <Header />
+                <main className="flex-1 overflow-y-auto scroll-pt-16">
+                  <div className="max-w-[1600px] mx-auto p-6 md:p-8 lg:p-10">
+                    {children}
+                  </div>
+                </main>
+              </div>
+            </div>
+            <Toaster position="top-right" closeButton richColors />
+          </SidebarProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -114,3 +114,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   tasks: many(tasks),
   timeEntries: many(timeEntries),
 }));
+
+export const stageMappingsRelations = relations(stageMappings, ({ one }) => ({
+  displayStage: one(displayStages, { fields: [stageMappings.displayStageId], references: [displayStages.id] }),
+}));
