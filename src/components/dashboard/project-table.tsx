@@ -92,9 +92,21 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             aVal = a.name || "";
             bVal = b.name || "";
             break;
+          case 'budgetHours':
+            aVal = Number(a.budgetHours) || 0;
+            bVal = Number(b.budgetHours) || 0;
+            break;
           case 'remainingHours':
-            aVal = a.remainingHours || 0;
-            bVal = b.remainingHours || 0;
+            aVal = Number(a.remainingHours) || 0;
+            bVal = Number(b.remainingHours) || 0;
+            break;
+          case 'actualHours':
+            aVal = Number(a.actualHours) || 0;
+            bVal = Number(b.actualHours) || 0;
+            break;
+          case 'progressPercent':
+            aVal = Number(a.progressPercent) || 0;
+            bVal = Number(b.progressPercent) || 0;
             break;
           case 'status':
             aVal = a.rawStatus || "";
@@ -227,14 +239,20 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
               >
                 <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" /></div>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help">
+              <th 
+                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors"
+                onClick={() => handleSort('budgetHours')}
+              >
                 <Tooltip content="Calculated from total Task quantity across project">
-                  <div className="flex items-center justify-center">Budget</div>
+                  <div className="flex items-center justify-center">Budget <SortIcon column="budgetHours" /></div>
                 </Tooltip>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help">
+              <th 
+                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors"
+                onClick={() => handleSort('actualHours')}
+              >
                 <Tooltip content="Aggregated from ALL logged timesheets (Draft, Submitted, Approved)">
-                  <div className="flex items-center justify-center">Actual</div>
+                  <div className="flex items-center justify-center">Actual <SortIcon column="actualHours" /></div>
                 </Tooltip>
               </th>
               <th 
@@ -242,11 +260,14 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                 onClick={() => handleSort('remainingHours')}
               >
                 <Tooltip content="Budget - Actual Hours">
-                  <div className="flex items-center justify-center">Rem. <SortIcon column="remainingHours" /></div>
+                  <div className="flex items-center justify-center">REM <SortIcon column="remainingHours" /></div>
                 </Tooltip>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
-                %
+              <th 
+                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
+                onClick={() => handleSort('progressPercent')}
+              >
+                <div className="flex items-center justify-center">% <SortIcon column="progressPercent" /></div>
               </th>
             </tr>
           </thead>
@@ -272,15 +293,63 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                               <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
                             </a>
                           </div>
-                          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
+                            
+                            {/* Operational Flags */}
+                            {(() => {
+                              const budget = Number(project.budgetHours) || 0;
+                              const actual = Number(project.actualHours) || 0;
+                              const progress = Number(project.progressPercent) || 0;
+                              const hasUnapproved = project.hasUnapprovedHours === 1;
+                              
+                              let primaryFlag = null;
+                              if (actual > budget && budget > 0) {
+                                primaryFlag = <span className="text-[9px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-500/20 uppercase tracking-tighter shrink-0">Over Budget</span>;
+                              } else if (progress >= 80 && actual <= budget && budget > 0) {
+                                primaryFlag = <span className="text-[9px] font-bold text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-500/20 uppercase tracking-tighter shrink-0">High Usage</span>;
+                              } else if (actual === 0 && budget > 0) {
+                                primaryFlag = <span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-500/10 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-500/20 uppercase tracking-tighter shrink-0">Not Started</span>;
+                              }
+
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  {primaryFlag}
+                                  {hasUnapproved && (
+                                    <Tooltip content={`Includes unapproved timesheets (${project.approvedHours}h approved)`}>
+                                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-100/40 uppercase tracking-tighter shrink-0 flex items-center gap-1">
+                                        <AlertTriangle className="h-2 w-2" />
+                                        Unapproved
+                                      </span>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                         
                         {/* Stale Data Indicator */}
                         {(() => {
-                           const isStale = project.lastDeepSyncAt === null || (project.remoteUpdatedAt && new Date(project.remoteUpdatedAt) > new Date(project.lastDeepSyncAt));
+                           const now = new Date();
+                           const sixHoursAgo = new Date(now.getTime() - (6 * 60 * 60 * 1000));
+                           const isStale = !project.lastDeepSyncAt || new Date(project.lastDeepSyncAt) < sixHoursAgo;
+                           
                            if (!isStale) return null;
+
+                           const lastSyncedText = project.lastDeepSyncAt 
+                             ? new Date(project.lastDeepSyncAt).toLocaleString('en-AU', {
+                                 timeZone: 'Australia/Sydney',
+                                 day: 'numeric',
+                                 month: 'short',
+                                 hour: 'numeric',
+                                 minute: '2-digit',
+                                 hour12: true,
+                               })
+                             : "Never";
+
                            return (
-                             <Tooltip content="Data is not recently refreshed relative to remote changes">
+                             <Tooltip content={`Last synced: ${lastSyncedText} (Sydney)`}>
                                <span className="text-[9px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-500/20 uppercase tracking-tighter">Stale</span>
                              </Tooltip>
                            );
@@ -320,18 +389,12 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
-                      {project.hasUnapprovedHours === 1 && (
-                        <Tooltip content={`Includes unapproved timesheets (${project.approvedHours}h approved)`}>
-                          <AlertTriangle className="h-3 w-3 text-amber-500" />
-                        </Tooltip>
-                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={cn(
                       "text-[12px] font-bold tabular-nums",
-                      project.remainingHours <= 5 && project.remainingHours > 0 ? "text-amber-500" : 
-                      project.remainingHours <= 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
+                      project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
                     )}>
                       {project.remainingHours}h
                     </span>
@@ -340,13 +403,15 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     <div className="flex items-center gap-2 justify-center min-w-[80px]">
                       <span className={cn(
                         "text-[10px] font-bold tabular-nums",
-                        project.progressPercent > 100 ? "text-red-500" : "text-brand"
+                        project.progressPercent >= 100 ? "text-red-500" : 
+                        project.progressPercent >= 80 ? "text-orange-500" : "text-brand"
                       )}>{Math.round(project.progressPercent)}%</span>
                       <div className="w-12 bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
                         <div 
                           className={cn(
                             "h-full rounded-full transition-all duration-1000",
-                            project.progressPercent > 100 ? "bg-red-500" : "bg-brand"
+                            project.progressPercent >= 100 ? "bg-red-500" : 
+                            project.progressPercent >= 80 ? "bg-orange-500" : "bg-brand"
                           )}
                           style={{ width: `${Math.min(project.progressPercent, 100)}%` }}
                         />
@@ -357,7 +422,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
               ))
             ) : (
               <tr>
-                 <td colSpan={10} className="px-6 py-20 text-center">
+                 <td colSpan={9} className="px-6 py-20 text-center">
                    <div className="flex flex-col items-center gap-3">
                       <div className="h-12 w-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-800">
                          <Search className="h-5 w-5 text-slate-300" />

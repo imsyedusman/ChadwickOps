@@ -94,7 +94,7 @@ export class SyncService {
       // Progression Sync Logic
       let deepSyncStats;
       if (mode === 'QUICK') {
-        deepSyncStats = await this.runDeepSyncQueue(15, true); // 15 most recent
+        deepSyncStats = await this.runDeepSyncQueue(15); // 15 most recent/stale
       } else {
         deepSyncStats = await this.runFullDeepSyncCycle(); // All batches sequentially or resumable
       }
@@ -127,7 +127,7 @@ export class SyncService {
     let offset = config ? (config.value as { offset: number }).offset : 0;
     console.log(`[Sync] Resuming Full Sync at offset ${offset}`);
 
-    const stats = await this.runDeepSyncQueue(20, false, offset); // Process batch of 20
+    const stats = await this.runDeepSyncQueue(20, offset); // Process batch of 20
     
     const newOffset = offset + stats.processedCount;
     const totalActive = await db.select({ count: sql<number>`count(*)` })
@@ -235,14 +235,19 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} base projects.`);
   }
 
-  private async runDeepSyncQueue(limit = 15, prioritizeRecent = true, offset = 0) {
-    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, RecentFirst: ${prioritizeRecent}, Offset: ${offset})...`);
+  private async runDeepSyncQueue(limit = 15, offset = 0) {
+    const STALE_THRESHOLD_HOURS = 6;
+    const now = new Date();
+    const staleTime = new Date(now.getTime() - (STALE_THRESHOLD_HOURS * 60 * 60 * 1000));
+
+    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, Offset: ${offset}). Prioritizing projects not synced for >${STALE_THRESHOLD_HOURS}h.`);
     
     const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
     
+    // Prioritize: 1. Never synced (null), 2. Oldest sync first
     const projectsToDeepSync = await db.select().from(projects)
       .where(conditions)
-      .orderBy(...(prioritizeRecent ? [desc(projects.remoteUpdatedAt)] : [asc(projects.lastDeepSyncAt)]))
+      .orderBy(asc(projects.lastDeepSyncAt))
       .limit(limit)
       .offset(offset);
 
