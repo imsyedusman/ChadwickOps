@@ -94,47 +94,71 @@ export class SyncService {
   private async syncProjects(remoteProjects: any[]) {
     let count = 0;
     for (const remote of remoteProjects) {
-      const workguruId = (remote.id || remote.ProjectID)?.toString();
-      const projectNumber = remote.projectNumber || remote.ProjectNumber;
-      const name = remote.name || remote.ProjectName;
-      const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
+        // Detailed mapping based on API response
+        // workguruId MUST be the numeric ID for API calls
+        const workguruId = (remote.id || remote.ProjectID)?.toString();
+        const projectNumber = remote.projectNo || remote.ProjectNumber || 'N/A';
+        const name = remote.projectName || remote.ProjectName || remote.name;
+        const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
+        const status = remote.status || remote.Status || 'UNKNOWN';
+        const dueDate = remote.dueDate || remote.DueDate ? new Date(remote.dueDate || remote.DueDate) : null;
 
-      if (!workguruId || !name || !remoteClientId) continue;
+        if (!workguruId || !name || !remoteClientId) {
+            console.log(`[Sync] Skipping project: missing critical fields. ID=${workguruId}, Name=${name}, ClientID=${remoteClientId}`);
+            continue;
+        }
 
-      const localClient = await db.query.clients.findFirst({
-        where: eq(clients.workguruId, remoteClientId),
-      });
+        const localClient = await db.query.clients.findFirst({
+            where: eq(clients.workguruId, remoteClientId),
+        });
 
-      if (!localClient) continue;
+        if (!localClient) {
+            console.log(`[Sync] Skipping project ${workguruId}: Local client ${remoteClientId} not found.`);
+            continue;
+        }
 
-      const budgetHours = remote.estimatedHours || remote.EstimatedHours || 0;
-      const actualHours = remote.actualHours || remote.ActualHours || 0;
-      const remainingHours = Math.max(0, budgetHours - actualHours);
-      const progressPercent = budgetHours > 0 ? (actualHours / budgetHours) * 100 : 0;
+        const budgetHours = remote.estimatedHours || remote.EstimatedHours || 0;
+        const actualHours = remote.actualHours || remote.ActualHours || 0;
+        const remainingHours = Math.max(0, budgetHours - actualHours);
+        const progressPercent = budgetHours > 0 ? (actualHours / budgetHours) * 100 : 0;
 
-      const projectData = {
-        workguruId,
-        projectNumber,
-        name,
-        clientId: localClient.id,
-        rawStatus: remote.status || remote.Status || 'UNKNOWN',
-        budgetHours,
-        actualHours,
-        remainingHours,
-        progressPercent,
-        deliveryDate: remote.dueDate || remote.DueDate ? new Date(remote.dueDate || remote.DueDate) : null,
-        updatedAt: new Date(),
-      };
+        const projectData = {
+            workguruId,
+            projectNumber,
+            name,
+            clientId: localClient.id,
+            rawStatus: status,
+            budgetHours,
+            actualHours,
+            remainingHours,
+            progressPercent,
+            deliveryDate: dueDate,
+            updatedAt: new Date(),
+        };
 
-      await db.insert(projects).values(projectData).onConflictDoUpdate({
-        target: projects.workguruId,
-        set: projectData,
-      });
+        if (count === 0) {
+            console.log(`[Sync] Sample mapped project:`, JSON.stringify(projectData, null, 2));
+        }
 
-      // Sync tasks and time entries for this project
-      await this.syncTasks(workguruId);
-      await this.syncProjectTimeEntries(workguruId);
-      count++;
+        await db.insert(projects).values(projectData).onConflictDoUpdate({
+            target: projects.workguruId,
+            set: projectData,
+        });
+
+        // Sync tasks and time entries for this project
+        // Defensive handling: only sync if we have a numeric-looking ID
+        if (workguruId && !isNaN(Number(workguruId))) {
+            try {
+                await this.syncTasks(workguruId);
+                await this.syncProjectTimeEntries(workguruId);
+            } catch (taskError) {
+                console.error(`[Sync] Failed to sync tasks/time for project ${projectNumber} (${workguruId}):`, taskError instanceof Error ? taskError.message : taskError);
+                // Don't re-throw, continue with next project
+            }
+        } else {
+            console.warn(`[Sync] Skipping task sync for project ${projectNumber}: Invalid numeric ID (${workguruId})`);
+        }
+        count++;
     }
     console.log(`[Sync] Inserted/Updated ${count} projects.`);
   }

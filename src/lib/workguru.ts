@@ -76,7 +76,7 @@ export class WorkGuruClient {
     this.logRequest(url, 'GET');
     
     try {
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
       this.logResponse(url, response.status, response.data);
       return response.data;
     } catch (error: any) {
@@ -91,7 +91,7 @@ export class WorkGuruClient {
     this.logRequest(url, 'GET');
     
     try {
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
       this.logResponse(url, response.status, response.data);
       return response.data;
     } catch (error: any) {

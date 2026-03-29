@@ -21,9 +21,9 @@ import { DashboardSummaries } from "@/components/dashboard/DashboardSummaries";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Promise<{ filter?: string }>;
 }) {
-  const filter = searchParams.filter || "";
+  const { filter = "" } = await searchParams;
   const riskService = new DeliveryRiskService();
   const allProjects = await db.query.projects.findMany({
     with: {
@@ -39,6 +39,11 @@ export default async function DashboardPage({
       risk: await riskService.calculateProjectRisk(p),
     }))
   );
+
+  console.log(`[UI] Fetched ${projectsWithRisk.length} projects for display.`);
+  if (projectsWithRisk.length > 0) {
+      console.log(`[UI] Sample project:`, JSON.stringify(projectsWithRisk[0]).substring(0, 200));
+  }
 
   const latestSync = await db.query.syncLogs.findFirst({
     orderBy: [desc(syncLogs.timestamp)],
