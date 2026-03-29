@@ -70,7 +70,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
       const matchesPm = !pmFilter || p.projectManager === pmFilter;
       const matchesStatus = !statusFilter || p.rawStatus === statusFilter;
       const matchesClient = !clientFilter || p.client?.name === clientFilter;
-      const matchesMonth = !monthFilter || (p.deliveryDate && format(new Date(p.deliveryDate), 'MMM yyyy') === monthFilter);
+      const matchesMonth = !monthFilter || (p.deliveryDate && format(new Date(p.deliveryDate), 'yyyy-MM') === monthFilter);
 
       return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesMonth;
     });
@@ -177,14 +177,12 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
 
            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-             <select 
+             <input 
+               type="month"
                value={monthFilter}
                onChange={(e) => setMonthFilter(e.target.value)}
-               className="bg-transparent text-[11px] font-bold outline-none border-none pr-6 focus:ring-0"
-             >
-               <option value="">All Months</option>
-               {filterOptions.months.map(m => <option key={m} value={m}>{m}</option>)}
-             </select>
+               className="bg-transparent text-[11px] font-bold outline-none border-none pr-2 focus:ring-0 text-slate-600 dark:text-slate-300 h-[22px]"
+             />
            </div>
 
            <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2">
@@ -223,19 +221,27 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                 className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
                 onClick={() => handleSort('deliveryDate')}
               >
-                <div className="flex items-center justify-center">Delivery <SortIcon column="deliveryDate" /></div>
+                <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" /></div>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
-                Budget
+              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center group cursor-help relative">
+                <div className="flex items-center justify-center">
+                  Budget
+                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-48 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Calculated from total Task quantity across project</div>
+                </div>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
-                Actual
+              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center group cursor-help relative">
+                <div className="flex items-center justify-center">
+                  Actual
+                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-48 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Aggregated directly from logged timesheets</div>
+                </div>
               </th>
               <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
+                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center group relative cursor-help"
                 onClick={() => handleSort('remainingHours')}
               >
-                <div className="flex items-center justify-center">Rem. <SortIcon column="remainingHours" /></div>
+                <div className="flex items-center justify-center">Rem. <SortIcon column="remainingHours" />
+                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-32 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Budget - Actual Hours</div>
+                </div>
               </th>
               <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 %
@@ -253,7 +259,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
                         <a 
-                          href={`https://app.workguru.io/Projects/Project/Details/${project.workguruId}`}
+                          href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"

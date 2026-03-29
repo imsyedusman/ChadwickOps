@@ -51,6 +51,7 @@ export default async function DashboardPage({
 
   const lastUpdatedText = latestSync 
     ? new Date(latestSync.timestamp).toLocaleString('en-AU', {
+        timeZone: 'Australia/Sydney',
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -68,7 +69,6 @@ export default async function DashboardPage({
   const stats = {
     total: projectsWithRisk.length,
     activeJobs: projectsWithRisk.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
-    atRisk: projectsWithRisk.filter(p => p.risk === 'AT_RISK' || p.risk === 'OVER_CAPACITY').length,
     onTrack: projectsWithRisk.filter(p => p.risk === 'ON_TRACK').length,
     dueThisWeek: projectsWithRisk.filter(p => {
       if (!p.deliveryDate) return false;
@@ -155,8 +155,6 @@ export default async function DashboardPage({
 
       <DashboardSummaries 
         totalCount={stats.activeJobs}
-        atRiskCount={stats.atRisk}
-        onTrackCount={stats.onTrack}
         dueThisWeekCount={stats.dueThisWeek}
         overdueCount={stats.overdue}
         thisMonthCount={stats.thisMonth}

@@ -177,8 +177,26 @@ export class SyncService {
         // Defensive handling: only sync if we have a numeric-looking ID
         if (workguruId && !isNaN(Number(workguruId))) {
             try {
-                await this.syncTasks(workguruId);
-                await this.syncProjectTimeEntries(workguruId);
+                // Added a slight delay per project to respect WorkGuru rate limits (batching via spacing)
+                await new Promise(resolve => setTimeout(resolve, 250));
+                
+                const calculatedBudget = await this.syncTasks(workguruId) || 0;
+                const calculatedActual = await this.syncProjectTimeEntries(workguruId) || 0;
+                
+                const remainingHours = Math.max(0, calculatedBudget - calculatedActual);
+                const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
+                
+                // Update project with real calculated values
+                await db.update(projects)
+                  .set({
+                    budgetHours: calculatedBudget,
+                    actualHours: calculatedActual,
+                    remainingHours,
+                    progressPercent,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(projects.workguruId, workguruId));
+                  
             } catch (taskError) {
                 console.error(`[Sync] Failed to sync tasks/time for project ${projectNumber} (${workguruId}):`, taskError instanceof Error ? taskError.message : taskError);
                 // Don't re-throw, continue with next project
@@ -191,28 +209,38 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} projects.`);
   }
 
-  private async syncTasks(projectWorkGuruId: string) {
+  private async syncTasks(projectWorkGuruId: string): Promise<number> {
     const taskResponse = await this.client.getProjectTasks(projectWorkGuruId);
+    if (!taskResponse || typeof taskResponse === 'string') return 0;
+    
     const remoteTasks = this.extractItems(taskResponse, 'Task');
     
     const localProject = await db.query.projects.findFirst({
       where: eq(projects.workguruId, projectWorkGuruId),
     });
 
-    if (!localProject) return;
+    if (!localProject) return 0;
 
     let count = 0;
+    let totalBudget = 0;
     for (const remote of remoteTasks) {
       const workguruId = (remote.id || remote.TaskID)?.toString();
       const name = remote.name || remote.TaskName;
       if (!workguruId || !name) continue;
 
+      // In WorkGuru, quantity is typically the quoted/budgeted amount for the task line
+      const taskBudget = Number(remote.quantity) || 0;
+      const remainingHours = Number(remote.remainingHours) || 0;
+      const actualHours = Math.max(0, taskBudget - remainingHours); // fallback inferred actual
+      
+      totalBudget += taskBudget;
+
       const taskData = {
         workguruId,
         projectId: localProject.id,
         name,
-        budgetHours: remote.estimatedHours || remote.EstimatedHours || 0,
-        actualHours: remote.actualHours || remote.ActualHours || 0,
+        budgetHours: taskBudget,
+        actualHours: actualHours,
         updatedAt: new Date(),
       };
 
@@ -222,26 +250,31 @@ export class SyncService {
       });
       count++;
     }
-    // Only log if significant, or keep it quiet to avoid log bloat for many projects
-    // console.log(`[Sync] Project ${projectWorkGuruId}: Synced ${count} tasks.`);
+    return totalBudget;
   }
 
-  private async syncProjectTimeEntries(projectWorkGuruId: string) {
+  private async syncProjectTimeEntries(projectWorkGuruId: string): Promise<number> {
     const entryResponse = await this.client.getProjectTimeEntries(projectWorkGuruId);
+    if (!entryResponse || typeof entryResponse === 'string') return 0;
+
     const remoteEntries = this.extractItems(entryResponse, 'TimeEntry');
 
     const localProject = await db.query.projects.findFirst({
       where: eq(projects.workguruId, projectWorkGuruId),
     });
 
-    if (!localProject) return;
+    if (!localProject) return 0;
 
     let count = 0;
+    let totalActual = 0;
     for (const remote of remoteEntries) {
       const workguruId = (remote.id || remote.TimeEntryID)?.toString();
       const remoteTaskId = (remote.taskId || remote.TaskID)?.toString();
 
       if (!workguruId) continue;
+
+      const hours = Number(remote.hours || remote.Hours || 0);
+      totalActual += hours;
 
       let localTaskId = null;
       if (remoteTaskId) {
@@ -255,7 +288,7 @@ export class SyncService {
         workguruId,
         projectId: localProject.id,
         taskId: localTaskId,
-        hours: remote.hours || remote.Hours || 0,
+        hours: hours,
         date: this.parseDate(remote.date || remote.Date) || new Date(),
         user: remote.user || remote.UserName || 'System',
         updatedAt: new Date(),
@@ -267,6 +300,7 @@ export class SyncService {
       });
       count++;
     }
+    return totalActual;
   }
 
   private async cleanDatabase() {

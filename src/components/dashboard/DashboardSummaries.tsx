@@ -15,8 +15,6 @@ import { Tooltip } from "@/components/ui/Tooltip";
 
 interface DashboardSummariesProps {
   totalCount: number;
-  atRiskCount: number;
-  onTrackCount: number;
   dueThisWeekCount: number;
   overdueCount: number;
   thisMonthCount: number;
@@ -25,8 +23,6 @@ interface DashboardSummariesProps {
 
 export function DashboardSummaries({ 
   totalCount, 
-  atRiskCount, 
-  onTrackCount, 
   dueThisWeekCount,
   overdueCount,
   thisMonthCount,
@@ -42,15 +38,6 @@ export function DashboardSummaries({
         href="/"
         isActive={currentFilter === ""}
         tooltip="Total volume of active projects currently tracked in the system."
-      />
-      <StatCard 
-        title="At Risk" 
-        value={atRiskCount.toString()} 
-        icon={<AlertTriangle className="h-6 w-6 text-red-500" />}
-        description="Utilization > 90%"
-        href="/?filter=at_risk"
-        isActive={currentFilter === "at_risk"}
-        tooltip="Projects where remaining hours exceed 90% of availability based on daily capacity profiles."
       />
       <StatCard 
         title="Due This Week" 
@@ -78,15 +65,6 @@ export function DashboardSummaries({
         href="/?filter=this_month"
         isActive={currentFilter === "this_month"}
         tooltip="Projects with a delivery date in the current calendar month."
-      />
-      <StatCard 
-        title="At Risk" 
-        value={atRiskCount.toString()} 
-        icon={<AlertTriangle className="h-6 w-6 text-red-500" />}
-        description="Utilization > 90%"
-        href="/?filter=at_risk"
-        isActive={currentFilter === "at_risk"}
-        tooltip="Projects where remaining hours exceed 90% of availability based on daily capacity profiles."
       />
     </div>
   );
