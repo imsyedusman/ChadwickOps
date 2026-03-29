@@ -50,19 +50,57 @@ export default async function DashboardPage({
   });
 
   const lastUpdatedText = latestSync 
-    ? format(new Date(latestSync.timestamp), "MMM d, yyyy, h:mm a")
+    ? new Date(latestSync.timestamp).toLocaleString('en-AU', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
     : "Never";
 
   const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
   const stats = {
     total: projectsWithRisk.length,
+    activeJobs: projectsWithRisk.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
     atRisk: projectsWithRisk.filter(p => p.risk === 'AT_RISK' || p.risk === 'OVER_CAPACITY').length,
     onTrack: projectsWithRisk.filter(p => p.risk === 'ON_TRACK').length,
-    dueThisWeek: projectsWithRisk.filter(p => p.deliveryDate && isSameWeek(new Date(p.deliveryDate), now, { weekStartsOn: 1 })).length,
+    dueThisWeek: projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d >= todayStart && d <= weekEnd;
+    }).length,
+    overdue: projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d < todayStart && !['Completed', 'Archived'].includes(p.rawStatus);
+    }).length,
+    thisMonth: projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length,
   };
+
+  // Monthly Aggregation (Planning Foundation)
+  const monthlyStats = projectsWithRisk.reduce((acc, p) => {
+    if (!p.deliveryDate) return acc;
+    const monthKey = format(new Date(p.deliveryDate), 'yyyy-MM');
+    if (!acc[monthKey]) {
+      acc[monthKey] = { totalBudgetHours: 0, totalRemainingHours: 0, projectCount: 0 };
+    }
+    acc[monthKey].totalBudgetHours += p.budgetHours;
+    acc[monthKey].totalRemainingHours += p.remainingHours;
+    acc[monthKey].projectCount += 1;
+    return acc;
+  }, {} as Record<string, { totalBudgetHours: number, totalRemainingHours: number, projectCount: number }>);
+
+  console.log(`[UI] Monthly aggregation:`, monthlyStats);
 
   // Stage Bottleneck calculation
   const stageCounts: Record<string, { name: string, count: number, color: string }> = {};
@@ -83,7 +121,23 @@ export default async function DashboardPage({
   if (filter === "at_risk") {
     displayedProjects = projectsWithRisk.filter(p => p.risk === 'AT_RISK' || p.risk === 'OVER_CAPACITY');
   } else if (filter === "due_this_week") {
-    displayedProjects = projectsWithRisk.filter(p => p.deliveryDate && isSameWeek(new Date(p.deliveryDate), now, { weekStartsOn: 1 }));
+    displayedProjects = projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d >= todayStart && d <= weekEnd;
+    });
+  } else if (filter === "overdue") {
+    displayedProjects = projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d < todayStart && !['Completed', 'Archived'].includes(p.rawStatus);
+    });
+  } else if (filter === "this_month") {
+    displayedProjects = projectsWithRisk.filter(p => {
+      if (!p.deliveryDate) return false;
+      const d = new Date(p.deliveryDate);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
   }
 
   return (
@@ -100,10 +154,12 @@ export default async function DashboardPage({
       </div>
 
       <DashboardSummaries 
-        totalCount={stats.total}
+        totalCount={stats.activeJobs}
         atRiskCount={stats.atRisk}
         onTrackCount={stats.onTrack}
         dueThisWeekCount={stats.dueThisWeek}
+        overdueCount={stats.overdue}
+        thisMonthCount={stats.thisMonth}
         currentFilter={filter}
       />
 

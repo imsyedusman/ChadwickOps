@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
+import { UserPreferencesProvider } from "@/components/providers/user-preferences-provider";
 import { Toaster } from "sonner";
 
 const albertSans = Albert_Sans({
@@ -33,18 +34,20 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <SidebarProvider>
-            <div className="grid grid-cols-[var(--sidebar-width)_1fr] h-screen w-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out">
-              <Sidebar />
-              <div className="flex flex-col h-full overflow-hidden relative border-l border-slate-200/60 dark:border-slate-800/60">
-                <Header />
-                <main className="flex-1 overflow-y-auto scroll-pt-16">
-                  <div className="max-w-[1600px] mx-auto p-6 md:p-8 lg:p-10">
-                    {children}
-                  </div>
-                </main>
+            <UserPreferencesProvider>
+              <div className="grid grid-cols-[var(--sidebar-width)_1fr] h-screen w-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out">
+                <Sidebar />
+                <div className="flex flex-col h-full overflow-hidden relative border-l border-slate-200/60 dark:border-slate-800/60">
+                  <Header />
+                  <main className="flex-1 overflow-y-auto scroll-pt-16">
+                    <div className="max-w-[1600px] mx-auto p-6 md:p-8 lg:p-10">
+                      {children}
+                    </div>
+                  </main>
+                </div>
               </div>
-            </div>
-            <Toaster position="top-right" closeButton richColors />
+              <Toaster position="top-right" closeButton richColors />
+            </UserPreferencesProvider>
           </SidebarProvider>
         </ThemeProvider>
       </body>

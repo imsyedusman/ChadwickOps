@@ -6,6 +6,7 @@ import { SyncService } from '@/lib/sync';
 import { WorkGuruClient } from '@/lib/workguru';
 import { encrypt, decrypt } from '@/lib/crypto';
 import { eq, desc } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 import { StageService } from '@/lib/stages';
 import { RiskConfig } from '@/lib/risk';
 
@@ -26,6 +27,7 @@ export async function triggerSync() {
     const syncService = new SyncService(decryptedKey, decryptedSecret);
     await syncService.runFullSync();
     
+    revalidatePath('/');
     return { success: true };
   } catch (error) {
     console.error('WorkGuru Sync error:', error);

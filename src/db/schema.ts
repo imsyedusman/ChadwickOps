@@ -42,6 +42,7 @@ export const projects = pgTable('projects', {
   drawingStatus: varchar('drawing_status', { length: 100 }),
   procurementStatus: varchar('procurement_status', { length: 100 }),
   productionReadiness: text('production_readiness'),
+  projectManager: text('project_manager'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {

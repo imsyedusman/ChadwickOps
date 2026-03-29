@@ -5,6 +5,7 @@ import {
   CheckCircle2, 
   Layers,
   Calendar,
+  Clock,
   HelpCircle,
   ArrowUpRight
 } from "lucide-react";
@@ -17,6 +18,8 @@ interface DashboardSummariesProps {
   atRiskCount: number;
   onTrackCount: number;
   dueThisWeekCount: number;
+  overdueCount: number;
+  thisMonthCount: number;
   currentFilter: string;
 }
 
@@ -25,6 +28,8 @@ export function DashboardSummaries({
   atRiskCount, 
   onTrackCount, 
   dueThisWeekCount,
+  overdueCount,
+  thisMonthCount,
   currentFilter 
 }: DashboardSummariesProps) {
   return (
@@ -57,12 +62,31 @@ export function DashboardSummaries({
         tooltip="Jobs with a delivery date set within the current business week (Mon-Fri)."
       />
       <StatCard 
-        title="On Schedule" 
-        value={onTrackCount.toString()} 
-        icon={<CheckCircle2 className="h-6 w-6 text-emerald-500" />}
-        description="Optimal utilization"
-        href="/"
-        tooltip="Projects currently trending below capacity thresholds with healthy margins."
+        title="Overdue" 
+        value={overdueCount.toString()} 
+        icon={<Clock className="h-6 w-6 text-orange-500" />}
+        description="Past delivery date"
+        href="/?filter=overdue"
+        isActive={currentFilter === "overdue"}
+        tooltip="Active projects where the delivery date has already passed."
+      />
+      <StatCard 
+        title="This Month" 
+        value={thisMonthCount.toString()} 
+        icon={<Calendar className="h-6 w-6 text-blue-500" />}
+        description="Due in current month"
+        href="/?filter=this_month"
+        isActive={currentFilter === "this_month"}
+        tooltip="Projects with a delivery date in the current calendar month."
+      />
+      <StatCard 
+        title="At Risk" 
+        value={atRiskCount.toString()} 
+        icon={<AlertTriangle className="h-6 w-6 text-red-500" />}
+        description="Utilization > 90%"
+        href="/?filter=at_risk"
+        isActive={currentFilter === "at_risk"}
+        tooltip="Projects where remaining hours exceed 90% of availability based on daily capacity profiles."
       />
     </div>
   );

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-provider";
+import { useUserPreferences } from "@/components/providers/user-preferences-provider";
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -32,6 +33,7 @@ const secondaryNavigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const { isCollapsed, toggle } = useSidebar();
+  const { preferences } = useUserPreferences();
 
   return (
     <div className={cn(
@@ -89,6 +91,9 @@ export function Sidebar() {
            )}
            <nav className="space-y-1">
             {secondaryNavigation.map((item) => {
+              // Only show Admin Panel if user is admin
+              if (item.name === 'Admin Panel' && !preferences.isAdmin) return null;
+              
               const isActive = pathname === item.href;
               return (
                 <SidebarLink 

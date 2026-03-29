@@ -128,6 +128,7 @@ export class SyncService {
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
         const status = remote.status || remote.Status || 'UNKNOWN';
         const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
+        const projectManager = remote.projectManager || 'Unassigned';
 
         if (!workguruId || !name || !remoteClientId) {
             console.log(`[Sync] Skipping project: missing critical fields. ID=${workguruId}, Name=${name}, ClientID=${remoteClientId}`);
@@ -159,6 +160,7 @@ export class SyncService {
             remainingHours,
             progressPercent,
             deliveryDate: dueDate,
+            projectManager,
             updatedAt: new Date(),
         };
 
