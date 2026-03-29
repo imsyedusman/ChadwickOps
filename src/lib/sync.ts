@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
 
 export class SyncService {
   private client: WorkGuruClient;
@@ -10,30 +10,41 @@ export class SyncService {
     this.client = new WorkGuruClient(apiKey, apiSecret);
   }
 
-  private parseDate(dateStr: any): Date | null {
-    if (!dateStr) return null;
-    const str = String(dateStr).trim();
-    if (!str) return null;
+  private async sleep(ms: number) {
+    const jitter = Math.floor(Math.random() * 300);
+    return new Promise(resolve => setTimeout(resolve, ms + jitter));
+  }
 
-    // Handle DD/MM/YYYY format
-    const parts = str.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts.map(Number);
-      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          const date = new Date(year, month - 1, day);
-          if (!isNaN(date.getTime())) return date;
+  private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 5): Promise<T | null> {
+    let lastError: any;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+        const isRateLimit = error.response?.status === 429 || error.status === 429;
+        
+        if (isRateLimit && attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 500; // 1s, 2s, 4s, 8s...
+          console.warn(`[Sync] Rate limit hit on ${label}. Attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+          await this.sleep(delay);
+          continue;
+        }
+        
+        if (attempt === maxRetries) {
+          console.error(`[Sync] ${label} failed after ${maxRetries} attempts:`, error.message);
+          return null;
+        }
+        
+        // Non-rate limit error or other failure
+        console.error(`[Sync] ${label} encountered error:`, error.message);
+        return null;
       }
     }
-
-    // Fallback to standard JS parsing
-    const date = new Date(str);
-    if (!isNaN(date.getTime())) return date;
-
-    console.warn(`[Sync] Failed to parse date string: "${str}"`);
     return null;
   }
 
-  private extractItems(data: any, entityName: string): any[] {
+  public extractItems(data: any, entityName: string): any[] {
     const result = data?.result;
     let items: any[] | undefined;
 
@@ -58,28 +69,38 @@ export class SyncService {
     return items;
   }
 
-  async runFullSync() {
+  async runSync(mode: 'QUICK' | 'FULL' = 'QUICK') {
     const startTime = new Date();
     try {
-      console.log('Starting full sync with standardized parsing...');
+      console.log(`Starting ${mode} sync...`);
       
-      const clientData = await this.client.getClients();
-      const remoteClients = this.extractItems(clientData, 'Client');
-      await this.syncClients(remoteClients);
+      const clientData = await this.withRetry(() => this.client.getClients(), 'Fetch Clients');
+      if (clientData) {
+        const remoteClients = this.extractItems(clientData, 'Client');
+        await this.syncClients(remoteClients);
+      }
 
-      const projectData = await this.client.getProjects();
-      const remoteProjects = this.extractItems(projectData, 'Project');
-      
-      // Cleanup old duplicate records before syncing projects
-      await this.cleanDatabase();
-      
-      await this.syncProjects(remoteProjects);
+      const projectFetchMethod = mode === 'FULL' ? () => this.client.getAllProjects() : () => this.client.getProjects();
+      const projectData = await this.withRetry(projectFetchMethod, `Fetch ${mode} Projects`);
+      if (projectData) {
+        const remoteProjects = this.extractItems(projectData, 'Project');
+        await this.cleanDatabase();
+        await this.syncProjects(remoteProjects);
+      }
 
-      const clientCount = await db.select({ count: sql<number>`count(*)` }).from(clients);
-      const projectCount = await db.select({ count: sql<number>`count(*)` }).from(projects);
+      // 1. Global Time Entry Sync (Fetch all recent/open time once)
+      await this.syncGlobalTimeEntries();
+
+      // Progression Sync Logic
+      let deepSyncStats;
+      if (mode === 'QUICK') {
+        deepSyncStats = await this.runDeepSyncQueue(15, true); // 15 most recent
+      } else {
+        deepSyncStats = await this.runFullDeepSyncCycle(); // All batches sequentially or resumable
+      }
 
       const status = 'SUCCESS';
-      const details = `Sync completed: ${remoteProjects.length} projects, ${remoteClients.length} clients`;
+      const details = `${mode} Sync completed. ${deepSyncStats.processedCount} projects deep-synced.`;
 
       await db.insert(syncLogs).values({
         status,
@@ -87,6 +108,7 @@ export class SyncService {
       });
 
       console.log('Sync result:', status, details);
+      return { success: true, mode, stats: deepSyncStats };
     } catch (error) {
       console.error('Sync failed:', error);
       await db.insert(syncLogs).values({
@@ -95,6 +117,36 @@ export class SyncService {
       });
       throw error;
     }
+  }
+
+  private async runFullDeepSyncCycle() {
+    // Implement resumable full sync
+    const configResults = await db.select().from(systemConfig).where(eq(systemConfig.key, 'FULL_SYNC_CURSOR')).limit(1);
+    const config = configResults[0];
+    
+    let offset = config ? (config.value as { offset: number }).offset : 0;
+    console.log(`[Sync] Resuming Full Sync at offset ${offset}`);
+
+    const stats = await this.runDeepSyncQueue(20, false, offset); // Process batch of 20
+    
+    const newOffset = offset + stats.processedCount;
+    const totalActive = await db.select({ count: sql<number>`count(*)` })
+      .from(projects)
+      .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
+    
+    const isComplete = newOffset >= totalActive[0].count;
+    
+    await db.insert(systemConfig).values({
+      key: 'FULL_SYNC_CURSOR',
+      value: { offset: isComplete ? 0 : newOffset },
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: systemConfig.key,
+      set: { value: { offset: isComplete ? 0 : newOffset }, updatedAt: new Date() },
+    });
+
+    if (isComplete) console.log('[Sync] Full Sync Cycle Completed and Reset.');
+    return stats;
   }
 
   private async syncClients(remoteClients: any[]) {
@@ -135,9 +187,8 @@ export class SyncService {
             continue;
         }
 
-        const localClient = await db.query.clients.findFirst({
-            where: eq(clients.workguruId, remoteClientId),
-        });
+        const localClientResults = await db.select().from(clients).where(eq(clients.workguruId, remoteClientId)).limit(1);
+        const localClient = localClientResults[0];
 
         if (!localClient) {
             console.log(`[Sync] Skipping project ${workguruId}: Local client ${remoteClientId} not found.`);
@@ -149,18 +200,17 @@ export class SyncService {
         const remainingHours = Math.max(0, budgetHours - actualHours);
         const progressPercent = budgetHours > 0 ? (actualHours / budgetHours) * 100 : 0;
 
+        const remoteUpdatedAt = this.parseDate(remote.lastModificationTime || remote.LastModificationTime);
+
         const projectData = {
             workguruId,
             projectNumber,
             name,
             clientId: localClient.id,
             rawStatus: status,
-            budgetHours,
-            actualHours,
-            remainingHours,
-            progressPercent,
             deliveryDate: dueDate,
             projectManager,
+            remoteUpdatedAt,
             updatedAt: new Date(),
         };
 
@@ -168,70 +218,130 @@ export class SyncService {
             console.log(`[Sync] Sample mapped project:`, JSON.stringify(projectData, null, 2));
         }
 
-        await db.insert(projects).values(projectData).onConflictDoUpdate({
+        await db.insert(projects).values({
+            ...projectData,
+            budgetHours: 0,
+            actualHours: 0,
+            remainingHours: 0,
+            progressPercent: 0,
+            hasActualMismatch: 0,
+        }).onConflictDoUpdate({
             target: projects.workguruId,
-            set: projectData,
+            set: projectData, // Preserving hours, only updating metadata
         });
 
-        // Sync tasks and time entries for this project
-        // Defensive handling: only sync if we have a numeric-looking ID
-        if (workguruId && !isNaN(Number(workguruId))) {
-            try {
-                // Added a slight delay per project to respect WorkGuru rate limits (batching via spacing)
-                await new Promise(resolve => setTimeout(resolve, 250));
-                
-                const calculatedBudget = await this.syncTasks(workguruId) || 0;
-                const calculatedActual = await this.syncProjectTimeEntries(workguruId) || 0;
-                
-                const remainingHours = Math.max(0, calculatedBudget - calculatedActual);
-                const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
-                
-                // Update project with real calculated values
-                await db.update(projects)
-                  .set({
-                    budgetHours: calculatedBudget,
-                    actualHours: calculatedActual,
-                    remainingHours,
-                    progressPercent,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(projects.workguruId, workguruId));
-                  
-            } catch (taskError) {
-                console.error(`[Sync] Failed to sync tasks/time for project ${projectNumber} (${workguruId}):`, taskError instanceof Error ? taskError.message : taskError);
-                // Don't re-throw, continue with next project
-            }
-        } else {
-            console.warn(`[Sync] Skipping task sync for project ${projectNumber}: Invalid numeric ID (${workguruId})`);
-        }
         count++;
     }
-    console.log(`[Sync] Inserted/Updated ${count} projects.`);
+    console.log(`[Sync] Inserted/Updated ${count} base projects.`);
+  }
+
+  private async runDeepSyncQueue(limit = 15, prioritizeRecent = true, offset = 0) {
+    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, RecentFirst: ${prioritizeRecent}, Offset: ${offset})...`);
+    
+    const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
+    
+    const projectsToDeepSync = await db.select().from(projects)
+      .where(conditions)
+      .orderBy(...(prioritizeRecent ? [desc(projects.remoteUpdatedAt)] : [asc(projects.lastDeepSyncAt)]))
+      .limit(limit)
+      .offset(offset);
+
+    console.log(`[Sync] Selected ${projectsToDeepSync.length} projects for Deep Sync.`);
+    
+    let processedCount = 0;
+    let mismatchCount = 0;
+
+    for (const localProject of projectsToDeepSync) {
+      const result = await this.withRetry(async () => {
+        await this.sleep(300); // Base spacing
+        
+        // 1. Fetch Task Metadata (Budget source)
+        const calculatedBudget = await this.syncTasks(localProject.workguruId) || 0;
+        
+        // 2. Aggregate Hours LOCALLY from time_entries table
+        const hoursData = await this.aggregateProjectHoursLocally(localProject.id);
+        
+        const calculatedActual = hoursData.totalActual;
+        const calculatedApproved = hoursData.totalApproved;
+        const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
+        
+        // Detect mismatch logic
+        const hasActualMismatch = (calculatedActual === 0 && calculatedBudget > 0) ? 1 : 0;
+        
+        const remainingHours = calculatedBudget - calculatedActual;
+        const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
+        
+        await db.update(projects)
+          .set({
+            budgetHours: calculatedBudget,
+            actualHours: calculatedActual,
+            approvedHours: calculatedApproved,
+            hasUnapprovedHours,
+            remainingHours,
+            progressPercent,
+            hasActualMismatch,
+            lastDeepSyncAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.workguruId, localProject.workguruId));
+          
+        return { hasActualMismatch };
+      }, `Deep Sync Project ${localProject.projectNumber}`);
+
+      if (result) {
+        processedCount++;
+        if (result.hasActualMismatch) mismatchCount++;
+      }
+    }
+    
+    console.log(`[Sync] Deep Sync complete. Processed: ${processedCount}, Mismatches: ${mismatchCount}`);
+    return { processedCount, mismatchCount };
+  }
+
+  private parseDate(dateStr: any): Date | null {
+    if (!dateStr) return null;
+    const str = String(dateStr).trim();
+    if (!str) return null;
+
+    // Handle DD/MM/YYYY format
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const date = new Date(year, month - 1, day);
+          if (!isNaN(date.getTime())) return date;
+      }
+    }
+
+    // Fallback to standard JS parsing
+    const date = new Date(str);
+    if (!isNaN(date.getTime())) return date;
+
+    console.warn(`[Sync] Failed to parse date string: "${str}"`);
+    return null;
   }
 
   private async syncTasks(projectWorkGuruId: string): Promise<number> {
     const taskResponse = await this.client.getProjectTasks(projectWorkGuruId);
     if (!taskResponse || typeof taskResponse === 'string') return 0;
     
-    const remoteTasks = this.extractItems(taskResponse, 'Task');
+    const tasksData = this.extractItems(taskResponse, 'Task');
     
-    const localProject = await db.query.projects.findFirst({
-      where: eq(projects.workguruId, projectWorkGuruId),
-    });
+    const localProjectResults = await db.select().from(projects).where(eq(projects.workguruId, projectWorkGuruId)).limit(1);
+    const localProject = localProjectResults[0];
 
     if (!localProject) return 0;
 
     let count = 0;
     let totalBudget = 0;
-    for (const remote of remoteTasks) {
+    for (const remote of tasksData) {
       const workguruId = (remote.id || remote.TaskID)?.toString();
       const name = remote.name || remote.TaskName;
       if (!workguruId || !name) continue;
 
       // In WorkGuru, quantity is typically the quoted/budgeted amount for the task line
-      const taskBudget = Number(remote.quantity) || 0;
-      const remainingHours = Number(remote.remainingHours) || 0;
-      const actualHours = Math.max(0, taskBudget - remainingHours); // fallback inferred actual
+      const taskBudget = Number(remote.quantity || remote.Quantity || 0);
+      const actualHours = Number(remote.actualHours || remote.ActualHours || 0);
       
       totalBudget += taskBudget;
 
@@ -246,61 +356,104 @@ export class SyncService {
 
       await db.insert(tasks).values(taskData).onConflictDoUpdate({
         target: tasks.workguruId,
-        set: taskData,
+        set: {
+          projectId: sql`excluded.project_id`,
+          name: sql`excluded.name`,
+          budgetHours: sql`excluded.budget_hours`,
+          actualHours: sql`excluded.actual_hours`,
+          updatedAt: new Date(),
+        },
       });
       count++;
     }
     return totalBudget;
   }
 
-  private async syncProjectTimeEntries(projectWorkGuruId: string): Promise<number> {
-    const entryResponse = await this.client.getProjectTimeEntries(projectWorkGuruId);
-    if (!entryResponse || typeof entryResponse === 'string') return 0;
+  private async syncGlobalTimeEntries() {
+    console.log('[Sync] Performing Global Timesheet Sync...');
+    // Fetch with wide range or standard recent window
+    const entryResponse = await this.withRetry(() => this.client.getProjectTimeEntries(''), 'Global Fetch Timesheets');
+    if (!entryResponse || typeof entryResponse === 'string') return;
 
-    const remoteEntries = this.extractItems(entryResponse, 'TimeEntry');
+    const timesheets = this.extractItems(entryResponse, 'TimeSheet');
+    console.log(`[Sync] Processing ${timesheets.length} global timesheets...`);
 
-    const localProject = await db.query.projects.findFirst({
-      where: eq(projects.workguruId, projectWorkGuruId),
-    });
+    // Pre-fetch all projects and tasks for in-memory lookup
+    const allProjects = await db.select().from(projects);
+    const projectMap = new Map(allProjects.map(p => [p.workguruId, p.id]));
 
-    if (!localProject) return 0;
+    const allTasks = await db.select().from(tasks);
+    const taskMap = new Map(allTasks.map(t => [t.workguruId, t.id]));
 
-    let count = 0;
-    let totalActual = 0;
-    for (const remote of remoteEntries) {
-      const workguruId = (remote.id || remote.TimeEntryID)?.toString();
-      const remoteTaskId = (remote.taskId || remote.TaskID)?.toString();
+    const entriesToUpsert = [];
 
-      if (!workguruId) continue;
+    for (const remote of timesheets) {
+        const workguruId = (remote.id || remote.TimeSheetID)?.toString();
+        const remoteProjectId = (remote.projectId || remote.ProjectID)?.toString();
+        const remoteTaskId = (remote.taskId || remote.TaskID)?.toString();
 
-      const hours = Number(remote.hours || remote.Hours || 0);
-      totalActual += hours;
+        if (!workguruId || !remoteProjectId) continue;
 
-      let localTaskId = null;
-      if (remoteTaskId) {
-        const localTask = await db.query.tasks.findFirst({
-          where: eq(tasks.workguruId, remoteTaskId),
+        // Resolve local project ID from Map
+        const localProjectId = projectMap.get(remoteProjectId);
+        if (!localProjectId) continue;
+
+        const hours = Number(remote.length || remote.Hours || remote.hours || 0);
+        const status = remote.status || remote.Status || 'Draft';
+
+        const localTaskId = remoteTaskId ? (taskMap.get(remoteTaskId) || null) : null;
+
+        entriesToUpsert.push({
+            workguruId,
+            projectId: localProjectId,
+            taskId: localTaskId,
+            hours: hours,
+            status: status,
+            date: this.parseDate(remote.date || remote.Date || remote.startTime) || new Date(),
+            user: remote.user || remote.UserName || remote.StaffName || 'System',
+            updatedAt: new Date(),
         });
-        localTaskId = localTask?.id || null;
-      }
-
-      const entryData = {
-        workguruId,
-        projectId: localProject.id,
-        taskId: localTaskId,
-        hours: hours,
-        date: this.parseDate(remote.date || remote.Date) || new Date(),
-        user: remote.user || remote.UserName || 'System',
-        updatedAt: new Date(),
-      };
-
-      await db.insert(timeEntries).values(entryData).onConflictDoUpdate({
-        target: timeEntries.workguruId,
-        set: entryData,
-      });
-      count++;
     }
-    return totalActual;
+
+    if (entriesToUpsert.length > 0) {
+        // Chunk into batches of 100 for stability
+        const chunkSize = 100;
+        for (let i = 0; i < entriesToUpsert.length; i += chunkSize) {
+            const chunk = entriesToUpsert.slice(i, i + chunkSize);
+            await db.insert(timeEntries).values(chunk).onConflictDoUpdate({
+                target: timeEntries.workguruId,
+                set: {
+                    projectId: sql`excluded.project_id`,
+                    taskId: sql`excluded.task_id`,
+                    hours: sql`excluded.hours`,
+                    status: sql`excluded.status`,
+                    date: sql`excluded.date`,
+                    user: sql`excluded.user`,
+                    updatedAt: new Date(),
+                },
+            });
+        }
+        console.log(`[Sync] Batch upserted ${entriesToUpsert.length} time entries.`);
+    }
+  }
+
+  private async aggregateProjectHoursLocally(localProjectId: number) {
+    const entries = await db.select().from(timeEntries).where(eq(timeEntries.projectId, localProjectId));
+    
+    let totalActual = 0;
+    let totalApproved = 0;
+    let hasUnapproved = false;
+
+    for (const entry of entries) {
+        totalActual += entry.hours;
+        if (entry.status === 'Approved') {
+            totalApproved += entry.hours;
+        } else {
+            hasUnapproved = true;
+        }
+    }
+
+    return { totalActual, totalApproved, hasUnapproved };
   }
 
   private async cleanDatabase() {

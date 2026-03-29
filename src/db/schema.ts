@@ -36,6 +36,8 @@ export const projects = pgTable('projects', {
   rawStatus: text('raw_status').notNull(),
   budgetHours: doublePrecision('budget_hours').default(0).notNull(),
   actualHours: doublePrecision('actual_hours').default(0).notNull(),
+  approvedHours: doublePrecision('approved_hours').default(0).notNull(),
+  hasUnapprovedHours: integer('has_unapproved_hours').default(0).notNull(), // 0 = false, 1 = true
   remainingHours: doublePrecision('remaining_hours').default(0).notNull(),
   progressPercent: doublePrecision('progress_percent').default(0).notNull(),
   deliveryDate: timestamp('delivery_date'),
@@ -43,6 +45,9 @@ export const projects = pgTable('projects', {
   procurementStatus: varchar('procurement_status', { length: 100 }),
   productionReadiness: text('production_readiness'),
   projectManager: text('project_manager'),
+  lastDeepSyncAt: timestamp('last_deep_sync_at'),
+  remoteUpdatedAt: timestamp('remote_updated_at'),
+  hasActualMismatch: integer('has_actual_mismatch').default(0).notNull(), // 0 = false, 1 = true
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {
@@ -73,6 +78,7 @@ export const timeEntries = pgTable('time_entries', {
   projectId: integer('project_id').notNull().references(() => projects.id),
   taskId: integer('task_id').references(() => tasks.id),
   hours: doublePrecision('hours').notNull(),
+  status: varchar('status', { length: 50 }).default('Draft').notNull(),
   date: timestamp('date').notNull(),
   user: text('user').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

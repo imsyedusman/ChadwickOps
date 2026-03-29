@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, AlertCircle, Clock, RefreshCw, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, RefreshCw, Loader2, Activity } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { getLatestSyncStatus } from '@/app/actions/sync';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,11 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  
+  // Placeholder for admin check
+  const isAdmin = true; 
+
 
   const fetchStatus = async () => {
     const result = await getLatestSyncStatus();
@@ -28,21 +33,40 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
     setLoading(false);
   };
 
-  const handleSync = async () => {
+  const handleSync = async (mode: 'QUICK' | 'FULL') => {
     if (isSyncing || isSyncingGlobal) return;
     
     setIsSyncing(true);
+    setCurrentStep("Initializing...");
     
     try {
-      const { triggerSync } = await import('@/app/actions/sync');
-      const result = await triggerSync();
-      if (result.success) {
+      const { triggerQuickSync, triggerFullSync } = await import('@/app/actions/sync');
+      
+      setCurrentStep(mode === 'QUICK' ? "Syncing latest activity..." : "Performing full deep sync...");
+      
+      const result = mode === 'QUICK' ? await triggerQuickSync() : await triggerFullSync();
+      
+      if (result.success && result.stats) {
+        let msg = mode === 'QUICK' 
+          ? `Quick Sync: ${result.stats.processedCount} active projects refreshed.`
+          : `Full Sync: ${result.stats.processedCount} projects processed.`;
+          
+        if (result.stats.mismatchCount > 0) {
+          msg += ` (${result.stats.mismatchCount} warnings detected)`;
+        }
+        
+        setCurrentStep(msg);
         await fetchStatus();
+      } else {
+        setCurrentStep(`Sync failed: ${result.error}`);
       }
     } catch (error) {
       console.error('Manual sync failed:', error);
+      setCurrentStep("Sync encountered a critical error.");
     } finally {
       setIsSyncing(false);
+      // Keep result message for 5 seconds
+      setTimeout(() => setCurrentStep(null), 5000);
     }
   };
 
@@ -115,20 +139,48 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
         </>
       )}
 
-      <button 
-        onClick={handleSync}
-        className={cn(
-            "ml-auto px-3 py-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-brand/10 hover:text-brand border border-slate-200 dark:border-slate-700 rounded-lg transition-all active:scale-95 disabled:opacity-50 group",
-            (isSyncing || isSyncingGlobal) && "animate-pulse"
+      <div className="flex items-center gap-2 ml-auto">
+        <button 
+          onClick={() => handleSync('QUICK')}
+          className={cn(
+              "px-3 py-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-brand/10 hover:text-brand border border-slate-200 dark:border-slate-700 rounded-lg transition-all active:scale-95 disabled:opacity-50 group whitespace-nowrap",
+              (isSyncing || isSyncingGlobal) && "opacity-50 pointer-events-none"
+          )}
+          disabled={isSyncing || isSyncingGlobal}
+          title="Metadata update + 15 recent projects"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Quick Sync</span>
+          <RefreshCw className={cn(
+            "h-3 w-3 text-slate-400 group-hover:text-brand transition-colors",
+            isSyncing && "animate-spin text-brand"
+          )} />
+        </button>
+
+        {isAdmin && (
+          <button 
+            onClick={() => handleSync('FULL')}
+            className={cn(
+                "px-3 py-1 flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 hover:text-indigo-600 border border-indigo-200 dark:border-indigo-800/40 rounded-lg transition-all active:scale-95 disabled:opacity-50 group whitespace-nowrap",
+                (isSyncing || isSyncingGlobal) && "opacity-50 pointer-events-none"
+            )}
+            disabled={isSyncing || isSyncingGlobal}
+            title="Full Deep Sync (Resumable)"
+          >
+            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Full (Admin)</span>
+            <Activity className={cn(
+              "h-3 w-3 text-indigo-400 group-hover:text-indigo-600 transition-colors",
+              isSyncing && "animate-pulse text-indigo-500"
+            )} />
+          </button>
         )}
-        disabled={isSyncing || isSyncingGlobal}
-      >
-        <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Sync Now</span>
-        <RefreshCw className={cn(
-          "h-3 w-3 text-slate-400 group-hover:text-brand transition-colors",
-          (isSyncing || isSyncingGlobal) && "animate-spin text-brand"
-        )} />
-      </button>
+      </div>
+
+      {currentStep && (
+        <div className="absolute top-12 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 shadow-xl z-50 flex items-center gap-2 animate-in slide-in-from-top-2">
+          <Loader2 className="h-3 w-3 text-brand animate-spin" />
+          <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400">{currentStep}</span>
+        </div>
+      )}
     </div>
   );
 }

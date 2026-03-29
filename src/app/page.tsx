@@ -69,7 +69,6 @@ export default async function DashboardPage({
   const stats = {
     total: projectsWithRisk.length,
     activeJobs: projectsWithRisk.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
-    onTrack: projectsWithRisk.filter(p => p.risk === 'ON_TRACK').length,
     dueThisWeek: projectsWithRisk.filter(p => {
       if (!p.deliveryDate) return false;
       const d = new Date(p.deliveryDate);
@@ -118,9 +117,7 @@ export default async function DashboardPage({
   let displayedProjects = projectsWithRisk;
   let initialTableFilter = "";
 
-  if (filter === "at_risk") {
-    displayedProjects = projectsWithRisk.filter(p => p.risk === 'AT_RISK' || p.risk === 'OVER_CAPACITY');
-  } else if (filter === "due_this_week") {
+  if (filter === "due_this_week") {
     displayedProjects = projectsWithRisk.filter(p => {
       if (!p.deliveryDate) return false;
       const d = new Date(p.deliveryDate);
@@ -207,36 +204,12 @@ export default async function DashboardPage({
             </div>
           </section>
 
-          <div className="space-y-6">
-            <section className="bg-brand/5 dark:bg-brand/5 rounded-2xl border border-brand/10 p-6 space-y-4">
-               <div className="flex items-center justify-between">
-                 <h3 className="text-xs font-bold text-brand uppercase tracking-widest flex items-center gap-2">
-                   <Activity className="h-4 w-4" />
-                   Sync Status
-                 </h3>
-                 <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20 uppercase tracking-widest">
-                   Operational
-                 </span>
-               </div>
-               <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                  The dashboard is currently in sync with WorkGuru. All project and labour data is up to date based on the latest staff profiles.
-               </p>
-               <div className="h-1 w-full bg-brand/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-brand w-[100%]" />
-               </div>
-               <div className="flex justify-between items-center pt-2">
-                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Throughput used</span>
-                 <span className="text-[10px] text-slate-900 dark:text-white font-bold uppercase tracking-widest">{(stats.total * 6.5 / 160).toFixed(1)}%</span>
-               </div>
-            </section>
-
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-6">
                <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest mb-4">Operations Tip</h3>
-               <p className="text-xs text-slate-500 leading-relaxed">
-                 Use the summary cards above to quickly filter the project queue. Projects "At Risk" indicate utilization levels above 90% based on remaining scheduled hours.
+               <p className="text-xs text-slate-500 leading-relaxed font-medium italic">
+                 "Data freshness is tracked per-project. If a project is flagged as <span className="text-amber-500 font-bold uppercase tracking-tighter">Stale</span>, use <span className="font-bold whitespace-nowrap">Quick Sync</span> to prioritize its refresh."
                </p>
             </section>
-          </div>
         </div>
       </div>
     </div>

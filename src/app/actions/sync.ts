@@ -10,7 +10,15 @@ import { revalidatePath } from 'next/cache';
 import { StageService } from '@/lib/stages';
 import { RiskConfig } from '@/lib/risk';
 
-export async function triggerSync() {
+export async function triggerQuickSync() {
+  return handleSync('QUICK');
+}
+
+export async function triggerFullSync() {
+  return handleSync('FULL');
+}
+
+async function handleSync(mode: 'QUICK' | 'FULL') {
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),
@@ -25,12 +33,12 @@ export async function triggerSync() {
     const decryptedSecret = decrypt(apiSecret);
 
     const syncService = new SyncService(decryptedKey, decryptedSecret);
-    await syncService.runFullSync();
+    const result = await syncService.runSync(mode);
     
     revalidatePath('/');
-    return { success: true };
+    return { success: true, mode, stats: result.stats };
   } catch (error) {
-    console.error('WorkGuru Sync error:', error);
+    console.error(`WorkGuru ${mode} Sync error:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

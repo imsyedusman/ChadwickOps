@@ -85,6 +85,21 @@ export class WorkGuruClient {
     }
   }
 
+  async getAllProjects() {
+    const url = `${BASE_URL}/api/services/app/Project/GetAllProjects`;
+    const headers = await this.getAuthHeader();
+    this.logRequest(url, 'GET');
+    
+    try {
+      const response = await axios.get(url, { headers, params: { MaxResultCount: 5000 } });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
   async getClients() {
     const url = `${BASE_URL}/api/services/app/Client/GetClients`;
     const headers = await this.getAuthHeader();
@@ -117,9 +132,9 @@ export class WorkGuruClient {
   }
 
   async getProjectTimeEntries(projectId: string) {
-    const url = `${BASE_URL}/api/services/app/TimeSheet/GetAllTimeSheetByProjectId`;
+    const url = `${BASE_URL}/api/services/app/TimeSheet/GetTimeSheets`;
     const headers = await this.getAuthHeader();
-    const params = { id: projectId };
+    const params = { projectId, MaxResultCount: 1000 };
     this.logRequest(url, 'GET');
     
     try {

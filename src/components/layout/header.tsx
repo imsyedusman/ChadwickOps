@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { triggerSync } from "@/app/actions/sync";
 import { 
   RefreshCw, 
   Search, 

@@ -14,9 +14,13 @@ import {
   CalendarDays,
   User,
   Activity,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  History
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { formatDistanceToNow } from "date-fns";
 
 type ProjectTableProps = {
   projects: any[];
@@ -223,25 +227,23 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
               >
                 <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" /></div>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center group cursor-help relative">
-                <div className="flex items-center justify-center">
-                  Budget
-                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-48 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Calculated from total Task quantity across project</div>
-                </div>
+              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help">
+                <Tooltip content="Calculated from total Task quantity across project">
+                  <div className="flex items-center justify-center">Budget</div>
+                </Tooltip>
               </th>
-              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center group cursor-help relative">
-                <div className="flex items-center justify-center">
-                  Actual
-                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-48 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Aggregated directly from logged timesheets</div>
-                </div>
+              <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help">
+                <Tooltip content="Aggregated from ALL logged timesheets (Draft, Submitted, Approved)">
+                  <div className="flex items-center justify-center">Actual</div>
+                </Tooltip>
               </th>
               <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center group relative cursor-help"
+                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center cursor-help"
                 onClick={() => handleSort('remainingHours')}
               >
-                <div className="flex items-center justify-center">Rem. <SortIcon column="remainingHours" />
-                  <div className="hidden group-hover:block absolute bg-slate-800 text-white p-2 rounded text-[10px] font-normal tracking-normal normal-case -top-8 w-32 z-50 shadow-lg left-1/2 -translate-x-1/2 pointer-events-none">Budget - Actual Hours</div>
-                </div>
+                <Tooltip content="Budget - Actual Hours">
+                  <div className="flex items-center justify-center">Rem. <SortIcon column="remainingHours" /></div>
+                </Tooltip>
               </th>
               <th className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 %
@@ -257,18 +259,43 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <a 
-                          href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
-                        >
-                          {project.name}
-                          <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
-                        </a>
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <a 
+                              href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
+                            >
+                              {project.name}
+                              <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
+                            </a>
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
+                        </div>
+                        
+                        {/* Stale Data Indicator */}
+                        {(() => {
+                           const isStale = project.lastDeepSyncAt === null || (project.remoteUpdatedAt && new Date(project.remoteUpdatedAt) > new Date(project.lastDeepSyncAt));
+                           if (!isStale) return null;
+                           return (
+                             <Tooltip content="Data is not recently refreshed relative to remote changes">
+                               <span className="text-[9px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-500/20 uppercase tracking-tighter">Stale</span>
+                             </Tooltip>
+                           );
+                        })()}
                       </div>
-                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
+                      
+                      {/* Freshness indicator */}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <History className="h-2.5 w-2.5 text-slate-300" />
+                        <span className="text-[9px] font-medium text-slate-400">
+                          {project.lastDeepSyncAt 
+                            ? `Refreshed ${formatDistanceToNow(new Date(project.lastDeepSyncAt), { addSuffix: true })}` 
+                            : 'Priority: Pending deep sync'}
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400">
@@ -291,7 +318,14 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
+                      {project.hasUnapprovedHours === 1 && (
+                        <Tooltip content={`Includes unapproved timesheets (${project.approvedHours}h approved)`}>
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        </Tooltip>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={cn(
