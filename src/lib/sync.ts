@@ -10,28 +10,50 @@ export class SyncService {
     this.client = new WorkGuruClient(apiKey, apiSecret);
   }
 
-  private extractItems(data: any, entityName: string): any[] {
-    console.log(`[Sync] Raw ${entityName} data head:`, JSON.stringify(data).substring(0, 200));
-    console.log(`[Sync] ${entityName} result exists:`, !!data?.result);
-    console.log(`[Sync] ${entityName} items exists:`, !!data?.result?.items);
-    
-    const items = data?.result?.items;
-    
-    if (!items) {
-      throw new Error(`Missing items in WorkGuru response for ${entityName}`);
+  private parseDate(dateStr: any): Date | null {
+    if (!dateStr) return null;
+    const str = String(dateStr).trim();
+    if (!str) return null;
+
+    // Handle DD/MM/YYYY format
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const date = new Date(year, month - 1, day);
+          if (!isNaN(date.getTime())) return date;
+      }
     }
-    
-    if (!Array.isArray(items)) {
-      console.error(`[Sync] Invalid ${entityName} items structure:`, items);
-      throw new Error(`Invalid WorkGuru response: items for ${entityName} is not an array (Type: ${typeof items})`);
+
+    // Fallback to standard JS parsing
+    const date = new Date(str);
+    if (!isNaN(date.getTime())) return date;
+
+    console.warn(`[Sync] Failed to parse date string: "${str}"`);
+    return null;
+  }
+
+  private extractItems(data: any, entityName: string): any[] {
+    const result = data?.result;
+    let items: any[] | undefined;
+
+    if (Array.isArray(result)) {
+        // Pattern 1: result is directly an array (e.g. Tasks)
+        items = result;
+    } else if (result && Array.isArray(result.items)) {
+        // Pattern 2: result contains an items array (e.g. Clients, Projects)
+        items = result.items;
+    } else if (data && Array.isArray(data.items)) {
+        // Fallback Pattern 3: items is at the top level
+        items = data.items;
+    }
+
+    if (!items) {
+      console.error(`[Sync] Invalid ${entityName} response structure. Full data head:`, JSON.stringify(data).substring(0, 500));
+      throw new Error(`Invalid WorkGuru response: could not find items array for ${entityName}`);
     }
     
     console.log(`[Sync] ${entityName} Items length:`, items.length);
-    
-    // Debug log the first item to confirm structure
-    if (items.length > 0) {
-        console.log(`[Sync] First ${entityName} sample:`, JSON.stringify(items[0]).substring(0, 300));
-    }
     
     return items;
   }
@@ -47,6 +69,10 @@ export class SyncService {
 
       const projectData = await this.client.getProjects();
       const remoteProjects = this.extractItems(projectData, 'Project');
+      
+      // Cleanup old duplicate records before syncing projects
+      await this.cleanDatabase();
+      
       await this.syncProjects(remoteProjects);
 
       const clientCount = await db.select({ count: sql<number>`count(*)` }).from(clients);
@@ -101,7 +127,7 @@ export class SyncService {
         const name = remote.projectName || remote.ProjectName || remote.name;
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
         const status = remote.status || remote.Status || 'UNKNOWN';
-        const dueDate = remote.dueDate || remote.DueDate ? new Date(remote.dueDate || remote.DueDate) : null;
+        const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
 
         if (!workguruId || !name || !remoteClientId) {
             console.log(`[Sync] Skipping project: missing critical fields. ID=${workguruId}, Name=${name}, ClientID=${remoteClientId}`);
@@ -228,8 +254,8 @@ export class SyncService {
         projectId: localProject.id,
         taskId: localTaskId,
         hours: remote.hours || remote.Hours || 0,
-        date: new Date(remote.date || remote.Date),
-        user: remote.userName || remote.UserName || 'Unknown',
+        date: this.parseDate(remote.date || remote.Date) || new Date(),
+        user: remote.user || remote.UserName || 'System',
         updatedAt: new Date(),
       };
 
@@ -239,7 +265,24 @@ export class SyncService {
       });
       count++;
     }
-    // Only log if significant
-    // console.log(`[Sync] Project ${projectWorkGuruId}: Synced ${count} time entries.`);
+  }
+
+  private async cleanDatabase() {
+    console.log('[Sync] Cleaning up legacy duplicate records...');
+    try {
+        // Delete projects where workguruId contains a slash (legacy projectNo format)
+        const deletedProjects = await db.delete(projects)
+            .where(sql`workguru_id LIKE '%/%'`)
+            .returning({ id: projects.id });
+        
+        if (deletedProjects.length > 0) {
+            console.log(`[Sync] Removed ${deletedProjects.length} legacy duplicate projects.`);
+        }
+
+        // Also clean orphaned tasks and time entries if necessary
+        // (Though cascade delete should handle it if defined, but our schema doesn't have it on all)
+    } catch (error) {
+        console.error('[Sync] Database cleanup failed:', error);
+    }
   }
 }
