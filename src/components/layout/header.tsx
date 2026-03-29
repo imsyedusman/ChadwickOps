@@ -14,31 +14,14 @@ import {
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { SyncIndicator } from "@/components/dashboard/SyncIndicator";
 
 export function Header() {
-  const [isSyncing, setIsSyncing] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   // Avoid hydration mismatch
   useEffect(() => setMounted(true), []);
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    const toastId = toast.loading("Syncing with WorkGuru...");
-    try {
-      const result = await triggerSync();
-      if (result.success) {
-        toast.success("Sync completed successfully!", { id: toastId });
-      } else {
-        toast.error(`Sync failed: ${result.error}`, { id: toastId });
-      }
-    } catch (error) {
-      toast.error("An unexpected error occurred during sync.", { id: toastId });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   return (
     <header className="h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 transition-all duration-300 w-full">
@@ -52,25 +35,14 @@ export function Header() {
               placeholder="Search anything..." 
               className="w-full pl-11 pr-12 py-2.5 bg-slate-100/50 dark:bg-slate-800/40 border border-transparent focus:border-brand/20 dark:focus:border-brand/30 rounded-2xl text-[13px] font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-brand/5 outline-none transition-all placeholder:text-slate-400"
             />
-            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] text-slate-400 font-black opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none shadow-sm">
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] text-slate-400 font-bold opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none shadow-sm">
                <Command className="h-2.5 w-2.5" /> K
             </div>
          </div>
       </div>
       
-      <div className="flex items-center gap-4 ml-6">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="gap-2.5 h-10 px-5 rounded-2xl border-slate-200 dark:border-slate-800 hover:border-brand/40 dark:hover:border-brand/40 bg-white dark:bg-slate-900 shadow-sm transition-all active:scale-[0.98]"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5 text-slate-500", isSyncing && "animate-spin text-brand")} />
-          <span className="text-xs font-black uppercase tracking-widest">{isSyncing ? "Syncing" : "Refresh"}</span>
-        </Button>
-
-        <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
+      <div className="flex items-center gap-6 ml-6">
+        <SyncIndicator />
 
         <div className="flex items-center gap-1.5">
           <button 

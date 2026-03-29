@@ -3,9 +3,11 @@
 import { db } from '@/db';
 import { systemConfig, syncLogs } from '@/db/schema';
 import { SyncService } from '@/lib/sync';
+import { WorkGuruClient } from '@/lib/workguru';
 import { encrypt, decrypt } from '@/lib/crypto';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { StageService } from '@/lib/stages';
+import { RiskConfig } from '@/lib/risk';
 
 export async function triggerSync() {
   try {
@@ -26,13 +28,60 @@ export async function triggerSync() {
     
     return { success: true };
   } catch (error) {
-    console.error('Sync error:', error);
+    console.error('WorkGuru Sync error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function testApiConnection(apiKey: string, apiSecret: string) {
+  console.log('[SyncAction] Testing Connection...');
+  try {
+    const client = new WorkGuruClient(apiKey, apiSecret);
+    await client.authenticate();
+    
+    return { 
+      success: true, 
+      message: "Connection successful!",
+      details: "Token received. Credentials validated."
+    };
+  } catch (error: any) {
+    console.error('[SyncAction] Test Connection failed:', error.status, error.apiMessage || error.message);
+    
+    // Explicitly check for our custom auth error message or status
+    const isAuthError = error.status === 401 || error.status === 403 || error.message?.includes('Authentication failed');
+    
+    if (isAuthError) {
+      return { 
+        success: false, 
+        error: "Authentication failed. Please check API Key and Secret.",
+        details: error.apiMessage || error.message
+      };
+    }
+    
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Network Error')) {
+      return { 
+        success: false, 
+        error: "Unable to reach WorkGuru API. Please check your internet connection.",
+        details: "Network timeout or connection refused."
+      };
+    }
+
+    return { 
+      success: false, 
+      error: "Invalid response from WorkGuru API.",
+      details: error.apiMessage || error.message || "Unknown communication error."
+    };
   }
 }
 
 export async function updateApiCredentials(apiKey: string, apiSecret: string) {
   try {
+    // Validate credentials BEFORE saving
+    const testResult = await testApiConnection(apiKey, apiSecret);
+    if (!testResult.success) {
+      return testResult;
+    }
+
     const encryptedKey = encrypt(apiKey);
     const encryptedSecret = encrypt(apiSecret);
 
@@ -55,4 +104,30 @@ export async function initializeSystem() {
   await stageService.seedDefaultStages();
   await stageService.seedDefaultMappings();
   return { success: true };
+}
+
+export async function getLatestSyncStatus() {
+  try {
+    const latestLog = await db.query.syncLogs.findFirst({
+      orderBy: [desc(syncLogs.timestamp)],
+    });
+    return { success: true, data: latestLog };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function updateRiskConfig(config: RiskConfig) {
+  try {
+    await db.insert(systemConfig).values({
+      key: 'RISK_CONFIGURATION',
+      value: config,
+    }).onConflictDoUpdate({
+      target: systemConfig.key,
+      set: { value: config, updatedAt: new Date() },
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }

@@ -7,27 +7,30 @@ import {
   Search, 
   ChevronLeft, 
   ChevronRight,
-  Filter,
-  ArrowUpDown,
-  MoreVertical
+  Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProjectTableProps = {
   projects: any[];
+  initialFilter?: string;
 };
 
-export function ProjectTable({ projects }: ProjectTableProps) {
-  const [search, setSearch] = useState("");
+export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps) {
+  const [search, setSearch] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
   const filteredProjects = useMemo(() => {
-    return projects.filter(p => 
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.projectNumber.toLowerCase().includes(search.toLowerCase()) ||
-      p.client.name.toLowerCase().includes(search.toLowerCase())
-    );
+    return projects.filter(p => {
+      const searchLower = search.toLowerCase();
+      const matchesSearch = p.name?.toLowerCase().includes(searchLower) ||
+        p.projectNumber?.toLowerCase().includes(searchLower) ||
+        p.client?.name?.toLowerCase().includes(searchLower) ||
+        p.risk?.toLowerCase().replace('_', ' ').includes(searchLower);
+      
+      return matchesSearch;
+    });
   }, [projects, search]);
 
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
@@ -66,27 +69,27 @@ export function ProjectTable({ projects }: ProjectTableProps) {
       {/* Table Area */}
       <div className="overflow-x-auto relative no-scrollbar">
         <table className="w-full text-left border-collapse table-auto min-w-[1000px]">
-          <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800/30 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
+          <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
             <tr>
-              <th className="sticky left-0 z-30 bg-slate-50/80 dark:bg-slate-800/80 backdrop-blur-sm px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40">
+              <th className="sticky left-0 z-30 bg-slate-50/95 dark:bg-slate-800/95 px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40">
                 # ID
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                 Project & Client
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 Stage
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 Labor Hours
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 Progress
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 Deadline
               </th>
-              <th className="px-6 py-3.5 text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
+              <th className="px-6 py-3.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">
                 Risk Status
               </th>
             </tr>
@@ -95,7 +98,7 @@ export function ProjectTable({ projects }: ProjectTableProps) {
             {currentProjects.length > 0 ? (
               currentProjects.map((project) => (
                 <tr key={project.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150">
-                  <td className="sticky left-0 z-10 bg-white/95 dark:bg-slate-900/95 px-6 py-4 font-black text-[13px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors">
+                  <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-6 py-4 font-bold text-[13px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors">
                     {project.projectNumber}
                   </td>
                   <td className="px-6 py-4">
@@ -104,13 +107,13 @@ export function ProjectTable({ projects }: ProjectTableProps) {
                         <span className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">{project.name}</span>
                         <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:text-brand" />
                       </div>
-                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client.name}</span>
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">
                      {project.displayStage ? (
                        <span 
-                         className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black border shadow-sm uppercase tracking-wider"
+                         className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border shadow-sm uppercase tracking-wider"
                          style={{ 
                            backgroundColor: project.displayStage.color + '10', 
                            color: project.displayStage.color,
@@ -125,13 +128,13 @@ export function ProjectTable({ projects }: ProjectTableProps) {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex flex-col items-center">
-                       <span className="text-sm font-black text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
+                       <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Limit</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1.5 min-w-[140px] max-w-[180px] mx-auto">
-                       <div className="flex justify-between items-center text-[10px] font-black tracking-tight">
+                       <div className="flex justify-between items-center text-[10px] font-bold tracking-tight">
                           <span className="text-slate-500 dark:text-slate-400 tabular-nums">{project.actualHours}h / {project.budgetHours}h</span>
                           <span className={cn(
                             "tabular-nums",
@@ -151,7 +154,7 @@ export function ProjectTable({ projects }: ProjectTableProps) {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex flex-col items-center">
-                       <span className="text-sm font-black text-slate-800 dark:text-slate-200 tabular-nums">
+                       <span className="text-sm font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                         {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
                        </span>
                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Deadline</span>
@@ -212,16 +215,15 @@ export function ProjectTable({ projects }: ProjectTableProps) {
 }
 
 function RiskBadge({ risk }: { risk: string }) {
-  const configs: any = {
-    'HIGH_RISK': { label: 'CRITICAL', classes: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20' },
-    'MEDIUM_RISK': { label: 'AT RISK', classes: 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-500/20' },
-    'ON_TRACK': { label: 'HEALTHY', classes: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' },
-    'DELAYED': { label: 'DELAYED', classes: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white shadow-lg' },
+  const configs: Record<string, { label: string; classes: string }> = {
+    'OVER_CAPACITY': { label: 'OVER CAPACITY', classes: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30' },
+    'AT_RISK': { label: 'AT RISK', classes: 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-500/20' },
+    'ON_TRACK': { label: 'ON TRACK', classes: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' },
   };
   const config = configs[risk] || { label: risk, classes: 'bg-slate-100 text-slate-600' };
   return (
     <span className={cn(
-      "inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black tracking-[0.1em] border transition-all duration-300 shadow-sm uppercase shrink-0 whitespace-nowrap",
+      "inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold tracking-[0.1em] border transition-all duration-300 shadow-sm uppercase shrink-0 whitespace-nowrap",
       config.classes
     )}>
        {config.label}

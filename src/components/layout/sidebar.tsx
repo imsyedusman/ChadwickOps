@@ -41,10 +41,13 @@ export function Sidebar() {
       {/* Sidebar Header / Logo */}
       <div className="h-16 flex items-center px-4 border-b border-transparent">
         <div className={cn(
-          "flex items-center gap-3 transition-opacity duration-200",
-          isCollapsed ? "justify-center w-full" : "px-2"
+          "flex items-center transition-all duration-300",
+          isCollapsed ? "justify-center w-full px-0" : "px-2"
         )}>
-          <div className="relative h-8 w-8 min-w-[32px]">
+          <div className={cn(
+            "relative transition-all duration-500 ease-in-out",
+            isCollapsed ? "h-8 w-8 min-w-[32px]" : "h-11 w-44"
+          )}>
             <Image 
               src="/logo.svg" 
               alt="Logo" 
@@ -53,18 +56,13 @@ export function Sidebar() {
               priority
             />
           </div>
-          {!isCollapsed && (
-            <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight truncate animate-in fade-in duration-300">
-              CHADWICK
-            </span>
-          )}
         </div>
       </div>
 
       <div className="flex flex-col flex-grow py-6 overflow-y-auto no-scrollbar">
         <div className="px-3 mb-6">
            {!isCollapsed && (
-             <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] px-3 mb-3 animate-in fade-in duration-500">
+             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] px-3 mb-3 animate-in fade-in duration-500">
                Platform
              </p>
            )}
@@ -85,7 +83,7 @@ export function Sidebar() {
 
         <div className="px-3 mt-auto pt-6 border-t border-slate-200/40 dark:border-slate-800/40">
            {!isCollapsed && (
-             <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] px-3 mb-3 animate-in fade-in duration-500">
+             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] px-3 mb-3 animate-in fade-in duration-500">
                Management
              </p>
            )}
@@ -117,7 +115,7 @@ export function Sidebar() {
           {isCollapsed ? (
             <>
               <PanelLeftOpen className="h-5 w-5" />
-              <div className="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-black rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+              <div className="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
                  EXPAND
               </div>
             </>

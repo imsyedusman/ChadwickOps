@@ -5,8 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: var(--font-albert-sans), system-ui, sans-serif;
+  --font-sans: var(--font-albert-sans), "Albert Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: ui-monospace, SFMono-Regular, Roboto Mono, Menlo, Monaco, Libration Mono, Courier New, monospace;
+
+  --color-brand: var(--primary);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -87,6 +89,9 @@
 }
 
 @layer base {
+  html, body {
+    font-family: var(--font-sans);
+  }
   * {
     border-color: var(--color-border);
     outline-color: color-mix(in srgb, var(--color-ring) 50%, transparent);
@@ -94,9 +99,13 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-size: 0.9375rem;
     line-height: 1.6;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-bold text-foreground;
+    font-family: inherit;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+    color: var(--color-foreground);
   }
 }

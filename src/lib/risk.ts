@@ -3,10 +3,8 @@ import { systemConfig, projects } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 export interface RiskConfig {
-  capacityPerDay: number; // Total business capacity (hours)
-  highRiskThreshold: number; // e.g. 0.9 (90% capacity utilized)
-  mediumRiskThreshold: number; // e.g. 0.7
-  stuckThresholdDays: number; // Days in same stage to be considered "stuck"
+  dailyCapacity: number; // Total daily labor hours (e.g. 7.5 * number of workers)
+  riskThreshold: number; // % utilization to be considered "At Risk" (e.g. 90)
 }
 
 export class DeliveryRiskService {
@@ -16,10 +14,8 @@ export class DeliveryRiskService {
     });
 
     return (config?.value as RiskConfig) || {
-      capacityPerDay: 40, // Default 5 workers * 8h
-      highRiskThreshold: 0.9,
-      mediumRiskThreshold: 0.7,
-      stuckThresholdDays: 10,
+      dailyCapacity: 40, 
+      riskThreshold: 90,
     };
   }
 
@@ -32,23 +28,19 @@ export class DeliveryRiskService {
 
     const today = new Date();
     const deliveryDate = new Date(project.deliveryDate);
-    
-    // Calculate business days remaining (simplified)
     const diffTime = deliveryDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays <= 0) {
-      return 'DELAYED';
-    }
+    if (diffDays <= 0) return 'OVER_CAPACITY';
 
     // Business days (approx 5/7)
-    const businessDays = Math.ceil(diffDays * (5 / 7));
-    const totalAvailableCapacity = businessDays * config.capacityPerDay;
+    const businessDays = Math.max(1, Math.ceil(diffDays * (5 / 7)));
+    const totalAvailableCapacity = businessDays * config.dailyCapacity;
     
-    const utilization = project.remainingHours / totalAvailableCapacity;
+    const utilization = (project.remainingHours / totalAvailableCapacity) * 100;
 
-    if (utilization >= config.highRiskThreshold) return 'HIGH_RISK';
-    if (utilization >= config.mediumRiskThreshold) return 'MEDIUM_RISK';
+    if (utilization > 100) return 'OVER_CAPACITY';
+    if (utilization >= config.riskThreshold) return 'AT_RISK';
     
     return 'ON_TRACK';
   }
