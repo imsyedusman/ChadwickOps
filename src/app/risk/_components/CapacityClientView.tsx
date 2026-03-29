@@ -25,6 +25,10 @@ interface CapacityClientViewProps {
   initialHorizon: number; // Ignored for Phase 4 since we track local state
 }
 
+const formatHours = (value: number) => {
+    return new Intl.NumberFormat('en-AU').format(Math.round(value)) + 'h';
+};
+
 type TimeRangeType = '3' | '6' | '12' | 'custom';
 
 export default function CapacityClientView({ initialSettings, activeProjects }: CapacityClientViewProps) {
@@ -174,9 +178,9 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <SummaryCard title="Total Demand" value={Math.round(totalPlanned)} suffix="hrs" subtitle={`${months.length} mo horizon`} icon={<PieChart />} />
-          <SummaryCard title="Total Capacity" value={Math.round(totalCapacity)} suffix="hrs" subtitle={`Team of ${settings.staff}`} icon={<Users />} />
-          <SummaryCard title="Net Available" value={Math.round(netAvailable)} suffix="hrs" subtitle="Capacity - Demand" highlight={netAvailable < 0 ? 'red' : 'green'} icon={<Layers />} />
+          <SummaryCard title="Total Demand" value={formatHours(totalPlanned)} subtitle={`${months.length} mo horizon`} icon={<PieChart />} />
+          <SummaryCard title="Total Capacity" value={formatHours(totalCapacity)} subtitle={`Team of ${settings.staff}`} icon={<Users />} />
+          <SummaryCard title="Net Available" value={formatHours(netAvailable)} subtitle="Capacity - Demand" highlight={netAvailable < 0 ? 'red' : 'green'} icon={<Layers />} />
           <SummaryCard title="Risk Periods" value={overloadedMonthsCount} suffix="mos" subtitle="Overloaded months" highlight={overloadedMonthsCount > 0 ? 'orange' : 'neutral'} icon={<AlertTriangle />} />
       </div>
 
@@ -226,16 +230,33 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                                   {format(parseISO(`${m}-01`), 'MMM yyyy')}
                                               </span>
                                           </td>
-                                          <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{Math.round(d.budget)}</td>
-                                          <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{Math.round(d.actual)}</td>
+                                          <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.budget)}</td>
+                                          <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.actual)}</td>
                                           
                                           {/* Emphasized Fields */}
-                                          <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums text-base">{Math.round(d.remaining)}</td>
+                                          <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums text-base">{formatHours(d.remaining)}</td>
                                           <td className={cn(
-                                              "px-5 py-4 text-right font-bold tabular-nums text-base",
+                                              "px-5 py-4 text-right font-bold tabular-nums text-base relative group/row-info",
                                               isOverloaded ? "text-red-500" : isAtRisk ? "text-orange-500" : "text-emerald-600 dark:text-emerald-400"
                                           )}>
-                                              {Math.round(available)}
+                                              {formatHours(available)}
+                                              {/* Contextual Tooltip */}
+                                              <div className="absolute bottom-full right-0 mb-2 p-3 bg-slate-900 text-white text-[10px] font-bold rounded-xl opacity-0 invisible group-hover/row-info:opacity-100 group-hover/row-info:visible transition-all whitespace-nowrap shadow-xl border border-white/10 z-[60]">
+                                                  <div className="flex flex-col gap-1">
+                                                      <p className="text-brand">Calculation</p>
+                                                      <p className="text-slate-300 font-medium normal-case tracking-normal">Available = Capacity - Planned</p>
+                                                      <hr className="border-white/10 my-1" />
+                                                      <div className="flex justify-between gap-4 font-mono">
+                                                          <span>Capacity:</span>
+                                                          <span className="text-white">{formatHours(currentCapacity)}</span>
+                                                      </div>
+                                                      <div className="flex justify-between gap-4 font-mono">
+                                                          <span>Planned:</span>
+                                                          <span className="text-white">{formatHours(d.remaining)}</span>
+                                                      </div>
+                                                  </div>
+                                                  <div className="absolute -bottom-1 right-6 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-white/10" />
+                                              </div>
                                           </td>
 
                                           {/* Visual Risk Bar */}
@@ -275,7 +296,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                              Top Drivers • {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy')}
                           </h3>
                           <span className="text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md">
-                              Total Demand: {Math.round(monthlyData[selectedMonth].remaining)} hrs
+                              Total Demand: {formatHours(monthlyData[selectedMonth].remaining)}
                           </span>
                       </div>
                       
@@ -298,7 +319,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                            <div className="flex justify-between items-end">
                                                <div>
                                                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Remaining</p>
-                                                   <p className="font-black text-xl tabular-nums text-slate-700 dark:text-slate-200">{Math.round(p.remainingHours)}</p>
+                                                   <p className="font-black text-xl tabular-nums text-slate-700 dark:text-slate-200">{formatHours(p.remainingHours)}</p>
                                                </div>
                                                <div className="text-right">
                                                    <span className="text-xs font-bold text-brand bg-brand/10 px-2 py-1 rounded-md">{percentOfTotal.toFixed(1)}%</span>
@@ -375,7 +396,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                           {pm}
                                       </span>
                                       <div className="text-right">
-                                          <span className="text-slate-900 dark:text-white tabular-nums">{Math.round(hours)}h</span>
+                                          <span className="text-slate-900 dark:text-white tabular-nums">{formatHours(hours)}</span>
                                           <span className="text-[10px] text-slate-400 ml-1">({percent.toFixed(1)}%)</span>
                                       </div>
                                   </div>
@@ -406,7 +427,7 @@ function SettingsIcon(props: any) {
     return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 }
 
-function SettingField({ label, value, onChange, min, max, step }: any) {
+function SettingField({ label, value, onChange, min, max, step }: { label: string, value: number, onChange: (v: number) => void, min?: number, max?: number, step?: number }) {
     return (
         <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>
@@ -447,7 +468,6 @@ function SummaryCard({ title, value, suffix, subtitle, highlight, icon }: any) {
                         highlight === 'green' ? "text-emerald-500" :
                         "text-slate-900 dark:text-white"
                     )}>{value}</span>
-                    {suffix && <span className="text-xs font-bold text-slate-400">{suffix}</span>}
                 </div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{subtitle}</p>
             </div>
