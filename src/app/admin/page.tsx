@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { db } from "@/db";
 import { syncLogs, displayStages, systemConfig, stageMappings } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
