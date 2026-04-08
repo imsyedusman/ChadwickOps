@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getCapacitySettings } from "@/actions/capacity";
 import ProductionClientView from "./_components/ProductionClientView";
 
@@ -11,6 +11,7 @@ export const metadata = {
 
 export default async function ProductionPlanPage() {
   const allProjects = await db.query.projects.findMany({
+    where: eq(projects.isArchived, false),
     orderBy: [desc(projects.updatedAt)],
     with: {
       client: true

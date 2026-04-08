@@ -32,6 +32,7 @@ export default async function DashboardPage({
       client: true,
       displayStage: true,
     },
+    where: eq(projects.isArchived, false),
     orderBy: [desc(projects.updatedAt)],
   });
 

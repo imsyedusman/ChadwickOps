@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const clients = pgTable('clients', {
@@ -48,6 +48,8 @@ export const projects = pgTable('projects', {
   lastDeepSyncAt: timestamp('last_deep_sync_at'),
   remoteUpdatedAt: timestamp('remote_updated_at'),
   hasActualMismatch: integer('has_actual_mismatch').default(0).notNull(), // 0 = false, 1 = true
+  isArchived: boolean('is_archived').default(false).notNull(),
+  lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {

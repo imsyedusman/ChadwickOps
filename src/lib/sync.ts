@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
-import { eq, sql, asc, desc, inArray, and, notInArray } from 'drizzle-orm';
+import { eq, sql, asc, desc, inArray, and, notInArray, lt, lte, or, count } from 'drizzle-orm';
 
 export class SyncService {
   private client: WorkGuruClient;
@@ -71,6 +71,12 @@ export class SyncService {
 
   async runSync(mode: 'QUICK' | 'FULL' = 'QUICK') {
     const startTime = new Date();
+    const stats = {
+      syncedCount: 0,
+      restoredCount: 0,
+      archivedCount: 0,
+    };
+
     try {
       console.log(`Starting ${mode} sync...`);
       
@@ -86,7 +92,12 @@ export class SyncService {
         const remoteProjects = this.extractItems(projectData, 'Project');
         console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects for ${mode} sync.`);
         await this.cleanDatabase();
-        await this.syncProjects(remoteProjects);
+        await this.syncProjects(remoteProjects, stats);
+      }
+
+      // Cleanup logic - ONLY on FULL sync success
+      if (mode === 'FULL' && projectData) {
+        stats.archivedCount = await this.archiveMissingProjects(startTime);
       }
 
       // 1. Global Time Entry Sync (Fetch all recent/open time once)
@@ -101,15 +112,31 @@ export class SyncService {
       }
 
       const status = 'SUCCESS';
-      const details = `${mode} Sync completed. ${deepSyncStats.processedCount} projects deep-synced.`;
+      let details = `${mode} Sync completed. ${deepSyncStats.processedCount} projects deep-synced.`;
+      
+      if (mode === 'FULL') {
+        details += ` Summary: Synced: ${stats.syncedCount}, Restored: ${stats.restoredCount}, Archived: ${stats.archivedCount}.`;
+      }
 
       await db.insert(syncLogs).values({
         status,
         details,
       });
 
+      // Update baseline for next cycle ONLY if FULL sync succeeded
+      if (mode === 'FULL') {
+        await db.insert(systemConfig).values({
+          key: 'PREVIOUS_FULL_SYNC_START',
+          value: { timestamp: startTime.toISOString() },
+          updatedAt: new Date(),
+        }).onConflictDoUpdate({
+          target: systemConfig.key,
+          set: { value: { timestamp: startTime.toISOString() }, updatedAt: new Date() },
+        });
+      }
+
       console.log('Sync result:', status, details);
-      return { success: true, mode, stats: deepSyncStats };
+      return { success: true, mode, stats: { ...deepSyncStats, ...stats } };
     } catch (error) {
       console.error('Sync failed:', error);
       await db.insert(syncLogs).values({
@@ -186,7 +213,7 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} clients.`);
   }
 
-  private async syncProjects(remoteProjects: any[]) {
+  private async syncProjects(remoteProjects: any[], stats?: { syncedCount: number, restoredCount: number }) {
     let count = 0;
     for (const remote of remoteProjects) {
         // Detailed mapping based on API response
@@ -219,6 +246,19 @@ export class SyncService {
 
         const remoteUpdatedAt = this.parseDate(remote.lastModificationTime || remote.LastModificationTime);
 
+        // Check for unarchive logic
+        if (stats) {
+          const existing = await db.query.projects.findFirst({
+            where: eq(projects.workguruId, workguruId),
+            columns: { isArchived: true }
+          });
+          if (existing?.isArchived) {
+            console.log(`[Sync] Project ${workguruId} (${projectNumber}) found in WorkGuru - Unarchiving.`);
+            stats.restoredCount++;
+          }
+          stats.syncedCount++;
+        }
+
         const projectData = {
             workguruId,
             projectNumber,
@@ -229,6 +269,8 @@ export class SyncService {
             projectManager,
             remoteUpdatedAt,
             updatedAt: new Date(),
+            lastSeenAt: new Date(),
+            isArchived: false,
         };
 
         if (count === 0) {
@@ -250,6 +292,56 @@ export class SyncService {
         count++;
     }
     console.log(`[Sync] Inserted/Updated ${count} base projects.`);
+  }
+
+  private async archiveMissingProjects(syncStartTime: Date): Promise<number> {
+    console.log('[Sync] Checking for projects to archive...');
+    
+    // 1. Fetch config and check for first-run protection
+    const config = await db.query.systemConfig.findFirst({
+      where: eq(systemConfig.key, 'PREVIOUS_FULL_SYNC_START'),
+    });
+    
+    if (!config) {
+      console.log('[Sync] First-time FULL sync detected. Establishing baseline only (No archiving).');
+      return 0;
+    }
+
+    const prevSyncStart = new Date((config.value as any).timestamp);
+    
+    // Check for global override flag
+    const overrideConfig = await db.query.systemConfig.findFirst({
+      where: eq(systemConfig.key, 'ALLOW_AUTO_ARCHIVE'),
+    });
+    const allowAutoArchive = overrideConfig?.value === true;
+
+    // 2. Identify projects to archive
+    // Rule: Missing in current sync AND last seen before the PREVIOUS successful full sync start
+    // UNLESS override flag is on
+    const missingCondition = allowAutoArchive 
+      ? lt(projects.lastSeenAt, syncStartTime)
+      : lt(projects.lastSeenAt, prevSyncStart);
+
+    const projectsToArchive = await db.select({ id: projects.id, projectNumber: projects.projectNumber })
+      .from(projects)
+      .where(and(
+        eq(projects.isArchived, false),
+        missingCondition
+      ));
+
+    if (projectsToArchive.length === 0) {
+      console.log('[Sync] No projects found to archive.');
+      return 0;
+    }
+
+    console.log(`[Sync] Archiving ${projectsToArchive.length} projects missing from WorkGuru ${allowAutoArchive ? '(Immediate)' : '(2rd cycle) '}.`);
+    
+    const idsToArchive = projectsToArchive.map(p => p.id);
+    await db.update(projects)
+      .set({ isArchived: true, updatedAt: new Date() })
+      .where(inArray(projects.id, idsToArchive));
+
+    return projectsToArchive.length;
   }
 
   private async runDeepSyncQueue(limit = 15, offset = 0) {

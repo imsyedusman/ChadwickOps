@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getCapacitySettings } from "@/actions/capacity";
 import CapacityClientView from "./_components/CapacityClientView";
 
@@ -14,6 +14,7 @@ export default async function CapacityPage({
   const horizon = parseInt(months, 10) || 3;
 
   const allProjects = await db.query.projects.findMany({
+    where: eq(projects.isArchived, false),
     orderBy: [desc(projects.updatedAt)],
   });
 

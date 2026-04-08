@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { db } from "@/db";
-import { syncLogs, displayStages, systemConfig, stageMappings } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { syncLogs, displayStages, systemConfig, stageMappings, projects } from "@/db/schema";
+import { desc, eq, count } from "drizzle-orm";
 import { 
   Settings, 
   History, 
@@ -22,6 +22,9 @@ import { RiskConfigForm } from "@/components/admin/RiskConfigForm";
 import { RiskConfig } from "@/lib/risk";
 
 export default async function AdminPage() {
+  const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
+  const archivedCount = archivedCountResults[0]?.value || 0;
+
   const logs = await db.query.syncLogs.findMany({
     orderBy: [desc(syncLogs.timestamp)],
     limit: 10,
@@ -150,6 +153,9 @@ export default async function AdminPage() {
               <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Sync Status & Validation</h2>
            </div>
            <div className="flex items-center gap-4">
+               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700/50">
+                  ARCHIVED PROJECTS: {archivedCount}
+               </div>
                <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-100 dark:border-emerald-500/20">
                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   REAL-TIME VALIDATION ACTIVE
