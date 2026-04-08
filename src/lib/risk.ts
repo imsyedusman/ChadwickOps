@@ -9,14 +9,28 @@ export interface RiskConfig {
 
 export class DeliveryRiskService {
   async getRiskConfig(): Promise<RiskConfig> {
-    const config = await db.query.systemConfig.findFirst({
-      where: eq(systemConfig.key, 'RISK_CONFIGURATION'),
-    });
+    try {
+      const config = await db.query.systemConfig.findFirst({
+        where: eq(systemConfig.key, 'RISK_CONFIGURATION'),
+      });
 
-    return (config?.value as RiskConfig) || {
-      dailyCapacity: 40, 
-      riskThreshold: 90,
-    };
+      if (!config) {
+        console.warn('[DeliveryRiskService] RISK_CONFIGURATION not found in system_config. Using defaults.');
+        return {
+          dailyCapacity: 40,
+          riskThreshold: 90,
+        };
+      }
+
+      return config.value as RiskConfig;
+    } catch (error) {
+      console.error('[DeliveryRiskService] Failed to fetch RISK_CONFIGURATION from database:', error);
+      console.info('[DeliveryRiskService] Falling back to safe defaults.');
+      return {
+        dailyCapacity: 40,
+        riskThreshold: 90,
+      };
+    }
   }
 
   async calculateProjectRisk(project: typeof projects.$inferSelect) {

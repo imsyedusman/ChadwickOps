@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
+import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
 
 type ProjectTableProps = {
   projects: any[];
@@ -274,7 +275,13 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {currentProjects.length > 0 ? (
               currentProjects.map((project) => (
-                <tr key={project.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150 border-b border-slate-50 dark:border-slate-800">
+                <tr 
+                  key={project.id} 
+                  className={cn(
+                    "group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150 border-b border-slate-50 dark:border-slate-800",
+                    !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]"
+                  )}
+                >
                   <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors">
                     {project.projectNumber}
                   </td>
@@ -304,7 +311,15 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                               const hasUnapproved = project.hasUnapprovedHours === 1;
                               
                               let primaryFlag = null;
-                              if (actual > budget && budget > 0) {
+                              if (!isProductiveProject(project.projectNumber)) {
+                                primaryFlag = (
+                                  <Tooltip content={INTERNAL_WORK_DESCRIPTION}>
+                                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 uppercase tracking-tighter shrink-0 cursor-help">
+                                      Internal
+                                    </span>
+                                  </Tooltip>
+                                );
+                              } else if (actual > budget && budget > 0) {
                                 primaryFlag = <span className="text-[9px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-500/20 uppercase tracking-tighter shrink-0">Over Budget</span>;
                               } else if (progress >= 80 && actual <= budget && budget > 0) {
                                 primaryFlag = <span className="text-[9px] font-bold text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-500/20 uppercase tracking-tighter shrink-0">High Usage</span>;

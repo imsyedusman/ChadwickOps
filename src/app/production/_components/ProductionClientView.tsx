@@ -16,6 +16,8 @@ import {
 } from 'date-fns';
 import { Clock, Users, Activity, Lightbulb, CalendarDays, AlertTriangle, Play, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from '@/lib/project-utils';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 interface Project {
   id: number;
@@ -111,9 +113,9 @@ export default function ProductionClientView({ initialSettings, activeProjects }
             const wStart = runningStart;
             const wEnd = endOfWeek(wStart, { weekStartsOn: 1 });
             
-            // Demand: projects due in this week
+            // Demand: projects due in this week - Productive Only
             const projectsInWeek = activeProjects.filter(p => {
-                if (!p.deliveryDate) return false;
+                if (!p.deliveryDate || !isProductiveProject(p.projectNumber)) return false;
                 const dDate = new Date(p.deliveryDate);
                 return (isAfter(dDate, wStart) || dDate.getTime() === wStart.getTime()) 
                        && (isBefore(dDate, wEnd) || dDate.getTime() === wEnd.getTime());
@@ -291,17 +293,33 @@ function BucketSection({ title, projects, type, today }: { title: string, projec
                                 const daysRemaining = p.deliveryDate ? differenceInDays(new Date(p.deliveryDate), today) : null;
 
                                 return (
-                                    <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                    <tr 
+                                      key={p.id} 
+                                      className={cn(
+                                        "hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group",
+                                        !isProductiveProject(p.projectNumber) && "opacity-60 grayscale-[0.3]"
+                                      )}
+                                    >
                                         <td className="px-4 py-3">
                                             <div className="flex gap-1.5 flex-col items-start w-10">
-                                                {isOverdue && <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" title="Overdue" />}
-                                                {isDueSoon && <span className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.6)]" title="Due Soon" />}
-                                                {isHighPercent && <span className="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.6)]" title="High Usage >= 80%" />}
+                                                {!isProductiveProject(p.projectNumber) && (
+                                                  <Tooltip content={INTERNAL_WORK_DESCRIPTION}>
+                                                    <span className="w-2 h-2 rounded-full bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.6)]" title="Internal" />
+                                                  </Tooltip>
+                                                )}
+                                                {isProductiveProject(p.projectNumber) && isOverdue && <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" title="Overdue" />}
+                                                {isProductiveProject(p.projectNumber) && isDueSoon && <span className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.6)]" title="Due Soon" />}
+                                                {isProductiveProject(p.projectNumber) && isHighPercent && <span className="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.6)]" title="High Usage >= 80%" />}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col gap-0.5">
-                                                <span className="font-bold text-xs text-slate-500">{p.projectNumber}</span>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-bold text-xs text-slate-500">{p.projectNumber}</span>
+                                                  {!isProductiveProject(p.projectNumber) && (
+                                                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 uppercase tracking-tighter">Internal</span>
+                                                  )}
+                                                </div>
                                                 <span className="font-bold text-slate-900 dark:text-white truncate max-w-[250px]">{p.name}</span>
                                             </div>
                                         </td>

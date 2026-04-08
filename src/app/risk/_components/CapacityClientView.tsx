@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CapacitySettings, updateCapacitySettings } from '@/actions/capacity';
 import { format, addMonths, startOfMonth, parseISO } from 'date-fns';
 import { AlertTriangle, TrendingDown, TrendingUp, Users, Activity, Save, Loader2, Info, Lightbulb, PieChart, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from '@/lib/project-utils';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 interface Project {
   id: number;
@@ -85,18 +87,22 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
     }
   }, [months, selectedMonth]);
 
-  // Aggregate Data
+    // Aggregate Data
   const monthlyData = useMemo(() => {
-    const data: Record<string, { budget: number; actual: number; remaining: number; projects: Project[] }> = {};
-    months.forEach(m => data[m] = { budget: 0, actual: 0, remaining: 0, projects: [] });
+    const data: Record<string, { budget: number; actual: number; remaining: number; internalRemaining: number; projects: Project[] }> = {};
+    months.forEach(m => data[m] = { budget: 0, actual: 0, remaining: 0, internalRemaining: 0, projects: [] });
 
     activeProjects.forEach(p => {
         if (!p.deliveryDate) return; 
         const m = format(new Date(p.deliveryDate), 'yyyy-MM');
         if (data[m]) {
-            data[m].budget += p.budgetHours;
-            data[m].actual += p.actualHours;
-            data[m].remaining += p.remainingHours;
+            if (isProductiveProject(p.projectNumber)) {
+                data[m].budget += p.budgetHours;
+                data[m].actual += p.actualHours;
+                data[m].remaining += p.remainingHours;
+            } else {
+                data[m].internalRemaining += p.remainingHours;
+            }
             data[m].projects.push(p);
         }
     });
@@ -110,11 +116,12 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
   const netAvailable = totalCapacity - totalPlanned;
   const overloadedMonthsCount = months.filter(m => currentCapacity - monthlyData[m].remaining < 0).length;
 
-  // Intelligent Insight
+  // Intelligent Insight - Productive Only
   const insightText = useMemo(() => {
       const overloaded = months.find(m => currentCapacity - monthlyData[m].remaining < 0);
       if (overloaded) {
           const topReqs = [...monthlyData[overloaded].projects]
+                .filter(p => isProductiveProject(p.projectNumber))
                 .sort((a,b) => b.remainingHours - a.remainingHours)
                 .slice(0, 2);
           const names = topReqs.map(p => `"${p.name}"`).join(' and ');
@@ -129,19 +136,25 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
       return `Forward capacity is healthy with ample buffer across the next ${months.length} months.`;
   }, [months, monthlyData, currentCapacity]);
 
-  // PM Load Breakdown
+  // PM Load Breakdown - Split
   const pmLoad = useMemo(() => {
-    const load: Record<string, number> = {};
+    const load: Record<string, { productive: number; internal: number }> = {};
     months.forEach(m => {
         monthlyData[m].projects.forEach(p => {
             const pm = p.projectManager || 'Unassigned';
-            load[pm] = (load[pm] || 0) + p.remainingHours;
+            if (!load[pm]) load[pm] = { productive: 0, internal: 0 };
+            
+            if (isProductiveProject(p.projectNumber)) {
+                load[pm].productive += p.remainingHours;
+            } else {
+                load[pm].internal += p.remainingHours;
+            }
         });
     });
     
     return Object.entries(load)
-      .sort((a, b) => b[1] - a[1]) // Descending
-      .filter(([_, hours]) => hours > 0);
+      .sort((a, b) => (b[1].productive + b[1].internal) - (a[1].productive + a[1].internal)) // Sort by total load
+      .filter(([_, stats]) => (stats.productive + stats.internal) > 0);
   }, [monthlyData, months]);
 
   return (
@@ -206,22 +219,24 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                               {months.map(m => {
                                   const d = monthlyData[m];
                                   const planned = d.remaining;
+                                  const internal = d.internalRemaining;
                                   const available = currentCapacity - planned;
                                   const percent = currentCapacity > 0 ? (planned / currentCapacity) * 100 : 0;
                                   
                                   const isSelected = selectedMonth === m;
                                   const isOverloaded = available < 0;
                                   const isAtRisk = available >= 0 && available <= currentCapacity * 0.1;
-
+ 
                                   const rowClass = cn(
                                       "transition-all cursor-pointer group",
                                       isSelected ? "bg-slate-50 dark:bg-slate-800/80 ring-1 ring-inset ring-slate-200 dark:ring-slate-700" : "hover:bg-slate-50/50 dark:hover:bg-slate-800/30",
                                       isOverloaded && !isSelected ? "bg-red-50/30 dark:bg-red-900/10" : "",
                                       isAtRisk && !isSelected ? "bg-orange-50/30 dark:bg-orange-900/10" : ""
                                   );
-
+ 
                                   return (
-                                      <tr key={m} className={rowClass} onClick={() => setSelectedMonth(m)}>
+                                      <React.Fragment key={m}>
+                                      <tr className={rowClass} onClick={() => setSelectedMonth(m)}>
                                           <td className="px-5 py-4 whitespace-nowrap">
                                               <span className={cn(
                                                   "font-bold text-sm",
@@ -234,31 +249,14 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                           <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.actual)}</td>
                                           
                                           {/* Emphasized Fields */}
-                                          <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums text-base">{formatHours(d.remaining)}</td>
+                                          <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums text-base">{formatHours(planned)}</td>
                                           <td className={cn(
                                               "px-5 py-4 text-right font-bold tabular-nums text-base relative group/row-info",
                                               isOverloaded ? "text-red-500" : isAtRisk ? "text-orange-500" : "text-emerald-600 dark:text-emerald-400"
                                           )}>
                                               {formatHours(available)}
-                                              {/* Contextual Tooltip */}
-                                              <div className="absolute bottom-full right-0 mb-2 p-3 bg-slate-900 text-white text-[10px] font-bold rounded-xl opacity-0 invisible group-hover/row-info:opacity-100 group-hover/row-info:visible transition-all whitespace-nowrap shadow-xl border border-white/10 z-[60]">
-                                                  <div className="flex flex-col gap-1">
-                                                      <p className="text-brand">Calculation</p>
-                                                      <p className="text-slate-300 font-medium normal-case tracking-normal">Available = Capacity - Planned</p>
-                                                      <hr className="border-white/10 my-1" />
-                                                      <div className="flex justify-between gap-4 font-mono">
-                                                          <span>Capacity:</span>
-                                                          <span className="text-white">{formatHours(currentCapacity)}</span>
-                                                      </div>
-                                                      <div className="flex justify-between gap-4 font-mono">
-                                                          <span>Planned:</span>
-                                                          <span className="text-white">{formatHours(d.remaining)}</span>
-                                                      </div>
-                                                  </div>
-                                                  <div className="absolute -bottom-1 right-6 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-white/10" />
-                                              </div>
                                           </td>
-
+ 
                                           {/* Visual Risk Bar */}
                                           <td className="px-5 py-4">
                                               <div className="flex items-center gap-3">
@@ -280,6 +278,22 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                               </div>
                                           </td>
                                       </tr>
+                                      {/* Internal Load Sub-row (Muted) */}
+                                      {internal > 0 && (
+                                        <tr className="bg-slate-50/30 dark:bg-slate-800/20 border-b border-slate-100/50 dark:border-slate-800/50">
+                                            <td className="px-5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-8">
+                                                Internal Load
+                                            </td>
+                                            <td colSpan={2}></td>
+                                            <td className="px-5 py-1.5 text-right font-bold text-slate-400 tabular-nums text-xs">
+                                                +{formatHours(internal)}
+                                            </td>
+                                            <td colSpan={2} className="px-5 py-1.5 text-[9px] text-slate-400 italic">
+                                                Excluded from capacity utilization
+                                            </td>
+                                        </tr>
+                                      )}
+                                      </React.Fragment>
                                   );
                               })}
                           </tbody>
@@ -301,14 +315,16 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          {monthlyData[selectedMonth].projects.length > 0 ? (
-                              [...monthlyData[selectedMonth].projects]
-                                .sort((a,b) => b.remainingHours - a.remainingHours)
-                                .slice(0, 3)
-                                .map((p, i) => {
-                                    const percentOfTotal = monthlyData[selectedMonth].remaining > 0 
-                                      ? (p.remainingHours / monthlyData[selectedMonth].remaining) * 100 
-                                      : 0;
+                           {monthlyData[selectedMonth].projects.length > 0 ? (
+                               [...monthlyData[selectedMonth].projects]
+                                 .filter(p => isProductiveProject(p.projectNumber))
+                                 .sort((a,b) => b.remainingHours - a.remainingHours)
+                                 .slice(0, 3)
+                                 .map((p, i) => {
+                                     const totalProductive = monthlyData[selectedMonth].remaining;
+                                     const percentOfTotal = totalProductive > 0 
+                                       ? (p.remainingHours / totalProductive) * 100 
+                                       : 0;
                                     
                                     return (
                                         <div key={p.id} className="relative p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 rounded-xl group hover:border-brand/30 transition-colors">
@@ -379,42 +395,58 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                       </h2>
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{months.length} mo</span>
                   </div>
-                  <p className="text-xs text-slate-500 mb-6">Aggregate % of total planned workload.</p>
-
-                  <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
-                      {pmLoad.length > 0 ? pmLoad.map(([pm, hours], i) => {
-                          const percent = (hours / totalPlanned) * 100;
-                          const isTop = i < 2; // Highlight top 2
-                          return (
-                              <div key={pm} className="space-y-1.5 group p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                  <div className="flex justify-between items-center text-xs font-bold">
-                                      <span className={cn(
-                                          "truncate pr-4 flex items-center gap-2",
-                                          isTop ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
-                                      )}>
-                                          {isTop && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
-                                          {pm}
-                                      </span>
-                                      <div className="text-right">
-                                          <span className="text-slate-900 dark:text-white tabular-nums">{formatHours(hours)}</span>
-                                          <span className="text-[10px] text-slate-400 ml-1">({percent.toFixed(1)}%)</span>
-                                      </div>
-                                  </div>
-                                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                          className={cn(
-                                              "h-full rounded-full transition-all duration-1000",
-                                              isTop ? "bg-red-500" : "bg-indigo-400"
-                                          )}
-                                          style={{ width: `${Math.min(100, (hours / (pmLoad[0][1] || 1)) * 100)}%` }} // Scaled relative to highest PM for better visual distinction
-                                      />
-                                  </div>
-                              </div>
-                          );
-                      }) : (
-                          <div className="flex items-center justify-center h-full text-xs font-medium text-slate-400 italic">No PM data available.</div>
-                      )}
-                  </div>
+                  <p className="text-xs text-slate-500 mb-6">Aggregate % of total planned workload.</p>                   <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                       {pmLoad.length > 0 ? pmLoad.map(([pm, stats], i) => {
+                           const totalHours = stats.productive + stats.internal;
+                           const productivePercent = (stats.productive / totalPlanned) * 100;
+                           const isTop = i < 2; // Highlight top 2
+                           
+                           return (
+                               <div key={pm} className="space-y-1.5 group p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                   <div className="flex justify-between items-start text-xs font-bold">
+                                       <span className={cn(
+                                           "truncate pr-4 flex items-center gap-2",
+                                           isTop ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
+                                       )}>
+                                           {isTop && <span className="w-1.5 h-1.5 rounded-full bg-brand" />}
+                                           {pm}
+                                       </span>
+                                       <div className="text-right flex flex-col items-end">
+                                           <div className="flex items-center gap-1.5">
+                                               <span className="text-slate-900 dark:text-white tabular-nums">{formatHours(stats.productive)}</span>
+                                               <span className="text-[9px] text-slate-400 font-medium">productive</span>
+                                           </div>
+                                           {stats.internal > 0 && (
+                                               <div className="flex items-center gap-1.5 opacity-60">
+                                                   <span className="text-slate-500 tabular-nums">{formatHours(stats.internal)}</span>
+                                                   <span className="text-[9px] text-slate-400 font-medium italic">internal</span>
+                                               </div>
+                                           )}
+                                       </div>
+                                   </div>
+                                   <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex shadow-inner">
+                                       <div 
+                                           className={cn(
+                                               "h-full transition-all duration-1000",
+                                               isTop ? "bg-brand" : "bg-indigo-400"
+                                           )}
+                                           style={{ width: `${(stats.productive / totalHours) * 100}%` }}
+                                       />
+                                       <div 
+                                           className="h-full bg-slate-300 dark:bg-slate-700 transition-all duration-1000 opacity-50"
+                                           style={{ width: `${(stats.internal / totalHours) * 100}%` }}
+                                       />
+                                   </div>
+                                   <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 px-0.5">
+                                      <span>{Math.round(productivePercent)}% of total shop load</span>
+                                      {stats.internal > 0 && <span>+{formatHours(stats.internal)} internal</span>}
+                                   </div>
+                               </div>
+                           );
+                       }) : (
+                           <div className="flex items-center justify-center h-full text-xs font-medium text-slate-400 italic">No PM data available.</div>
+                       )}
+                   </div>
               </div>
           </div>
       </div>

@@ -37,7 +37,7 @@ export function DashboardSummaries({
         description="All live production records"
         href="/"
         isActive={currentFilter === ""}
-        tooltip="Total volume of active projects currently tracked in the system."
+        tooltip="Total volume of productive projects. Excludes Internal projects (Project No starting with 99)."
       />
       <StatCard 
         title="Due This Week" 
@@ -46,7 +46,7 @@ export function DashboardSummaries({
         description="Deadline approaching"
         href="/?filter=due_this_week"
         isActive={currentFilter === "due_this_week"}
-        tooltip="Jobs with a delivery date set within the current business week (Mon-Fri)."
+        tooltip="Jobs with a delivery date set within the current business week. Excludes Internal projects (Project No starting with 99)."
       />
       <StatCard 
         title="Overdue" 
@@ -55,7 +55,7 @@ export function DashboardSummaries({
         description="Past delivery date"
         href="/?filter=overdue"
         isActive={currentFilter === "overdue"}
-        tooltip="Active projects where the delivery date has already passed."
+        tooltip="Active projects where the delivery date has already passed. Excludes Internal projects (Project No starting with 99)."
       />
       <StatCard 
         title="This Month" 
@@ -64,7 +64,7 @@ export function DashboardSummaries({
         description="Due in current month"
         href="/?filter=this_month"
         isActive={currentFilter === "this_month"}
-        tooltip="Projects with a delivery date in the current calendar month."
+        tooltip="Projects with a delivery date in the current calendar month. Excludes Internal projects (Project No starting with 99)."
       />
     </div>
   );

@@ -22,15 +22,22 @@ const DEFAULT_SETTINGS: CapacitySettings = {
 const CONFIG_KEY = 'capacity_settings';
 
 export async function getCapacitySettings(): Promise<CapacitySettings> {
-  const record = await db.query.systemConfig.findFirst({
-    where: eq(systemConfig.key, CONFIG_KEY)
-  });
+  try {
+    const record = await db.query.systemConfig.findFirst({
+      where: eq(systemConfig.key, CONFIG_KEY)
+    });
 
-  if (!record || !record.value) {
+    if (!record || !record.value) {
+      console.warn(`[getCapacitySettings] ${CONFIG_KEY} not found. Using defaults.`);
+      return DEFAULT_SETTINGS;
+    }
+
+    return { ...DEFAULT_SETTINGS, ...(record.value as Partial<CapacitySettings>) };
+  } catch (error) {
+    console.error(`[getCapacitySettings] Failed to fetch ${CONFIG_KEY} from server:`, error);
+    console.info('[getCapacitySettings] Falling back to safe defaults.');
     return DEFAULT_SETTINGS;
   }
-
-  return { ...DEFAULT_SETTINGS, ...(record.value as Partial<CapacitySettings>) };
 }
 
 export async function updateCapacitySettings(data: CapacitySettings) {

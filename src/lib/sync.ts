@@ -84,6 +84,7 @@ export class SyncService {
       const projectData = await this.withRetry(projectFetchMethod, `Fetch ${mode} Projects`);
       if (projectData) {
         const remoteProjects = this.extractItems(projectData, 'Project');
+        console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects for ${mode} sync.`);
         await this.cleanDatabase();
         await this.syncProjects(remoteProjects);
       }
@@ -120,33 +121,49 @@ export class SyncService {
   }
 
   private async runFullDeepSyncCycle() {
-    // Implement resumable full sync
-    const configResults = await db.select().from(systemConfig).where(eq(systemConfig.key, 'FULL_SYNC_CURSOR')).limit(1);
-    const config = configResults[0];
-    
-    let offset = config ? (config.value as { offset: number }).offset : 0;
-    console.log(`[Sync] Resuming Full Sync at offset ${offset}`);
+    const BATCH_SIZE = 25;
+    let totalProcessed = 0;
+    let totalMismatched = 0;
+    let isComplete = false;
+    let offset = 0;
 
-    const stats = await this.runDeepSyncQueue(20, offset); // Process batch of 20
+    console.log(`[Sync] Starting continuous Full Deep Sync (Batch Size: ${BATCH_SIZE})`);
+
+    while (!isComplete) {
+      const stats = await this.runDeepSyncQueue(BATCH_SIZE, offset);
+      
+      totalProcessed += stats.processedCount;
+      totalMismatched += stats.mismatchCount;
+      
+      const activeProjectsCount = await db.select({ count: sql<number>`count(*)` })
+        .from(projects)
+        .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
+      
+      const totalCount = activeProjectsCount[0].count;
+      offset += stats.processedCount;
+      isComplete = offset >= totalCount || stats.processedCount === 0;
+      
+      console.log(`[Sync] Progress: ${offset}/${totalCount} projects deep-synced.`);
+      
+      if (!isComplete) {
+          // Small cooldown between batches to let DB/Event loop breathe
+          await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    console.log(`[Sync] Full Deep Sync complete. Total processed: ${totalProcessed}`);
     
-    const newOffset = offset + stats.processedCount;
-    const totalActive = await db.select({ count: sql<number>`count(*)` })
-      .from(projects)
-      .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
-    
-    const isComplete = newOffset >= totalActive[0].count;
-    
+    // Reset cursor for legacy purposes
     await db.insert(systemConfig).values({
       key: 'FULL_SYNC_CURSOR',
-      value: { offset: isComplete ? 0 : newOffset },
+      value: { offset: 0 },
       updatedAt: new Date(),
     }).onConflictDoUpdate({
       target: systemConfig.key,
-      set: { value: { offset: isComplete ? 0 : newOffset }, updatedAt: new Date() },
+      set: { value: { offset: 0 }, updatedAt: new Date() },
     });
 
-    if (isComplete) console.log('[Sync] Full Sync Cycle Completed and Reset.');
-    return stats;
+    return { processedCount: totalProcessed, mismatchCount: totalMismatched };
   }
 
   private async syncClients(remoteClients: any[]) {

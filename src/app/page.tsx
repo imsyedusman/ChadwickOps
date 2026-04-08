@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ProjectTable } from "@/components/dashboard/project-table";
 import { DashboardSummaries } from "@/components/dashboard/DashboardSummaries";
+import { isProductiveProject } from "@/lib/project-utils";
 
 export default async function DashboardPage({
   searchParams,
@@ -67,28 +68,32 @@ export default async function DashboardPage({
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
+  const productiveProjects = projectsWithRisk.filter(p => isProductiveProject(p.projectNumber));
+  const internalProjects = projectsWithRisk.filter(p => !isProductiveProject(p.projectNumber));
+
   const stats = {
     total: projectsWithRisk.length,
-    activeJobs: projectsWithRisk.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
-    dueThisWeek: projectsWithRisk.filter(p => {
+    activeJobs: productiveProjects.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
+    dueThisWeek: productiveProjects.filter(p => {
       if (!p.deliveryDate) return false;
       const d = new Date(p.deliveryDate);
       return d >= todayStart && d <= weekEnd;
     }).length,
-    overdue: projectsWithRisk.filter(p => {
+    overdue: productiveProjects.filter(p => {
       if (!p.deliveryDate) return false;
       const d = new Date(p.deliveryDate);
       return d < todayStart && !['Completed', 'Archived'].includes(p.rawStatus);
     }).length,
-    thisMonth: projectsWithRisk.filter(p => {
+    thisMonth: productiveProjects.filter(p => {
       if (!p.deliveryDate) return false;
       const d = new Date(p.deliveryDate);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length,
+    internalHours: internalProjects.reduce((acc, p) => acc + p.remainingHours, 0),
   };
 
-  // Monthly Aggregation (Planning Foundation)
-  const monthlyStats = projectsWithRisk.reduce((acc, p) => {
+  // Monthly Aggregation (Planning Foundation) - Productive Only
+  const monthlyStats = productiveProjects.reduce((acc, p) => {
     if (!p.deliveryDate) return acc;
     const monthKey = format(new Date(p.deliveryDate), 'yyyy-MM');
     if (!acc[monthKey]) {
@@ -100,11 +105,11 @@ export default async function DashboardPage({
     return acc;
   }, {} as Record<string, { totalBudgetHours: number, totalRemainingHours: number, projectCount: number }>);
 
-  console.log(`[UI] Monthly aggregation:`, monthlyStats);
+  console.log(`[UI] Monthly aggregation (Productive):`, monthlyStats);
 
-  // Stage Bottleneck calculation
+  // Stage Bottleneck calculation - Productive Only
   const stageCounts: Record<string, { name: string, count: number, color: string }> = {};
-  projectsWithRisk.forEach(p => {
+  productiveProjects.forEach(p => {
     if (p.displayStage) {
       if (!stageCounts[p.displayStage.id]) {
         stageCounts[p.displayStage.id] = { name: p.displayStage.name, count: 0, color: p.displayStage.color };
