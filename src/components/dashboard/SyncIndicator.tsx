@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, Clock, RefreshCw, Loader2, Activity } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { getLatestSyncStatus } from '@/app/actions/sync';
+import { getLatestSyncStatus, getSyncProgress } from '@/app/actions/sync';
 import { cn } from '@/lib/utils';
 
 interface SyncStatus {
@@ -17,6 +17,7 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
   const [isSyncing, setIsSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
   
   // Placeholder for admin check
   const isAdmin = true; 
@@ -47,13 +48,8 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
       const result = mode === 'QUICK' ? await triggerQuickSync() : await triggerFullSync();
       
       if (result.success && result.stats) {
-        let msg = mode === 'QUICK' 
-          ? `Quick Sync: ${result.stats.processedCount} active projects refreshed.`
-          : `Full Sync: ${result.stats.processedCount} projects processed.`;
-          
-        if (result.stats.mismatchCount > 0) {
-          msg += ` (${result.stats.mismatchCount} warnings detected)`;
-        }
+        const stats = result.stats;
+        const msg = `${mode} Sync: ${stats.processedCount} success, ${stats.failedCount} failed.`;
         
         setCurrentStep(msg);
         await fetchStatus();
@@ -79,8 +75,30 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
   useEffect(() => {
     if (!isSyncingGlobal && !isSyncing) {
       fetchStatus();
+      setProgress(null);
     }
   }, [isSyncingGlobal, isSyncing]);
+
+  // Polling for progress
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isSyncing || isSyncingGlobal) {
+      interval = setInterval(async () => {
+        const result = await getSyncProgress();
+        if (result.success && result.active && result.progress) {
+          setProgress({ 
+            processed: result.progress.processed, 
+            total: result.progress.total 
+          });
+        }
+      }, 2000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isSyncing, isSyncingGlobal]);
 
   if (loading && !syncStatus) return (
     <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl h-10 animate-pulse">
@@ -115,9 +133,14 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
             isSuccess ? "text-emerald-600 dark:text-emerald-400" : 
             isFailure ? "text-red-500" : "text-amber-500"
           )}>
-            {isSyncingGlobal ? "Syncing..." : isSuccess ? "Status: Operational" : isFailure ? "Sync Failed" : "Sync Warning"}
+            {isSyncingGlobal || isSyncing ? "Syncing..." : isSuccess ? "Status: Operational" : isFailure ? "Sync Failed" : "Sync Warning"}
           </span>
-          {syncStatus && (
+          {(isSyncing || isSyncingGlobal) && progress && (
+            <span className="text-[9px] text-brand font-bold uppercase tracking-widest leading-none tabular-nums animate-pulse">
+              Processing {progress.processed} / {progress.total}
+            </span>
+          )}
+          {!isSyncing && !isSyncingGlobal && syncStatus && (
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none tabular-nums">
               Manual Sync Only
             </span>
@@ -125,15 +148,25 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
         </div>
       </div>
 
-      {syncStatus?.details && (
+      {syncStatus?.details && !isSyncing && !isSyncingGlobal && (
         <>
           <div className="h-4 w-[1px] bg-slate-100 dark:bg-slate-800 mx-1" />
-          <div className="hidden md:flex items-center gap-1 max-w-[250px] truncate">
+          <div className="hidden md:flex items-center gap-1 max-w-[300px] truncate">
             <span className={cn(
                "text-[9px] font-bold truncate",
                isFailure ? "text-red-500" : isWarning ? "text-amber-500" : "text-slate-500"
             )}>
-              {syncStatus.details}
+              {(() => {
+                try {
+                  const summary = JSON.parse(syncStatus.details || '{}');
+                  if (summary.mode) {
+                    return `${summary.mode}: ${summary.success} OK, ${summary.failed} FAIL`;
+                  }
+                  return syncStatus.details;
+                } catch (e) {
+                  return syncStatus.details;
+                }
+              })()}
             </span>
           </div>
         </>

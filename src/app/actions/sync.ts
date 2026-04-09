@@ -141,3 +141,21 @@ export async function updateRiskConfig(config: RiskConfig) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
+
+export async function getSyncProgress() {
+  try {
+    const config = await db.query.systemConfig.findFirst({
+      where: eq(systemConfig.key, 'SYNC_PROGRESS'),
+    });
+    
+    if (!config) return { success: true, active: false };
+    
+    return { 
+      success: true, 
+      active: true, 
+      progress: config.value as { processed: number; total: number; mode: string } 
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}

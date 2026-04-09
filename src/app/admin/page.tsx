@@ -162,33 +162,115 @@ export default async function AdminPage() {
                </div>
             </div>
         </div>
+        
+        {/* Persistent Sync Summary Card */}
+        {logs.length > 0 && (
+          <div className="px-8 py-6 bg-slate-50/50 dark:bg-slate-800/10 border-b border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {(() => {
+                const latest = logs[0];
+                let summary: any = null;
+                try {
+                  summary = JSON.parse(latest.details || '{}');
+                } catch (e) {
+                  summary = { legacy: true, details: latest.details };
+                }
+
+                return (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Attempt</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {format(new Date(latest.timestamp), 'dd MMM, HH:mm:ss')}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</p>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "h-2 w-2 rounded-full",
+                          latest.status === 'SUCCESS' ? "bg-emerald-500" :
+                          latest.status === 'PARTIAL' ? "bg-amber-500" : "bg-red-500"
+                        )} />
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                          {latest.status.replace('_', ' ')}
+                        </p>
+                      </div>
+                    </div>
+                    {summary && !summary.legacy && (
+                      <>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Projects Processed</p>
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                             <span className="text-emerald-500">{summary.success || 0}</span>
+                             <span className="text-slate-300 mx-1">/</span>
+                             <span>{summary.total || (summary.success + (summary.failed || 0)) || 0}</span>
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">API Failures</p>
+                          <p className={cn(
+                            "text-sm font-bold",
+                            (summary.failed || 0) > 0 ? "text-red-500" : "text-slate-400"
+                          )}>
+                             {summary.failed || 0}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
            {logs.length > 0 ? logs.map((log) => (
                <div key={log.id} className="px-8 py-5 flex items-start justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                   <div className="space-y-1.5 flex-1 pr-8">
                      <div className="flex items-center gap-3">
-                        <span className={cn(
-                         "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border shadow-sm",
-                         log.status === 'SUCCESS' ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                         log.status === 'WARNING' ? "bg-amber-50 text-amber-600 border-amber-200" :
-                         "bg-red-50 text-red-600 border-red-200"
-                        )}>
-                           {log.status === 'SUCCESS' ? 'OK' : log.status}
-                        </span>
-                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">
-                          {log.status === 'SUCCESS' ? 'Direct labour and project hours synchronized successfully.' : log.details}
-                        </span>
+                         <span className={cn(
+                          "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border shadow-sm",
+                          log.status === 'SUCCESS' ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                          log.status === 'PARTIAL' ? "bg-amber-50 text-amber-600 border-amber-200 shadow-amber-100/20" :
+                          log.status === 'WARNING' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                          "bg-red-50 text-red-600 border-red-200"
+                         )}>
+                            {log.status === 'SUCCESS' ? 'OK' : log.status.replace('_', ' ')}
+                         </span>
+                         <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                           {(() => {
+                             try {
+                               const summary = JSON.parse(log.details || '{}');
+                               if (summary.mode) {
+                                  return `${summary.mode} sync processed ${summary.success} projects${summary.failed > 0 ? ` (${summary.failed} failures skipped)` : ''}.`;
+                               }
+                               return summary.error || log.details;
+                             } catch (e) {
+                               return log.status === 'SUCCESS' ? 'Direct labour and project hours synchronized successfully.' : log.details;
+                             }
+                           })()}
+                         </span>
                      </div>
                      <div className="flex items-center gap-2 ml-[52px]">
-                        <Clock className="h-3 w-3 text-slate-300" />
+                         <Clock className="h-3 w-3 text-slate-300" />
                         <span className="text-[10px] text-slate-400 font-bold tabular-nums">
                           {format(new Date(log.timestamp), 'dd MMM yyyy, HH:mm:ss')}
                         </span>
-                        {log.details && log.status === 'SUCCESS' && (
-                           <span className="text-[10px] text-slate-300 font-medium truncate italic max-w-[300px]">
-                             — {log.details}
-                           </span>
-                        )}
+                        {(() => {
+                          try {
+                            const summary = JSON.parse(log.details || '{}');
+                            if (summary.archived !== undefined || summary.restored !== undefined) {
+                              return (
+                                <span className="text-[10px] text-indigo-400 font-bold ml-2 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/5 rounded border border-indigo-100 dark:border-indigo-500/10">
+                                  {summary.archived} ARCHIVED | {summary.restored} RESTORED
+                                </span>
+                              );
+                            }
+                          } catch (e) {}
+                          return null;
+                        })()}
                      </div>
                   </div>
                   <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">

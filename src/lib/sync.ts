@@ -15,18 +15,19 @@ export class SyncService {
     return new Promise(resolve => setTimeout(resolve, ms + jitter));
   }
 
-  private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 5): Promise<T | null> {
+  private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T | null> {
     let lastError: any;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await fn();
       } catch (error: any) {
         lastError = error;
-        const isRateLimit = error.response?.status === 429 || error.status === 429;
+        const status = error.response?.status || error.status;
+        const isRetryable = status === 429 || status === 503;
         
-        if (isRateLimit && attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * 500; // 1s, 2s, 4s, 8s...
-          console.warn(`[Sync] Rate limit hit on ${label}. Attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+        if (isRetryable && attempt < maxRetries) {
+          const delay = status === 429 ? Math.pow(2, attempt) * 1000 : 2000;
+          console.warn(`[Sync] ${status === 429 ? 'Rate limit' : 'Service error (503)'} hit on ${label}. Attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
           await this.sleep(delay);
           continue;
         }
@@ -36,8 +37,8 @@ export class SyncService {
           return null;
         }
         
-        // Non-rate limit error or other failure
-        console.error(`[Sync] ${label} encountered error:`, error.message);
+        // Permanent error or other failure
+        console.error(`[Sync] ${label} encountered non-retryable error:`, error.message);
         return null;
       }
     }
@@ -104,27 +105,33 @@ export class SyncService {
       await this.syncGlobalTimeEntries();
 
       // Progression Sync Logic
-      let deepSyncStats;
+      let syncResults;
       if (mode === 'QUICK') {
-        deepSyncStats = await this.runDeepSyncQueue(15); // 15 most recent/stale
+        const deepSyncStats = await this.runDeepSyncQueue(15);
+        syncResults = { ...stats, ...deepSyncStats, totalToProcess: 15 };
       } else {
-        deepSyncStats = await this.runFullDeepSyncCycle(); // All batches sequentially or resumable
+        syncResults = await this.runFullDeepSyncCycle(stats);
       }
 
-      const status = 'SUCCESS';
-      let details = `${mode} Sync completed. ${deepSyncStats.processedCount} projects deep-synced.`;
+      const status = syncResults.failedCount > 0 ? 'PARTIAL' : 'SUCCESS';
       
-      if (mode === 'FULL') {
-        details += ` Summary: Synced: ${stats.syncedCount}, Restored: ${stats.restoredCount}, Archived: ${stats.archivedCount}.`;
-      }
+      const summary = {
+        mode,
+        total: syncResults.totalToProcess,
+        success: syncResults.processedCount,
+        failed: syncResults.failedCount,
+        archived: syncResults.archivedCount,
+        restored: syncResults.restoredCount,
+        timestamp: startTime.toISOString()
+      };
 
       await db.insert(syncLogs).values({
         status,
-        details,
+        details: JSON.stringify(summary),
       });
 
-      // Update baseline for next cycle ONLY if FULL sync succeeded
-      if (mode === 'FULL') {
+      // Update baseline for next cycle ONLY if sync didn't fully fail
+      if (mode === 'FULL' && syncResults.processedCount > 0) {
         await db.insert(systemConfig).values({
           key: 'PREVIOUS_FULL_SYNC_START',
           value: { timestamp: startTime.toISOString() },
@@ -135,62 +142,72 @@ export class SyncService {
         });
       }
 
-      console.log('Sync result:', status, details);
-      return { success: true, mode, stats: { ...deepSyncStats, ...stats } };
+      // Clear progress on completion
+      await db.delete(systemConfig).where(eq(systemConfig.key, 'SYNC_PROGRESS'));
+
+      console.log('Sync result:', status, summary);
+      return { success: true, mode, stats: syncResults };
     } catch (error) {
       console.error('Sync failed:', error);
+      await db.delete(systemConfig).where(eq(systemConfig.key, 'SYNC_PROGRESS'));
       await db.insert(syncLogs).values({
         status: 'FAILURE',
-        details: error instanceof Error ? error.message : String(error),
+        details: JSON.stringify({ error: error instanceof Error ? error.message : String(error), timestamp: startTime.toISOString() }),
       });
       throw error;
     }
   }
 
-  private async runFullDeepSyncCycle() {
+  private async runFullDeepSyncCycle(initialStats: any) {
     const BATCH_SIZE = 25;
     let totalProcessed = 0;
+    let totalFailed = 0;
     let totalMismatched = 0;
-    let isComplete = false;
+    
+    const activeProjectsCount = await db.select({ count: sql<number>`count(*)` })
+      .from(projects)
+      .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
+    
+    const totalCount = activeProjectsCount[0].count;
     let offset = 0;
 
-    console.log(`[Sync] Starting continuous Full Deep Sync (Batch Size: ${BATCH_SIZE})`);
+    console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} projects`);
 
-    while (!isComplete) {
+    while (offset < totalCount) {
+      // Update progress
+      await db.insert(systemConfig).values({
+        key: 'SYNC_PROGRESS',
+        value: { processed: offset, total: totalCount, mode: 'FULL' },
+        updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: systemConfig.key,
+        set: { value: { processed: offset, total: totalCount, mode: 'FULL' }, updatedAt: new Date() },
+      });
+
       const stats = await this.runDeepSyncQueue(BATCH_SIZE, offset);
       
       totalProcessed += stats.processedCount;
+      totalFailed += stats.failedCount;
       totalMismatched += stats.mismatchCount;
       
-      const activeProjectsCount = await db.select({ count: sql<number>`count(*)` })
-        .from(projects)
-        .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
+      offset += BATCH_SIZE; // Use fixed batch size for offset to ensure we attempt all
       
-      const totalCount = activeProjectsCount[0].count;
-      offset += stats.processedCount;
-      isComplete = offset >= totalCount || stats.processedCount === 0;
+      console.log(`[Sync] Progress: ${Math.min(offset, totalCount)}/${totalCount} projects attempted.`);
       
-      console.log(`[Sync] Progress: ${offset}/${totalCount} projects deep-synced.`);
-      
-      if (!isComplete) {
-          // Small cooldown between batches to let DB/Event loop breathe
+      if (offset < totalCount) {
           await new Promise(r => setTimeout(r, 500));
       }
     }
 
-    console.log(`[Sync] Full Deep Sync complete. Total processed: ${totalProcessed}`);
+    console.log(`[Sync] Full Deep Sync complete. Success: ${totalProcessed}, Failed: ${totalFailed}`);
     
-    // Reset cursor for legacy purposes
-    await db.insert(systemConfig).values({
-      key: 'FULL_SYNC_CURSOR',
-      value: { offset: 0 },
-      updatedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: systemConfig.key,
-      set: { value: { offset: 0 }, updatedAt: new Date() },
-    });
-
-    return { processedCount: totalProcessed, mismatchCount: totalMismatched };
+    return { 
+      ...initialStats,
+      processedCount: totalProcessed, 
+      failedCount: totalFailed,
+      mismatchCount: totalMismatched,
+      totalToProcess: totalCount
+    };
   }
 
   private async syncClients(remoteClients: any[]) {
@@ -345,15 +362,10 @@ export class SyncService {
   }
 
   private async runDeepSyncQueue(limit = 15, offset = 0) {
-    const STALE_THRESHOLD_HOURS = 6;
-    const now = new Date();
-    const staleTime = new Date(now.getTime() - (STALE_THRESHOLD_HOURS * 60 * 60 * 1000));
-
-    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, Offset: ${offset}). Prioritizing projects not synced for >${STALE_THRESHOLD_HOURS}h.`);
+    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, Offset: ${offset}).`);
     
     const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
     
-    // Prioritize: 1. Never synced (null), 2. Oldest sync first
     const projectsToDeepSync = await db.select().from(projects)
       .where(conditions)
       .orderBy(asc(projects.lastDeepSyncAt))
@@ -363,11 +375,13 @@ export class SyncService {
     console.log(`[Sync] Selected ${projectsToDeepSync.length} projects for Deep Sync.`);
     
     let processedCount = 0;
+    let failedCount = 0;
     let mismatchCount = 0;
 
     for (const localProject of projectsToDeepSync) {
       const result = await this.withRetry(async () => {
-        await this.sleep(300); // Base spacing
+        // Enforce safe pace: 1300ms total delay
+        await this.sleep(1000); 
         
         // 1. Fetch Task Metadata (Budget source)
         const calculatedBudget = await this.syncTasks(localProject.workguruId) || 0;
@@ -379,9 +393,7 @@ export class SyncService {
         const calculatedApproved = hoursData.totalApproved;
         const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
         
-        // Detect mismatch logic
         const hasActualMismatch = (calculatedActual === 0 && calculatedBudget > 0) ? 1 : 0;
-        
         const remainingHours = calculatedBudget - calculatedActual;
         const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
         
@@ -405,11 +417,13 @@ export class SyncService {
       if (result) {
         processedCount++;
         if (result.hasActualMismatch) mismatchCount++;
+      } else {
+        console.warn(`[Sync] Skipping project ${localProject.projectNumber} due to persistent errors.`);
+        failedCount++;
       }
     }
     
-    console.log(`[Sync] Deep Sync complete. Processed: ${processedCount}, Mismatches: ${mismatchCount}`);
-    return { processedCount, mismatchCount };
+    return { processedCount, failedCount, mismatchCount };
   }
 
   private parseDate(dateStr: any): Date | null {
