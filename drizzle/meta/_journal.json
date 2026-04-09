@@ -15,6 +15,13 @@
       "when": 1775641863023,
       "tag": "0001_remarkable_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775746698695,
+      "tag": "0002_graceful_madame_masque",
+      "breakpoints": true
     }
   ]
 }

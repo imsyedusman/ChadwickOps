@@ -13,7 +13,8 @@ import {
   Trash2,
   Plus,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,11 @@ import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
 export default async function AdminPage() {
   const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
   const archivedCount = archivedCountResults[0]?.value || 0;
+
+  const archivedProjects = await db.query.projects.findMany({
+    where: eq(projects.isArchived, true),
+    orderBy: [desc(projects.archivedAt)],
+  });
 
   const logs = await db.query.syncLogs.findMany({
     orderBy: [desc(syncLogs.timestamp)],
@@ -271,6 +277,58 @@ export default async function AdminPage() {
                  No synchronization logs found.
               </div>
             )}
+        </div>
+      </section>
+
+      {/* Archived Projects Section */}
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+           <div className="flex items-center gap-3">
+              <div className="p-2 bg-slate-700/10 rounded-lg text-slate-700 dark:text-slate-400">
+                 <Archive className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Archived Projects</h2>
+           </div>
+           <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full uppercase tracking-widest">
+              Total Archived: {archivedCount}
+           </span>
+        </div>
+        <div className="overflow-x-auto">
+           <table className="w-full text-left">
+              <thead>
+                 <tr className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
+                    <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">Project Name</th>
+                    <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">Status</th>
+                    <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">Last Seen</th>
+                    <th className="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">Archived Date</th>
+                 </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                 {archivedProjects.length > 0 ? archivedProjects.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                       <td className="px-8 py-4">
+                          <div className="flex flex-col">
+                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{p.name}</span>
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{p.projectNumber}</span>
+                          </div>
+                       </td>
+                       <td className="px-8 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-tight">{p.rawStatus}</td>
+                       <td className="px-8 py-4 text-xs font-bold text-slate-400 tabular-nums">
+                          {p.lastSeenAt ? format(new Date(p.lastSeenAt), 'dd MMM yyyy') : 'Never'}
+                       </td>
+                       <td className="px-8 py-4 text-xs font-bold text-indigo-500 tabular-nums">
+                          {p.archivedAt ? format(new Date(p.archivedAt), 'dd MMM yyyy') : 'Unknown'}
+                       </td>
+                    </tr>
+                 )) : (
+                    <tr>
+                       <td colSpan={4} className="px-8 py-12 text-center text-slate-400 text-xs italic">
+                          No projects have been archived yet.
+                       </td>
+                    </tr>
+                 )}
+              </tbody>
+           </table>
         </div>
       </section>
     </div>

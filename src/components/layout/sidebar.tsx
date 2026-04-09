@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  BookOpen
 } from "lucide-react";
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Production Plan', href: '/production', icon: CalendarDays },
   { name: 'Capacity & Risk', href: '/risk', icon: BarChart3 },
   { name: 'Sync Logs', href: '/logs', icon: History },
+  { name: 'Help Guide', href: '/help', icon: BookOpen },
 ];
 
 const secondaryNavigation = [

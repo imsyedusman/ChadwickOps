@@ -284,6 +284,10 @@ export class SyncService {
           if (existing?.isArchived) {
             console.log(`[Sync] Project ${workguruId} (${projectNumber}) found in WorkGuru - Unarchiving.`);
             stats.restoredCount++;
+            // Clear archivedAt when restored
+            await db.update(projects)
+              .set({ isArchived: false, archivedAt: null, updatedAt: new Date() })
+              .where(eq(projects.workguruId, workguruId));
           }
           stats.syncedCount++;
         }
@@ -300,6 +304,7 @@ export class SyncService {
             updatedAt: new Date(),
             lastSeenAt: new Date(),
             isArchived: false,
+            archivedAt: null, // Ensure archivedAt is null for active projects
         };
 
         if (count === 0) {
@@ -367,7 +372,7 @@ export class SyncService {
     
     const idsToArchive = projectsToArchive.map(p => p.id);
     await db.update(projects)
-      .set({ isArchived: true, updatedAt: new Date() })
+      .set({ isArchived: true, archivedAt: new Date(), updatedAt: new Date() })
       .where(inArray(projects.id, idsToArchive));
 
     return projectsToArchive.length;

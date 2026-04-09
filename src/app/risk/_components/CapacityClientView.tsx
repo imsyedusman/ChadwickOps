@@ -208,11 +208,31 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                           <thead className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200/60 dark:border-slate-700/60 text-[10px] uppercase tracking-widest font-bold text-slate-400">
                               <tr>
                                   <th className="px-5 py-3">Month</th>
-                                  <th className="px-5 py-3 text-right">Budget</th>
-                                  <th className="px-5 py-3 text-right">Actual</th>
-                                  <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">Remaining</th>
-                                  <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">Available</th>
-                                  <th className="px-5 py-3 w-[25%] text-left">Capacity Utilization</th>
+                                  <th className="px-5 py-3 text-right">
+                                    <Tooltip content="Total estimated hours from all project tasks in WorkGuru.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Budget</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right">
+                                    <Tooltip content="Total hours logged in WorkGuru timesheets as of the last sync.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Actual</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">
+                                    <Tooltip content="Outstanding work (Budget minus Actual). Calculated for active projects only.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Remaining</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">
+                                    <Tooltip content="Capacity minus Remaining work. Shows how much more work the workshop can take on.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Available</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 w-[25%] text-left">
+                                    <Tooltip content="Workload vs. available capacity. Higher % means higher risk of delays.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Capacity Utilization</span>
+                                    </Tooltip>
+                                  </th>
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">

@@ -49,6 +49,7 @@ export const projects = pgTable('projects', {
   remoteUpdatedAt: timestamp('remote_updated_at'),
   hasActualMismatch: integer('has_actual_mismatch').default(0).notNull(), // 0 = false, 1 = true
   isArchived: boolean('is_archived').default(false).notNull(),
+  archivedAt: timestamp('archived_at'),
   lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
