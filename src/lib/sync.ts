@@ -173,29 +173,34 @@ export class SyncService {
 
     console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} projects`);
 
-    while (offset < totalCount) {
+    while (totalProcessed + totalFailed < totalCount) {
       // Update progress
       await db.insert(systemConfig).values({
         key: 'SYNC_PROGRESS',
-        value: { processed: offset, total: totalCount, mode: 'FULL' },
+        value: { processed: totalProcessed + totalFailed, total: totalCount, mode: 'FULL' },
         updatedAt: new Date(),
       }).onConflictDoUpdate({
         target: systemConfig.key,
-        set: { value: { processed: offset, total: totalCount, mode: 'FULL' }, updatedAt: new Date() },
+        set: { value: { processed: totalProcessed + totalFailed, total: totalCount, mode: 'FULL' }, updatedAt: new Date() },
       });
 
-      const stats = await this.runDeepSyncQueue(BATCH_SIZE, offset);
+      const stats = await this.runDeepSyncQueue(BATCH_SIZE);
       
       totalProcessed += stats.processedCount;
       totalFailed += stats.failedCount;
       totalMismatched += stats.mismatchCount;
       
-      offset += BATCH_SIZE; // Use fixed batch size for offset to ensure we attempt all
+      const attempted = totalProcessed + totalFailed;
+      console.log(`[Sync] Progress: ${attempted}/${totalCount} projects attempted.`);
       
-      console.log(`[Sync] Progress: ${Math.min(offset, totalCount)}/${totalCount} projects attempted.`);
-      
-      if (offset < totalCount) {
+      if (attempted < totalCount) {
           await new Promise(r => setTimeout(r, 500));
+      }
+
+      // Safety break to prevent infinite loops if something goes wrong
+      if (stats.processedCount === 0 && stats.failedCount === 0) {
+          console.warn('[Sync] Queue returned no results but goal not reached. Terminating cycle.');
+          break;
       }
     }
 
@@ -241,7 +246,14 @@ export class SyncService {
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
         const status = remote.status || remote.Status || 'UNKNOWN';
         const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
-        const projectManager = remote.projectManager || 'Unassigned';
+        let projectManager = 'Unassigned';
+        if (remote.projectManager) {
+            if (typeof remote.projectManager === 'object') {
+                projectManager = remote.projectManager.name || remote.projectManager.Name || 'Unassigned';
+            } else {
+                projectManager = String(remote.projectManager);
+            }
+        }
 
         if (!workguruId || !name || !remoteClientId) {
             console.log(`[Sync] Skipping project: missing critical fields. ID=${workguruId}, Name=${name}, ClientID=${remoteClientId}`);
@@ -361,16 +373,15 @@ export class SyncService {
     return projectsToArchive.length;
   }
 
-  private async runDeepSyncQueue(limit = 15, offset = 0) {
-    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}, Offset: ${offset}).`);
+  private async runDeepSyncQueue(limit = 15) {
+    console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}).`);
     
     const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
     
     const projectsToDeepSync = await db.select().from(projects)
       .where(conditions)
       .orderBy(asc(projects.lastDeepSyncAt))
-      .limit(limit)
-      .offset(offset);
+      .limit(limit);
 
     console.log(`[Sync] Selected ${projectsToDeepSync.length} projects for Deep Sync.`);
     
@@ -419,6 +430,13 @@ export class SyncService {
         if (result.hasActualMismatch) mismatchCount++;
       } else {
         console.warn(`[Sync] Skipping project ${localProject.projectNumber} due to persistent errors.`);
+        // Mark as "attempted" so it moves to back of queue
+        await db.update(projects)
+          .set({ 
+            lastDeepSyncAt: new Date(),
+            updatedAt: new Date() 
+          })
+          .where(eq(projects.workguruId, localProject.workguruId));
         failedCount++;
       }
     }

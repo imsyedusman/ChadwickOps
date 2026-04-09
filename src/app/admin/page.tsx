@@ -18,8 +18,6 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
-import { RiskConfigForm } from "@/components/admin/RiskConfigForm";
-import { RiskConfig } from "@/lib/risk";
 
 export default async function AdminPage() {
   const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
@@ -43,12 +41,6 @@ export default async function AdminPage() {
   const config = await db.query.systemConfig.findMany();
   
   const credentialsConfig = config.find(c => c.key === 'WORKGURU_API_CREDENTIALS');
-  const riskConfigRaw = config.find(c => c.key === 'RISK_CONFIGURATION');
-  
-  const riskConfig: RiskConfig = (riskConfigRaw?.value as RiskConfig) || {
-    dailyCapacity: 40,
-    riskThreshold: 90,
-  };
 
   const isEncryptionKeySet = process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length === 32;
 
@@ -83,9 +75,6 @@ export default async function AdminPage() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* API Credentials */}
         <ApiCredentialsForm hasExistingCredentials={!!credentialsConfig} />
-
-        {/* System Configuration */}
-        <RiskConfigForm initialConfig={riskConfig} />
       </div>
 
       {/* Stage Mappings */}

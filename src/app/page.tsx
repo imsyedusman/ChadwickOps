@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ProjectTable } from "@/components/dashboard/project-table";
 import { DashboardSummaries } from "@/components/dashboard/DashboardSummaries";
-import { isProductiveProject } from "@/lib/project-utils";
+import { isProductiveProject, isActiveWorkStatus } from "@/lib/project-utils";
 
 export default async function DashboardPage({
   searchParams,
@@ -74,19 +74,19 @@ export default async function DashboardPage({
 
   const stats = {
     total: projectsWithRisk.length,
-    activeJobs: productiveProjects.filter(p => !['Completed', 'Archived'].includes(p.rawStatus)).length,
+    activeJobs: productiveProjects.filter(p => isActiveWorkStatus(p.rawStatus)).length,
     dueThisWeek: productiveProjects.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
       return d >= todayStart && d <= weekEnd;
     }).length,
     overdue: productiveProjects.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
-      return d < todayStart && !['Completed', 'Archived'].includes(p.rawStatus);
+      return d < todayStart;
     }).length,
     thisMonth: productiveProjects.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length,
@@ -95,7 +95,7 @@ export default async function DashboardPage({
 
   // Monthly Aggregation (Planning Foundation) - Productive Only
   const monthlyStats = productiveProjects.reduce((acc, p) => {
-    if (!p.deliveryDate) return acc;
+    if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return acc;
     const monthKey = format(new Date(p.deliveryDate), 'yyyy-MM');
     if (!acc[monthKey]) {
       acc[monthKey] = { totalBudgetHours: 0, totalRemainingHours: 0, projectCount: 0 };
@@ -126,19 +126,19 @@ export default async function DashboardPage({
 
   if (filter === "due_this_week") {
     displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
       return d >= todayStart && d <= weekEnd;
     });
   } else if (filter === "overdue") {
     displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
-      return d < todayStart && !['Completed', 'Archived'].includes(p.rawStatus);
+      return d < todayStart;
     });
   } else if (filter === "this_month") {
     displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate) return false;
+      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
       const d = new Date(p.deliveryDate);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });

@@ -10,13 +10,15 @@ export interface CapacitySettings {
   hoursPerWeek: number;
   efficiency: number; // 0 to 1
   weeksPerMonth: number;
+  riskThreshold: number; // % (e.g. 90)
 }
 
 const DEFAULT_SETTINGS: CapacitySettings = {
   staff: 10,
   hoursPerWeek: 38,
   efficiency: 0.8,
-  weeksPerMonth: 4.33
+  weeksPerMonth: 4.33,
+  riskThreshold: 90
 };
 
 const CONFIG_KEY = 'capacity_settings';

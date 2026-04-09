@@ -4,6 +4,7 @@ import { projects } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getCapacitySettings } from "@/actions/capacity";
 import ProductionClientView from "./_components/ProductionClientView";
+import { isActiveWorkStatus } from "@/lib/project-utils";
 
 export const metadata = {
   title: "Production Plan | WorkGuru Operations",
@@ -18,10 +19,8 @@ export default async function ProductionPlanPage() {
     }
   });
 
-  // EXACT same filtering as WIP
-  const activeProjects = allProjects.filter(
-    (p) => !['Completed', 'Archived'].includes(p.rawStatus)
-  );
+  // Filter by active production status
+  const activeProjects = allProjects.filter((p) => isActiveWorkStatus(p.rawStatus));
 
   const settings = await getCapacitySettings();
 

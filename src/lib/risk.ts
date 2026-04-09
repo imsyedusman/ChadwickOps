@@ -2,39 +2,22 @@ import { db } from '@/db';
 import { systemConfig, projects } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
-export interface RiskConfig {
-  dailyCapacity: number; // Total daily labor hours (e.g. 7.5 * number of workers)
-  riskThreshold: number; // % utilization to be considered "At Risk" (e.g. 90)
-}
+import { getCapacitySettings } from '@/actions/capacity';
+
+/**
+ * Service to calculate delivery risk based on unified capacity settings.
+ */
 
 export class DeliveryRiskService {
-  async getRiskConfig(): Promise<RiskConfig> {
-    try {
-      const config = await db.query.systemConfig.findFirst({
-        where: eq(systemConfig.key, 'RISK_CONFIGURATION'),
-      });
-
-      if (!config) {
-        console.warn('[DeliveryRiskService] RISK_CONFIGURATION not found in system_config. Using defaults.');
-        return {
-          dailyCapacity: 40,
-          riskThreshold: 90,
-        };
-      }
-
-      return config.value as RiskConfig;
-    } catch (error) {
-      console.error('[DeliveryRiskService] Failed to fetch RISK_CONFIGURATION from database:', error);
-      console.info('[DeliveryRiskService] Falling back to safe defaults.');
-      return {
-        dailyCapacity: 40,
-        riskThreshold: 90,
-      };
-    }
-  }
-
+  /**
+   * Calculates risk status for a project based on remaining hours and business days.
+   */
   async calculateProjectRisk(project: typeof projects.$inferSelect) {
-    const config = await this.getRiskConfig();
+    const settings = await getCapacitySettings();
+    
+    // Unified Daily Capacity = (Staff * Hrs/Wk * Efficiency) / 5 (Assuming 5 work days/week)
+    const dailyCapacity = (settings.staff * settings.hoursPerWeek * settings.efficiency) / 5;
+    const riskThreshold = settings.riskThreshold;
     
     if (!project.deliveryDate || project.remainingHours <= 0) {
       return 'ON_TRACK';
@@ -49,23 +32,14 @@ export class DeliveryRiskService {
 
     // Business days (approx 5/7)
     const businessDays = Math.max(1, Math.ceil(diffDays * (5 / 7)));
-    const totalAvailableCapacity = businessDays * config.dailyCapacity;
-    
+    const totalAvailableCapacity = businessDays * dailyCapacity;
     const utilization = (project.remainingHours / totalAvailableCapacity) * 100;
 
     if (utilization > 100) return 'OVER_CAPACITY';
-    if (utilization >= config.riskThreshold) return 'AT_RISK';
+    if (utilization >= riskThreshold) return 'AT_RISK';
     
     return 'ON_TRACK';
   }
 
-  async updateRiskConfig(newConfig: RiskConfig) {
-    await db.insert(systemConfig).values({
-      key: 'RISK_CONFIGURATION',
-      value: newConfig,
-    }).onConflictDoUpdate({
-      target: systemConfig.key,
-      set: { value: newConfig, updatedAt: new Date() },
-    });
-  }
+  // Removed updateRiskConfig as we now use updateCapacitySettings in capacity.ts
 }

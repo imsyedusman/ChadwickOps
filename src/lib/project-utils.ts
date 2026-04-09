@@ -24,6 +24,35 @@ export function getProjectCategory(projectNumber: string | null): 'Productive' |
 }
 
 /**
+ * Strict list of statuses representing active production work.
+ */
+export const ACTIVE_STATUSES = [
+  'Not Drawn',
+  'Drawings Submitted',
+  'Drawings Approved',
+  'Ordered',
+  'In Progress',
+  'Ready for Testing',
+  'Tested Defective',
+  'On Hold',
+  'Waiting to Start'
+];
+
+/**
+ * Returns true if the project status represents active production work.
+ * Handles WorkGuru prefixes like "1.1 - Not Drawn" by cleaning the status string.
+ */
+export function isActiveWorkStatus(status: string | null): boolean {
+  if (!status) return false;
+  
+  // Strip numeric prefix (e.g., "1.1 - ", "2 - ") and trim
+  const cleaned = status.replace(/^[\d.]+ - /, '').trim().toLowerCase();
+  
+  // Case-insensitive inclusion check
+  return ACTIVE_STATUSES.some(s => s.toLowerCase() === cleaned);
+}
+
+/**
  * Tooltip explaining what "Internal" means in the context of the dashboard.
  */
 export const INTERNAL_WORK_DESCRIPTION = "Internal projects (starting with 99xxx) such as Leave, Training, or Non-project work. These are excluded from capacity and utilization metrics.";

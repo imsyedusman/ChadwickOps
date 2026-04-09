@@ -4,6 +4,7 @@ import { projects } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getCapacitySettings } from "@/actions/capacity";
 import CapacityClientView from "./_components/CapacityClientView";
+import { isActiveWorkStatus } from "@/lib/project-utils";
 
 export default async function CapacityPage({
   searchParams,
@@ -18,10 +19,8 @@ export default async function CapacityPage({
     orderBy: [desc(projects.updatedAt)],
   });
 
-  // Filter exact same as WIP active projects
-  const activeProjects = allProjects.filter(
-    (p) => !['Completed', 'Archived'].includes(p.rawStatus)
-  );
+  // Filter by active production status
+  const activeProjects = allProjects.filter((p) => isActiveWorkStatus(p.rawStatus));
 
   const settings = await getCapacitySettings();
 
