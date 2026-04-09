@@ -8,7 +8,6 @@ import { encrypt, decrypt } from '@/lib/crypto';
 import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { StageService } from '@/lib/stages';
-import { RiskConfig } from '@/lib/risk';
 
 export async function triggerQuickSync() {
   return handleSync('QUICK');
@@ -122,21 +121,6 @@ export async function getLatestSyncStatus() {
       orderBy: [desc(syncLogs.timestamp)],
     });
     return { success: true, data: latestLog };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-export async function updateRiskConfig(config: RiskConfig) {
-  try {
-    await db.insert(systemConfig).values({
-      key: 'RISK_CONFIGURATION',
-      value: config,
-    }).onConflictDoUpdate({
-      target: systemConfig.key,
-      set: { value: config, updatedAt: new Date() },
-    });
-    return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
