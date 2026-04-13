@@ -44,6 +44,17 @@ export default async function DashboardPage({
   );
 
   console.log(`[UI] Fetched ${projectsWithRisk.length} projects for display.`);
+  
+  const projectsWithBay = projectsWithRisk.filter(p => p.bayLocation);
+  if (projectsWithBay.length > 0) {
+      console.log(`[UI] Found ${projectsWithBay.length} projects with Bay Location:`);
+      projectsWithBay.slice(0, 5).forEach(p => {
+          console.log(`- ${p.projectNumber}: ${p.bayLocation}`);
+      });
+  } else {
+      console.log(`[UI] No projects found with Bay Location data (checked ${projectsWithRisk.length} projects).`);
+  }
+  
   if (projectsWithRisk.length > 0) {
       console.log(`[UI] Sample project:`, JSON.stringify(projectsWithRisk[0]).substring(0, 200));
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import { 
   ExternalLink, 
@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
+import { useUserPreferences } from "@/components/providers/user-preferences-provider";
+import { Checkbox } from "../ui/Checkbox";
 
 type ProjectTableProps = {
   projects: any[];
@@ -29,6 +31,19 @@ type ProjectTableProps = {
 };
 
 export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps) {
+  const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
+  const columnPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (columnPickerRef.current && !columnPickerRef.current.contains(event.target as Node)) {
+        setIsColumnPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [search, setSearch] = useState(initialFilter);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -39,6 +54,114 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   const [statusFilter, setStatusFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
+
+  const { preferences, setPreference } = useUserPreferences();
+  const { columnVisibility } = preferences;
+
+  const [isScrolled, setIsScrolled] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const fakeScrollRef = useRef<HTMLDivElement>(null);
+  const syncingRef = useRef(false);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [showFakeScroll, setShowFakeScroll] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  // Sync scroll from table to fake scrollbar (and handle shadow)
+  const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    setIsScrolled(target.scrollLeft > 0);
+    
+    if (syncingRef.current) return;
+    
+    if (fakeScrollRef.current) {
+      syncingRef.current = true;
+      fakeScrollRef.current.scrollLeft = target.scrollLeft;
+      // Use requestAnimationFrame for smoothness if needed, 
+      // but simple sync is often enough for modern browsers
+      syncingRef.current = false;
+    }
+  };
+
+  // Sync scroll from fake scrollbar to table
+  const handleFakeScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (syncingRef.current) return;
+    
+    if (tableContainerRef.current) {
+      syncingRef.current = true;
+      tableContainerRef.current.scrollLeft = target.scrollLeft;
+      syncingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    const tableEl = tableContainerRef.current;
+    if (!tableEl) return;
+
+    // Track width and overflow
+    const resizeObserver = new ResizeObserver(() => {
+      const overflow = tableEl.scrollWidth > tableEl.clientWidth;
+      setHasOverflow(overflow);
+      setContentWidth(tableEl.scrollWidth);
+    });
+
+    // Track intersection for visibility rules
+    const intersectionObserver = new IntersectionObserver((entries) => {
+      for (let entry of entries) {
+        // We show the fake scrollbar if the table is in view 
+        // AND the table's natural bottom is NOT in view (handled by secondary check or calc)
+        setShowFakeScroll(entry.isIntersecting);
+      }
+    }, { threshold: 0 });
+
+    resizeObserver.observe(tableEl);
+    intersectionObserver.observe(tableEl);
+
+    // Scroll listener to hide fake scrollbar when real one is visible
+    const handleViewportScroll = () => {
+      if (!tableEl) return;
+      const rect = tableEl.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // Hide if the bottom of the table (where the real scrollbar lives) is above the viewport bottom
+      const isBottomVisible = rect.bottom <= viewportHeight;
+      const isTopVisible = rect.top <= viewportHeight;
+      
+      // The fake scrollbar should only show if the table is "active" in viewport 
+      // but its bottom is currently off-screen
+      setShowFakeScroll(isTopVisible && !isBottomVisible);
+    };
+
+    const scrollParent = document.querySelector('main') || window;
+    scrollParent.addEventListener('scroll', handleViewportScroll);
+    window.addEventListener('resize', handleViewportScroll);
+    handleViewportScroll(); // Initial check
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      scrollParent.removeEventListener('scroll', handleViewportScroll);
+      window.removeEventListener('resize', handleViewportScroll);
+    };
+  }, []);
+
+  // Target widths for sticky columns to ensure consistent layout
+  const STICKY_WIDTHS = {
+    projectNumber: 80,
+    projectName: 300,
+    itemName: 220,
+  };
+
+  const getStickyOffset = (columnId: 'projectNumber' | 'projectName' | 'itemName') => {
+    let offset = 0;
+    if (columnId === 'projectNumber') return offset;
+    
+    if (columnVisibility.projectNumber) offset += STICKY_WIDTHS.projectNumber;
+    if (columnId === 'projectName') return offset;
+    
+    if (columnVisibility.projectName) offset += STICKY_WIDTHS.projectName;
+    return offset;
+  };
 
   // Extract unique values for filters
   const filterOptions = useMemo(() => {
@@ -89,6 +212,34 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             aVal = a.deliveryDate ? new Date(a.deliveryDate).getTime() : 0;
             bVal = b.deliveryDate ? new Date(b.deliveryDate).getTime() : 0;
             break;
+          case 'drawingApprovalDate':
+            aVal = a.drawingApprovalDate ? new Date(a.drawingApprovalDate).getTime() : 0;
+            bVal = b.drawingApprovalDate ? new Date(b.drawingApprovalDate).getTime() : 0;
+            break;
+          case 'drawingSubmittedDate':
+            aVal = a.drawingSubmittedDate ? new Date(a.drawingSubmittedDate).getTime() : 0;
+            bVal = b.drawingSubmittedDate ? new Date(b.drawingSubmittedDate).getTime() : 0;
+            break;
+          case 'projectNumber':
+            const parseId = (num: string) => {
+              const parts = num.split('-');
+              if (parts.length < 2) return { prefix: num, suffix: 99999999 }; // IDs without hyphen go after same-prefix ones
+              const suffix = parseInt(parts[parts.length - 1], 10);
+              return { 
+                prefix: parts.slice(0, -1).join('-'), 
+                suffix: isNaN(suffix) ? 99999999 : suffix 
+              };
+            };
+            const aParsed = parseId(a.projectNumber || "");
+            const bParsed = parseId(b.projectNumber || "");
+            if (aParsed.prefix !== bParsed.prefix) {
+              aVal = aParsed.prefix;
+              bVal = bParsed.prefix;
+            } else {
+              aVal = aParsed.suffix;
+              bVal = bParsed.suffix;
+            }
+            break;
           case 'name':
             aVal = a.name || "";
             bVal = b.name || "";
@@ -112,6 +263,10 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
           case 'status':
             aVal = a.rawStatus || "";
             bVal = b.rawStatus || "";
+            break;
+          case 'bayLocation':
+            aVal = a.bayLocation || "";
+            bVal = b.bayLocation || "";
             break;
           case 'projectManager':
             aVal = a.projectManager || "";
@@ -167,7 +322,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-4 focus:ring-brand/5 focus:border-brand/30 outline-none transition-all"
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
              <User className="h-3.5 w-3.5 text-slate-400" />
              <select 
@@ -205,71 +360,195 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
            <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2">
              {filteredAndSortedProjects.length} records
            </div>
+
+           <div className="relative" ref={columnPickerRef}>
+             <button 
+               onClick={() => setIsColumnPickerOpen(!isColumnPickerOpen)}
+               className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+             >
+               <Filter className="h-3.5 w-3.5 text-slate-400" />
+               Columns
+             </button>
+             
+             {isColumnPickerOpen && (
+               <div className="absolute right-0 mt-2 w-56 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                 <div className="space-y-2">
+                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 px-1">Visible Columns</h4>
+                   <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
+                     {Object.keys(columnVisibility).map((key) => {
+                       const labels: Record<string, string> = {
+                         projectNumber: "Project ID",
+                         itemName: "Item",
+                         projectName: "Project Name",
+                         client: "Client",
+                         projectManager: "Manager",
+                         status: "Status",
+                         bayLocation: "Bay Location",
+                         deliveryDate: "Due Date",
+                         drawingApprovalDate: "Drawing Approval",
+                         drawingSubmittedDate: "Drawing Submitted",
+                         budgetHours: "Budget",
+                         actualHours: "Actual",
+                         remainingHours: "Remaining",
+                         progressPercent: "Progress %"
+                       };
+                       return (
+                         <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
+                           const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
+                           setPreference('columnVisibility', updated);
+                         }}>
+                           <Checkbox checked={columnVisibility[key]} onChange={() => {
+                             const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
+                             setPreference('columnVisibility', updated);
+                           }} />
+                           <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">{labels[key] || key}</span>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               </div>
+             )}
+           </div>
         </div>
       </div>
 
       {/* Table Area */}
-      <div className="overflow-x-auto relative no-scrollbar">
-        <table className="w-full text-left border-collapse table-auto min-w-[1000px]">
-          <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
-            <tr>
-              <th className="sticky left-0 z-30 bg-slate-50/95 dark:bg-slate-800/95 px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40">
-                # ID
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors"
-                onClick={() => handleSort('name')}
-              >
-                <div className="flex items-center">Project Name / Client <SortIcon column="name" /></div>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors"
-                onClick={() => handleSort('projectManager')}
-              >
-                <div className="flex items-center">PM <SortIcon column="projectManager" /></div>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
-                onClick={() => handleSort('status')}
-              >
-                <div className="flex items-center justify-center">Status <SortIcon column="status" /></div>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
-                onClick={() => handleSort('deliveryDate')}
-              >
-                <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" /></div>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors"
-                onClick={() => handleSort('budgetHours')}
-              >
-                <Tooltip content="Calculated from total Task quantity across project">
-                  <div className="flex items-center justify-center">Budget <SortIcon column="budgetHours" /></div>
-                </Tooltip>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors"
-                onClick={() => handleSort('actualHours')}
-              >
-                <Tooltip content="Aggregated from ALL logged timesheets (Draft, Submitted, Approved)">
-                  <div className="flex items-center justify-center">Actual <SortIcon column="actualHours" /></div>
-                </Tooltip>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center cursor-help"
-                onClick={() => handleSort('remainingHours')}
-              >
-                <Tooltip content="Budget - Actual Hours">
-                  <div className="flex items-center justify-center">REM <SortIcon column="remainingHours" /></div>
-                </Tooltip>
-              </th>
-              <th 
-                className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center"
-                onClick={() => handleSort('progressPercent')}
-              >
-                <div className="flex items-center justify-center">% <SortIcon column="progressPercent" /></div>
-              </th>
+      <div 
+        ref={tableContainerRef}
+        onScroll={handleTableScroll}
+        className="overflow-x-auto relative scrollbar-hide border-b border-slate-100 dark:border-slate-800"
+      >
+        <table className="w-full text-left border-collapse table-auto min-w-[max-content]">
+          <thead className="sticky top-0 z-40 bg-slate-50 dark:bg-slate-800 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
+            <tr className="divide-x divide-slate-100/50 dark:divide-slate-800/50">
+              {columnVisibility.projectNumber && (
+                <th 
+                  style={{ 
+                    left: getStickyOffset('projectNumber'),
+                    width: STICKY_WIDTHS.projectNumber,
+                    minWidth: STICKY_WIDTHS.projectNumber 
+                  }}
+                  className="sticky z-50 bg-slate-50 dark:bg-slate-800 px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40 cursor-pointer hover:bg-slate-100/50 transition-colors"
+                  onClick={() => handleSort('projectNumber')}
+                >
+                  <div className="flex items-center"># ID <SortIcon column="projectNumber" /></div>
+                </th>
+              )}
+              {columnVisibility.projectName && (
+                <th 
+                  style={{ 
+                    left: getStickyOffset('projectName'),
+                    width: STICKY_WIDTHS.projectName,
+                    minWidth: STICKY_WIDTHS.projectName 
+                  }}
+                  className="sticky z-50 bg-slate-50 dark:bg-slate-800 px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40 cursor-pointer hover:bg-slate-100/50 transition-colors"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center">Project Name / Client <SortIcon column="name" /></div>
+                </th>
+              )}
+              {columnVisibility.itemName && (
+                <th 
+                  style={{ 
+                    left: getStickyOffset('itemName'),
+                    width: STICKY_WIDTHS.itemName,
+                    minWidth: STICKY_WIDTHS.itemName 
+                  }}
+                  className={cn(
+                    "sticky z-50 bg-slate-50 dark:bg-slate-800 px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40 transition-all",
+                    isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]"
+                  )}
+                >
+                  Item
+                </th>
+              )}
+              {columnVisibility.projectManager && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors min-w-[140px]"
+                  onClick={() => handleSort('projectManager')}
+                >
+                  <div className="flex items-center">PM <SortIcon column="projectManager" /></div>
+                </th>
+              )}
+              {columnVisibility.status && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[100px]"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center justify-center">Status <SortIcon column="status" /></div>
+                </th>
+              )}
+              {columnVisibility.bayLocation && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[120px]"
+                  onClick={() => handleSort('bayLocation')}
+                >
+                  <div className="flex items-center justify-center">Bay Location <SortIcon column="bayLocation" /></div>
+                </th>
+              )}
+              {columnVisibility.deliveryDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
+                  onClick={() => handleSort('deliveryDate')}
+                >
+                  <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" /></div>
+                </th>
+              )}
+              {columnVisibility.drawingApprovalDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                  onClick={() => handleSort('drawingApprovalDate')}
+                >
+                  <div className="flex items-center justify-center">Drawing Approval <SortIcon column="drawingApprovalDate" /></div>
+                </th>
+              )}
+              {columnVisibility.drawingSubmittedDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                  onClick={() => handleSort('drawingSubmittedDate')}
+                >
+                  <div className="flex items-center justify-center">Drawing Submitted <SortIcon column="drawingSubmittedDate" /></div>
+                </th>
+              )}
+              {columnVisibility.budgetHours && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors min-w-[90px]"
+                  onClick={() => handleSort('budgetHours')}
+                >
+                  <Tooltip content="Calculated from total Task quantity across project">
+                    <div className="flex items-center justify-center">Budget <SortIcon column="budgetHours" /></div>
+                  </Tooltip>
+                </th>
+              )}
+              {columnVisibility.actualHours && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center cursor-help cursor-pointer hover:bg-slate-100/50 transition-colors min-w-[90px]"
+                  onClick={() => handleSort('actualHours')}
+                >
+                  <Tooltip content="Aggregated from ALL logged timesheets (Draft, Submitted, Approved)">
+                    <div className="flex items-center justify-center">Actual <SortIcon column="actualHours" /></div>
+                  </Tooltip>
+                </th>
+              )}
+              {columnVisibility.remainingHours && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center cursor-help min-w-[90px]"
+                  onClick={() => handleSort('remainingHours')}
+                >
+                  <Tooltip content="Budget - Actual Hours">
+                    <div className="flex items-center justify-center">REM <SortIcon column="remainingHours" /></div>
+                  </Tooltip>
+                </th>
+              )}
+              {columnVisibility.progressPercent && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[100px]"
+                  onClick={() => handleSort('progressPercent')}
+                >
+                  <div className="flex items-center justify-center">% <SortIcon column="progressPercent" /></div>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -282,157 +561,151 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]"
                   )}
                 >
-                  <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors">
-                    {project.projectNumber}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
-                            <a 
-                              href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
-                            >
-                              {project.name}
-                              <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight">{project.client?.name}</span>
-                            
-                            {/* Operational Flags */}
-                            {(() => {
-                              const budget = Number(project.budgetHours) || 0;
-                              const actual = Number(project.actualHours) || 0;
-                              const progress = Number(project.progressPercent) || 0;
-                              const hasUnapproved = project.hasUnapprovedHours === 1;
-                              
-                              let primaryFlag = null;
-                              if (!isProductiveProject(project.projectNumber)) {
-                                primaryFlag = (
-                                  <Tooltip content={INTERNAL_WORK_DESCRIPTION}>
-                                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 uppercase tracking-tighter shrink-0 cursor-help">
-                                      Internal
-                                    </span>
-                                  </Tooltip>
-                                );
-                              } else if (actual > budget && budget > 0) {
-                                primaryFlag = <span className="text-[9px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-500/20 uppercase tracking-tighter shrink-0">Over Budget</span>;
-                              } else if (progress >= 80 && actual <= budget && budget > 0) {
-                                primaryFlag = <span className="text-[9px] font-bold text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-500/20 uppercase tracking-tighter shrink-0">High Usage</span>;
-                              } else if (actual === 0 && budget > 0) {
-                                primaryFlag = <span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-500/10 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-500/20 uppercase tracking-tighter shrink-0">Not Started</span>;
-                              }
-
-                              return (
-                                <div className="flex items-center gap-1.5">
-                                  {primaryFlag}
-                                  {hasUnapproved && (
-                                    <Tooltip content={`Includes unapproved timesheets (${project.approvedHours}h approved)`}>
-                                      <span className="text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-100/40 uppercase tracking-tighter shrink-0 flex items-center gap-1">
-                                        <AlertTriangle className="h-2 w-2" />
-                                        Unapproved
-                                      </span>
-                                    </Tooltip>
-                                  )}
-                                </div>
-                              );
-                            })()}
+                  {columnVisibility.projectNumber && (
+                    <td 
+                      style={{ 
+                        left: getStickyOffset('projectNumber'),
+                        width: STICKY_WIDTHS.projectNumber,
+                        minWidth: STICKY_WIDTHS.projectNumber 
+                      }}
+                      className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors"
+                    >
+                      {project.projectNumber}
+                    </td>
+                  )}
+                  {columnVisibility.projectName && (
+                    <td 
+                       style={{ 
+                         left: getStickyOffset('projectName'),
+                         width: STICKY_WIDTHS.projectName,
+                         minWidth: STICKY_WIDTHS.projectName 
+                       }}
+                       className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 border-r border-slate-100/60 dark:border-slate-800/60"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex justify-between items-start">
+                          <div className="flex flex-col gap-0.5 max-w-full">
+                            <div className="flex items-center gap-2">
+                              <a 
+                                href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[13px] font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
+                              >
+                                {project.name}
+                                <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight line-clamp-1">{project.client?.name}</span>
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* Stale Data Indicator */}
-                        {(() => {
-                           const now = new Date();
-                           const sixHoursAgo = new Date(now.getTime() - (6 * 60 * 60 * 1000));
-                           const isStale = !project.lastDeepSyncAt || new Date(project.lastDeepSyncAt) < sixHoursAgo;
-                           
-                           if (!isStale) return null;
-
-                           const lastSyncedText = project.lastDeepSyncAt 
-                             ? new Date(project.lastDeepSyncAt).toLocaleString('en-AU', {
-                                 timeZone: 'Australia/Sydney',
-                                 day: 'numeric',
-                                 month: 'short',
-                                 hour: 'numeric',
-                                 minute: '2-digit',
-                                 hour12: true,
-                               })
-                             : "Never";
-
-                           return (
-                             <Tooltip content={`Last synced: ${lastSyncedText} (Sydney)`}>
-                               <span className="text-[9px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-500/20 uppercase tracking-tighter">Stale</span>
-                             </Tooltip>
-                           );
-                        })()}
                       </div>
-                      
-                      {/* Freshness indicator */}
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <History className="h-2.5 w-2.5 text-slate-300" />
-                        <span className="text-[9px] font-medium text-slate-400">
-                          {project.lastDeepSyncAt 
-                            ? `Refreshed ${formatDistanceToNow(new Date(project.lastDeepSyncAt), { addSuffix: true })}` 
-                            : 'Priority: Pending deep sync'}
-                        </span>
+                    </td>
+                  )}
+                  {columnVisibility.itemName && (
+                    <td 
+                      style={{ 
+                        left: getStickyOffset('itemName'),
+                        width: STICKY_WIDTHS.itemName,
+                        minWidth: STICKY_WIDTHS.itemName 
+                      }}
+                      className={cn(
+                       "sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400 border-r border-slate-100/60 dark:border-slate-800/60 transition-all",
+                       isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]"
+                      )}
+                    >
+                      <div className="line-clamp-2 leading-relaxed">
+                        {project.description || '—'}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400">
-                    {project.projectManager || 'Unassigned'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                     <span className={cn(
-                       "inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border shadow-sm uppercase tracking-wider",
-                       project.rawStatus === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-600 border-slate-100"
-                     )}>
-                       {project.rawStatus}
-                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                     <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                      {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
-                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={cn(
-                      "text-[12px] font-bold tabular-nums",
-                      project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
-                    )}>
-                      {project.remainingHours}h
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center gap-2 justify-center min-w-[80px]">
+                    </td>
+                  )}
+
+                  {columnVisibility.projectManager && (
+                    <td className="px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                      {project.projectManager || 'Unassigned'}
+                    </td>
+                  )}
+                  {columnVisibility.status && (
+                    <td className="px-4 py-3 text-center">
+                       <span className={cn(
+                         "inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border shadow-sm uppercase tracking-wider",
+                         project.rawStatus === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-600 border-slate-100"
+                       )}>
+                         {project.rawStatus}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.bayLocation && (
+                    <td className="px-4 py-3 text-center text-[12px] font-bold text-slate-700 dark:text-slate-300">
+                      {project.bayLocation || '—'}
+                    </td>
+                  )}
+                  {columnVisibility.deliveryDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.drawingApprovalDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.drawingSubmittedDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.budgetHours && (
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
+                    </td>
+                  )}
+                  {columnVisibility.actualHours && (
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
+                      </div>
+                    </td>
+                  )}
+                  {columnVisibility.remainingHours && (
+                    <td className="px-4 py-3 text-center">
                       <span className={cn(
-                        "text-[10px] font-bold tabular-nums",
-                        project.progressPercent >= 100 ? "text-red-500" : 
-                        project.progressPercent >= 80 ? "text-orange-500" : "text-brand"
-                      )}>{Math.round(project.progressPercent)}%</span>
-                      <div className="w-12 bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
-                        <div 
-                          className={cn(
-                            "h-full rounded-full transition-all duration-1000",
-                            project.progressPercent >= 100 ? "bg-red-500" : 
-                            project.progressPercent >= 80 ? "bg-orange-500" : "bg-brand"
-                          )}
-                          style={{ width: `${Math.min(project.progressPercent, 100)}%` }}
-                        />
+                        "text-[12px] font-bold tabular-nums",
+                        project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
+                      )}>
+                        {project.remainingHours}h
+                      </span>
+                    </td>
+                  )}
+                  {columnVisibility.progressPercent && (
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center gap-2 justify-center min-w-[80px]">
+                        <span className={cn(
+                          "text-[10px] font-bold tabular-nums",
+                          project.progressPercent >= 100 ? "text-red-500" : 
+                          project.progressPercent >= 80 ? "text-orange-500" : "text-brand"
+                        )}>{Math.round(project.progressPercent)}%</span>
+                        <div className="w-12 bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full transition-all duration-1000",
+                              project.progressPercent >= 100 ? "bg-red-500" : 
+                              project.progressPercent >= 80 ? "bg-orange-500" : "bg-brand"
+                            )}
+                            style={{ width: `${Math.min(project.progressPercent, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))
             ) : (
@@ -453,6 +726,18 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
           </tbody>
         </table>
       </div>
+
+      {/* Viewport Sticky Scrollbar */}
+      {showFakeScroll && hasOverflow && (
+        <div 
+          ref={fakeScrollRef}
+          onScroll={handleFakeScroll}
+          style={{ left: 'var(--sidebar-width)' }}
+          className="fixed bottom-0 right-0 z-[60] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 h-[12px] overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 hover:h-[16px] transition-all"
+        >
+          <div style={{ width: contentWidth, height: '1px' }} />
+        </div>
+      )}
 
       {/* Pagination Footer */}
       {totalPages > 1 && (
@@ -494,22 +779,5 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
         </div>
       )}
     </div>
-  );
-}
-
-function RiskBadge({ risk }: { risk: string }) {
-  const configs: Record<string, { label: string; classes: string }> = {
-    'OVER_CAPACITY': { label: 'OVER CAPACITY', classes: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30' },
-    'AT_RISK': { label: 'AT RISK', classes: 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-500/20' },
-    'ON_TRACK': { label: 'ON TRACK', classes: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' },
-  };
-  const config = configs[risk] || { label: risk, classes: 'bg-slate-100 text-slate-600' };
-  return (
-    <span className={cn(
-      "inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold tracking-[0.1em] border transition-all duration-300 shadow-sm uppercase shrink-0 whitespace-nowrap",
-      config.classes
-    )}>
-       {config.label}
-    </span>
   );
 }

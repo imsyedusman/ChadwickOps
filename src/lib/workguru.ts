@@ -146,4 +146,20 @@ export class WorkGuruClient {
       throw error;
     }
   }
+
+  async getProjectDetails(projectId: string) {
+    const url = `${BASE_URL}/api/services/app/Project/GetProject`;
+    const headers = await this.getAuthHeader();
+    const params = { id: projectId };
+    this.logRequest(url, 'GET');
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
 }

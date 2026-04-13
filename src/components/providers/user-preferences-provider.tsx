@@ -19,11 +19,15 @@ type UserPreferencesContextType = {
 const defaultPreferences: UserPreferences = {
   columnVisibility: {
     projectNumber: true,
+    itemName: true,
     projectName: true,
     client: true,
     projectManager: true,
     status: true,
+    bayLocation: false,
     deliveryDate: true,
+    drawingApprovalDate: false,
+    drawingSubmittedDate: false,
     budgetHours: true,
     actualHours: true,
     remainingHours: true,

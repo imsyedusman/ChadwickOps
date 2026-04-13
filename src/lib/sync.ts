@@ -246,6 +246,19 @@ export class SyncService {
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
         const status = remote.status || remote.Status || 'UNKNOWN';
         const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
+        
+        // DIAGNOSTIC LOG: Log the first project to see raw structure (including custom fields)
+        if (count === 0) {
+          console.log('[Sync-Diag] Raw Project Sample:', JSON.stringify(remote, null, 2));
+        }
+
+        // New Field Mapping: Project Description -> Item Name
+        const description = remote.description || remote.Description || null;
+
+        // Custom Fields Mapping
+        const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remote, 'ClientDrawingApprovalDate'));
+        const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remote, 'DrawingSubmittedDate'));
+
         let projectManager = 'Unassigned';
         if (remote.projectManager) {
             if (typeof remote.projectManager === 'object') {
@@ -298,6 +311,10 @@ export class SyncService {
             name,
             clientId: localClient.id,
             rawStatus: status,
+            description,
+            drawingApprovalDate,
+            drawingSubmittedDate,
+            bayLocation: this.getCustomFieldValue(remote, 'BayLocation'),
             deliveryDate: dueDate,
             projectManager,
             remoteUpdatedAt,
@@ -378,7 +395,7 @@ export class SyncService {
     return projectsToArchive.length;
   }
 
-  private async runDeepSyncQueue(limit = 15) {
+  public async runDeepSyncQueue(limit = 15) {
     console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}).`);
     
     const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
@@ -405,6 +422,16 @@ export class SyncService {
         // 2. Aggregate Hours LOCALLY from time_entries table
         const hoursData = await this.aggregateProjectHoursLocally(localProject.id);
         
+        // 3. Fetch Full Project Details for Custom Fields (Enrichment)
+        console.log(`[Sync] Fetching deep details for project ${localProject.projectNumber}...`);
+        const detailResponse = await this.client.getProjectDetails(localProject.workguruId);
+        const remoteDetails = detailResponse?.result || detailResponse;
+        const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
+
+        if (bayLocation) {
+            console.log(`[Sync] Found Bay Location for ${localProject.projectNumber}: ${bayLocation}`);
+        }
+
         const calculatedActual = hoursData.totalActual;
         const calculatedApproved = hoursData.totalApproved;
         const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
@@ -422,6 +449,7 @@ export class SyncService {
             remainingHours,
             progressPercent,
             hasActualMismatch,
+            bayLocation, // Successfully enriched
             lastDeepSyncAt: new Date(),
             updatedAt: new Date(),
           })
@@ -447,6 +475,34 @@ export class SyncService {
     }
     
     return { processedCount, failedCount, mismatchCount };
+  }
+
+  private getCustomFieldValue(remote: any, key: string): string | null {
+    // 1. Check flat properties (various casings)
+    if (remote[key] !== undefined) return remote[key];
+    const lowerKey = key.toLowerCase();
+    
+    for (const k of Object.keys(remote)) {
+        if (k.toLowerCase() === lowerKey) return remote[k];
+    }
+    
+    // 2. Check customFields array pattern
+    if (Array.isArray(remote.customFields)) {
+      const field = remote.customFields.find((f: any) => {
+        const fieldKey = (f.key || f.Key || f.name || f.Name || '').toLowerCase();
+        return fieldKey === lowerKey || fieldKey === 'bay location' || fieldKey === 'bay_location';
+      });
+      return field?.value || field?.Value || null;
+    }
+
+    // 3. Check customFields object pattern
+    if (remote.customFields && typeof remote.customFields === 'object' && !Array.isArray(remote.customFields)) {
+      for (const k of Object.keys(remote.customFields)) {
+          if (k.toLowerCase() === lowerKey || k.toLowerCase() === 'bay location') return remote.customFields[k];
+      }
+    }
+
+    return null;
   }
 
   private parseDate(dateStr: any): Date | null {
