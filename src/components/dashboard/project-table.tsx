@@ -63,10 +63,10 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   const fakeScrollRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
   const [contentWidth, setContentWidth] = useState(0);
+  const [containerRect, setContainerRect] = useState({ left: 0, width: 0 });
   const [showFakeScroll, setShowFakeScroll] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
 
-  // Sync scroll from table to fake scrollbar (and handle shadow)
   const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     setIsScrolled(target.scrollLeft > 0);
@@ -74,23 +74,25 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     if (syncingRef.current) return;
     
     if (fakeScrollRef.current) {
+      if (Math.abs(fakeScrollRef.current.scrollLeft - target.scrollLeft) < 1) return;
+      
       syncingRef.current = true;
       fakeScrollRef.current.scrollLeft = target.scrollLeft;
-      // Use requestAnimationFrame for smoothness if needed, 
-      // but simple sync is often enough for modern browsers
-      syncingRef.current = false;
+      // Short timeout to let the browser settle the scroll event
+      setTimeout(() => { syncingRef.current = false; }, 0);
     }
   };
 
-  // Sync scroll from fake scrollbar to table
   const handleFakeScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     if (syncingRef.current) return;
     
     if (tableContainerRef.current) {
+      if (Math.abs(tableContainerRef.current.scrollLeft - target.scrollLeft) < 1) return;
+
       syncingRef.current = true;
       tableContainerRef.current.scrollLeft = target.scrollLeft;
-      syncingRef.current = false;
+      setTimeout(() => { syncingRef.current = false; }, 0);
     }
   };
 
@@ -98,18 +100,30 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     const tableEl = tableContainerRef.current;
     if (!tableEl) return;
 
-    // Track width and overflow
-    const resizeObserver = new ResizeObserver(() => {
+    // Track width, overflow, and position
+    const updateDimensions = () => {
+      if (!tableEl) return;
+      const rect = tableEl.getBoundingClientRect();
       const overflow = tableEl.scrollWidth > tableEl.clientWidth;
+      
       setHasOverflow(overflow);
       setContentWidth(tableEl.scrollWidth);
-    });
+      setContainerRect({ left: rect.left, width: rect.width });
+      
+      // DIAGNOSTICS: Confirm exact alignment
+      if (overflow && fakeScrollRef.current) {
+        console.log(`[ScrollSync] 
+          Table: scrollWidth=${tableEl.scrollWidth}px, clientWidth=${tableEl.clientWidth}px, max=${tableEl.scrollWidth - tableEl.clientWidth}px
+          Fake: scrollWidth=${fakeScrollRef.current.scrollWidth}px, clientWidth=${fakeScrollRef.current.clientWidth}px, max=${fakeScrollRef.current.scrollWidth - fakeScrollRef.current.clientWidth}px
+        `);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
 
     // Track intersection for visibility rules
     const intersectionObserver = new IntersectionObserver((entries) => {
       for (let entry of entries) {
-        // We show the fake scrollbar if the table is in view 
-        // AND the table's natural bottom is NOT in view (handled by secondary check or calc)
         setShowFakeScroll(entry.isIntersecting);
       }
     }, { threshold: 0 });
@@ -117,25 +131,24 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     resizeObserver.observe(tableEl);
     intersectionObserver.observe(tableEl);
 
-    // Scroll listener to hide fake scrollbar when real one is visible
+    // Visibility logic (Excel-Style: Fixed to viewport bottom while table is active)
     const handleViewportScroll = () => {
       if (!tableEl) return;
       const rect = tableEl.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       
-      // Hide if the bottom of the table (where the real scrollbar lives) is above the viewport bottom
-      const isBottomVisible = rect.bottom <= viewportHeight;
-      const isTopVisible = rect.top <= viewportHeight;
+      // Update rect position in case layout moved without resize
+      setContainerRect({ left: rect.left, width: rect.width });
       
-      // The fake scrollbar should only show if the table is "active" in viewport 
-      // but its bottom is currently off-screen
-      setShowFakeScroll(isTopVisible && !isBottomVisible);
+      const isActiveInView = rect.top < viewportHeight && rect.bottom > 0;
+      setShowFakeScroll(isActiveInView);
     };
 
     const scrollParent = document.querySelector('main') || window;
     scrollParent.addEventListener('scroll', handleViewportScroll);
     window.addEventListener('resize', handleViewportScroll);
-    handleViewportScroll(); // Initial check
+    updateDimensions();
+    handleViewportScroll();
 
     return () => {
       resizeObserver.disconnect();
@@ -727,13 +740,18 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
         </table>
       </div>
 
-      {/* Viewport Sticky Scrollbar */}
+      {/* Viewport Sticky Scrollbar (Excel-Style Navigation) */}
       {showFakeScroll && hasOverflow && (
         <div 
           ref={fakeScrollRef}
           onScroll={handleFakeScroll}
-          style={{ left: 'var(--sidebar-width)' }}
-          className="fixed bottom-0 right-0 z-[60] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 h-[12px] overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 hover:h-[16px] transition-all"
+          style={{ 
+            left: `${containerRect.left}px`,
+            width: `${containerRect.width}px`,
+            // High visibility styling
+            boxShadow: '0 -10px 15px -3px rgba(0,0,0,0.1), 0 -4px 6px -2px rgba(0,0,0,0.05)'
+          }}
+          className="fixed bottom-0 z-[60] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-[14px] overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 hover:h-[18px] transition-all"
         >
           <div style={{ width: contentWidth, height: '1px' }} />
         </div>

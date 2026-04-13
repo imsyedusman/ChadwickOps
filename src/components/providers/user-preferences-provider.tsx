@@ -24,7 +24,7 @@ const defaultPreferences: UserPreferences = {
     client: true,
     projectManager: true,
     status: true,
-    bayLocation: false,
+    bayLocation: true,
     deliveryDate: true,
     drawingApprovalDate: false,
     drawingSubmittedDate: false,
@@ -49,7 +49,18 @@ export function UserPreferencesProvider({ children }: { children: React.ReactNod
     const saved = localStorage.getItem('user_preferences');
     if (saved) {
       try {
-        setPreferences({ ...defaultPreferences, ...JSON.parse(saved) });
+        const parsed = JSON.parse(saved);
+        // Deep merge columnVisibility to ensure new defaults (like bayLocation) are added
+        const mergedColumnVisibility = {
+          ...defaultPreferences.columnVisibility,
+          ...(parsed.columnVisibility || {})
+        };
+        
+        setPreferences({ 
+          ...defaultPreferences, 
+          ...parsed,
+          columnVisibility: mergedColumnVisibility 
+        });
       } catch (e) {
         console.error('Failed to parse preferences', e);
       }
