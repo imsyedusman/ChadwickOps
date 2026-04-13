@@ -25,7 +25,7 @@ export async function GET() {
     });
     const token = tokenRes.data.accessToken;
 
-    const pUrl = `https://api.workguru.io/api/services/app/Project/GetProject?id=${workguruId}`;
+    const pUrl = `https://api.workguru.io/api/services/app/Project/GetProjectById?id=${workguruId}`;
     const pRes = await axios.get(pUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });

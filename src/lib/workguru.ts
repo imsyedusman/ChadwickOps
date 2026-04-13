@@ -148,7 +148,7 @@ export class WorkGuruClient {
   }
 
   async getProjectDetails(projectId: string) {
-    const url = `${BASE_URL}/api/services/app/Project/GetProject`;
+    const url = `${BASE_URL}/api/services/app/Project/GetProjectById`;
     const headers = await this.getAuthHeader();
     const params = { id: projectId };
     this.logRequest(url, 'GET');

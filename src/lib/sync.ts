@@ -3,6 +3,14 @@ import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@
 import { WorkGuruClient } from './workguru';
 import { eq, sql, asc, desc, inArray, and, notInArray, lt, lte, or, count } from 'drizzle-orm';
 
+// Deterministic Custom Field IDs from WorkGuru
+const CF_IDS = {
+    BAY_LOCATION: 8925,
+    PROJECT_TYPE: 8926,
+    DRAWING_APPROVAL_DATE: 9450,
+    DRAWING_SUBMITTED_DATE: 9451,
+} as const;
+
 export class SyncService {
   private client: WorkGuruClient;
 
@@ -477,29 +485,50 @@ export class SyncService {
     return { processedCount, failedCount, mismatchCount };
   }
 
+  private getCustomFieldValueById(remote: any, id: number): string | null {
+    if (!remote) return null;
+    
+    // Check customFieldValues array (the most reliable source)
+    const values = remote.customFieldValues || remote.CustomFieldValues || [];
+    if (Array.isArray(values)) {
+        const found = values.find((v: any) => v.customFieldId === id);
+        if (found) return found.value || found.Value || null;
+    }
+    
+    return null;
+  }
+
   private getCustomFieldValue(remote: any, key: string): string | null {
-    // 1. Check flat properties (various casings)
-    if (remote[key] !== undefined) return remote[key];
+    if (!remote) return null;
+    
+    // Map key to confirmed deterministic IDs for target fields
     const lowerKey = key.toLowerCase();
     
+    if (lowerKey === 'baylocation' || lowerKey === 'bay location') 
+        return this.getCustomFieldValueById(remote, CF_IDS.BAY_LOCATION);
+        
+    if (lowerKey === 'clientdrawingapprovaldate' || lowerKey === 'drawing approval date')
+        return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_APPROVAL_DATE);
+        
+    if (lowerKey === 'drawingsubmitteddate' || lowerKey === 'drawing submitted date')
+        return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_SUBMITTED_DATE);
+
+    // 1. Check flat properties (various casings) for other fields
+    if (remote[key] !== undefined) return remote[key];
     for (const k of Object.keys(remote)) {
         if (k.toLowerCase() === lowerKey) return remote[k];
     }
     
-    // 2. Check customFields array pattern
-    if (Array.isArray(remote.customFields)) {
-      const field = remote.customFields.find((f: any) => {
-        const fieldKey = (f.key || f.Key || f.name || f.Name || '').toLowerCase();
-        return fieldKey === lowerKey || fieldKey === 'bay location' || fieldKey === 'bay_location';
+    // 2. Fallback to old name-based search for non-deterministic fields
+    const fieldsArray = Array.isArray(remote.customFields) ? remote.customFields : 
+                        Array.isArray(remote.customFieldValues) ? remote.customFieldValues : null;
+
+    if (fieldsArray) {
+      const field = fieldsArray.find((f: any) => {
+        const fieldKey = (f.key || f.Key || f.name || f.Name || f.customField?.name || f.customField?.Name || '').toLowerCase();
+        return fieldKey === lowerKey;
       });
       return field?.value || field?.Value || null;
-    }
-
-    // 3. Check customFields object pattern
-    if (remote.customFields && typeof remote.customFields === 'object' && !Array.isArray(remote.customFields)) {
-      for (const k of Object.keys(remote.customFields)) {
-          if (k.toLowerCase() === lowerKey || k.toLowerCase() === 'bay location') return remote.customFields[k];
-      }
     }
 
     return null;
