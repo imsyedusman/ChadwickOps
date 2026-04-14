@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useTransition } from "react";
 import { format } from "date-fns";
 import { 
   ExternalLink, 
@@ -66,20 +66,26 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   const [containerRect, setContainerRect] = useState({ left: 0, width: 0 });
   const [showFakeScroll, setShowFakeScroll] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     setIsScrolled(target.scrollLeft > 0);
     
+    // Prevent sync loops and unnecessary updates
     if (syncingRef.current) return;
     
     if (fakeScrollRef.current) {
-      if (Math.abs(fakeScrollRef.current.scrollLeft - target.scrollLeft) < 1) return;
+      if (Math.abs(fakeScrollRef.current.scrollLeft - target.scrollLeft) < 0.5) return;
       
       syncingRef.current = true;
-      fakeScrollRef.current.scrollLeft = target.scrollLeft;
-      // Short timeout to let the browser settle the scroll event
-      setTimeout(() => { syncingRef.current = false; }, 0);
+      requestAnimationFrame(() => {
+        if (fakeScrollRef.current) {
+          fakeScrollRef.current.scrollLeft = target.scrollLeft;
+        }
+        // Small delay to ensure the other scroll handler's events are ignored
+        setTimeout(() => { syncingRef.current = false; }, 20);
+      });
     }
   };
 
@@ -88,79 +94,21 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     if (syncingRef.current) return;
     
     if (tableContainerRef.current) {
-      if (Math.abs(tableContainerRef.current.scrollLeft - target.scrollLeft) < 1) return;
+      if (Math.abs(tableContainerRef.current.scrollLeft - target.scrollLeft) < 0.5) return;
 
       syncingRef.current = true;
-      tableContainerRef.current.scrollLeft = target.scrollLeft;
-      setTimeout(() => { syncingRef.current = false; }, 0);
+      requestAnimationFrame(() => {
+        if (tableContainerRef.current) {
+          tableContainerRef.current.scrollLeft = target.scrollLeft;
+        }
+        setTimeout(() => { syncingRef.current = false; }, 20);
+      });
     }
   };
 
-  useEffect(() => {
-    const tableEl = tableContainerRef.current;
-    if (!tableEl) return;
-
-    // Track width, overflow, and position
-    const updateDimensions = () => {
-      if (!tableEl) return;
-      const rect = tableEl.getBoundingClientRect();
-      const overflow = tableEl.scrollWidth > tableEl.clientWidth;
-      
-      setHasOverflow(overflow);
-      setContentWidth(tableEl.scrollWidth);
-      setContainerRect({ left: rect.left, width: rect.width });
-      
-      // DIAGNOSTICS: Confirm exact alignment
-      if (overflow && fakeScrollRef.current) {
-        console.log(`[ScrollSync] 
-          Table: scrollWidth=${tableEl.scrollWidth}px, clientWidth=${tableEl.clientWidth}px, max=${tableEl.scrollWidth - tableEl.clientWidth}px
-          Fake: scrollWidth=${fakeScrollRef.current.scrollWidth}px, clientWidth=${fakeScrollRef.current.clientWidth}px, max=${fakeScrollRef.current.scrollWidth - fakeScrollRef.current.clientWidth}px
-        `);
-      }
-    };
-
-    const resizeObserver = new ResizeObserver(updateDimensions);
-
-    // Track intersection for visibility rules
-    const intersectionObserver = new IntersectionObserver((entries) => {
-      for (let entry of entries) {
-        setShowFakeScroll(entry.isIntersecting);
-      }
-    }, { threshold: 0 });
-
-    resizeObserver.observe(tableEl);
-    intersectionObserver.observe(tableEl);
-
-    // Visibility logic (Excel-Style: Fixed to viewport bottom while table is active)
-    const handleViewportScroll = () => {
-      if (!tableEl) return;
-      const rect = tableEl.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      
-      // Update rect position in case layout moved without resize
-      setContainerRect({ left: rect.left, width: rect.width });
-      
-      const isActiveInView = rect.top < viewportHeight && rect.bottom > 0;
-      setShowFakeScroll(isActiveInView);
-    };
-
-    const scrollParent = document.querySelector('main') || window;
-    scrollParent.addEventListener('scroll', handleViewportScroll);
-    window.addEventListener('resize', handleViewportScroll);
-    updateDimensions();
-    handleViewportScroll();
-
-    return () => {
-      resizeObserver.disconnect();
-      intersectionObserver.disconnect();
-      scrollParent.removeEventListener('scroll', handleViewportScroll);
-      window.removeEventListener('resize', handleViewportScroll);
-    };
-  }, []);
-
   // Target widths for sticky columns to ensure consistent layout
   const STICKY_WIDTHS = {
-    projectNumber: 80,
+    projectNumber: 120,
     projectName: 300,
     itemName: 220,
   };
@@ -304,6 +252,70 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     currentPage * pageSize
   );
 
+  useEffect(() => {
+    const tableEl = tableContainerRef.current;
+    if (!tableEl) return;
+
+    // Track width, overflow, and position
+    const updateDimensions = () => {
+      if (!tableEl) return;
+      const rect = tableEl.getBoundingClientRect();
+      const overflow = tableEl.scrollWidth > tableEl.clientWidth;
+      
+      setHasOverflow(overflow);
+      setContentWidth(tableEl.scrollWidth);
+      setContainerRect({ left: rect.left, width: rect.width });
+      
+      // DIAGNOSTICS: Confirm exact alignment
+      if (overflow && fakeScrollRef.current) {
+        console.log(`[ScrollSync] 
+          Table: scrollWidth=${tableEl.scrollWidth}px, clientWidth=${tableEl.clientWidth}px, max=${tableEl.scrollWidth - tableEl.clientWidth}px
+          Fake: scrollWidth=${fakeScrollRef.current.scrollWidth}px, clientWidth=${fakeScrollRef.current.clientWidth}px, max=${fakeScrollRef.current.scrollWidth - fakeScrollRef.current.clientWidth}px
+        `);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
+
+    // Track intersection for visibility rules
+    const intersectionObserver = new IntersectionObserver((entries) => {
+      for (let entry of entries) {
+        setShowFakeScroll(entry.isIntersecting);
+      }
+    }, { threshold: 0 });
+
+    resizeObserver.observe(tableEl);
+    intersectionObserver.observe(tableEl);
+
+    // Visibility logic (Excel-Style: Fixed to viewport bottom while table is active)
+    const handleViewportScroll = () => {
+      if (!tableEl) return;
+      const rect = tableEl.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // Update rect position in case layout moved without resize
+      setContainerRect({ left: rect.left, width: rect.width });
+      
+      const isActiveInView = rect.top < viewportHeight && rect.bottom > 0;
+      setShowFakeScroll(isActiveInView);
+    };
+
+    const scrollParent = document.querySelector('main') || window;
+    scrollParent.addEventListener('scroll', handleViewportScroll);
+    window.addEventListener('resize', handleViewportScroll);
+    
+    // Initial call
+    updateDimensions();
+    handleViewportScroll();
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      scrollParent.removeEventListener('scroll', handleViewportScroll);
+      window.removeEventListener('resize', handleViewportScroll);
+    };
+  }, [currentProjects.length, columnVisibility, pageSize]);
+
   const handleSort = (key: string) => {
     setSortConfig(prev => {
       if (prev?.key === key) {
@@ -406,16 +418,26 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                          progressPercent: "Progress %"
                        };
                        return (
-                         <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
-                           const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
-                           setPreference('columnVisibility', updated);
-                         }}>
-                           <Checkbox checked={columnVisibility[key]} onChange={() => {
-                             const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
-                             setPreference('columnVisibility', updated);
-                           }} />
-                           <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">{labels[key] || key}</span>
-                         </div>
+                          <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
+                            const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
+                            startTransition(() => {
+                              setPreference('columnVisibility', updated);
+                            });
+                          }}>
+                            <Checkbox checked={columnVisibility[key]} onChange={() => {
+                              const updated = { ...columnVisibility, [key]: !columnVisibility[key] };
+                              startTransition(() => {
+                                setPreference('columnVisibility', updated);
+                              });
+                            }} />
+                            <span className={cn(
+                              "text-[11px] font-medium transition-colors",
+                              columnVisibility[key] ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-600",
+                              isPending && "opacity-70"
+                            )}>
+                              {labels[key] || key}
+                            </span>
+                          </div>
                        );
                      })}
                    </div>
@@ -581,7 +603,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                         width: STICKY_WIDTHS.projectNumber,
                         minWidth: STICKY_WIDTHS.projectNumber 
                       }}
-                      className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors"
+                      className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
                     >
                       {project.projectNumber}
                     </td>
