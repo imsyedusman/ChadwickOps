@@ -3,7 +3,6 @@ import { db } from './src/db';
 import { systemConfig } from './src/db/schema';
 import { eq } from 'drizzle-orm';
 import { decrypt } from './src/lib/crypto';
-import * as dotenv from 'dotenv';
 
 // Manually load env since we'll run with tsx but might not have --env-file in some environments
 // or just use process.env which will be populated by --env-file if we use it.
