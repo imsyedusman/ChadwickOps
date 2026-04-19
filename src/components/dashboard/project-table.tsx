@@ -418,24 +418,24 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                    <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
                      {Object.keys(columnVisibility).map((key) => {
                        const labels: Record<string, string> = {
-                         projectNumber: "Project ID",
-                         itemName: "Item",
-                         projectName: "Project Name",
-                         client: "Client",
-                         projectManager: "Manager",
-                         status: "Status",
-                         bayLocation: "Bay Location",
-                         deliveryDate: "Due Date",
-                         drawingApprovalDate: "Drawing Approval",
-                         drawingSubmittedDate: "Drawing Submitted",
-                          sheetmetalOrderedDate: "S/Metal Ordered",
-                          sheetmetalDeliveredDate: "S/Metal Delivered",
-                          switchgearOrderedDate: "S/Gear Ordered",
-                          switchgearDeliveredDate: "S/Gear Delivered",
-                         budgetHours: "Budget",
-                         actualHours: "Actual",
-                         remainingHours: "Remaining",
-                         progressPercent: "Progress %"
+                          projectNumber: "Project ID",
+                          itemName: "Item",
+                          projectName: "Project Name",
+                          client: "Client",
+                          projectManager: "Manager",
+                          status: "Status",
+                          bayLocation: "Bay Location",
+                          deliveryDate: "Due Date",
+                          drawingApprovalDate: "Drawing Approval",
+                          drawingSubmittedDate: "Drawing Submitted",
+                          sheetmetalOrderedDate: "SM Ordered",
+                          sheetmetalDeliveredDate: "SM Delivered",
+                          switchgearOrderedDate: "SG Ordered",
+                          switchgearDeliveredDate: "SG Delivered",
+                          budgetHours: "Budget",
+                          actualHours: "Actual",
+                          remainingHours: "Remaining",
+                          progressPercent: "Progress %"
                        };
                        return (
                           <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
@@ -563,7 +563,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
                   onClick={() => handleSort('sheetmetalOrderedDate')}
                 >
-                  <div className="flex items-center justify-center">S/Metal Ordered <SortIcon column="sheetmetalOrderedDate" /></div>
+                  <div className="flex items-center justify-center">SM Ordered <SortIcon column="sheetmetalOrderedDate" /></div>
                 </th>
               )}
               {columnVisibility.sheetmetalDeliveredDate && (
@@ -571,7 +571,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
                   onClick={() => handleSort('sheetmetalDeliveredDate')}
                 >
-                  <div className="flex items-center justify-center">S/Metal Delivered <SortIcon column="sheetmetalDeliveredDate" /></div>
+                  <div className="flex items-center justify-center">SM Delivered <SortIcon column="sheetmetalDeliveredDate" /></div>
                 </th>
               )}
               {columnVisibility.switchgearOrderedDate && (
@@ -579,7 +579,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
                   onClick={() => handleSort('switchgearOrderedDate')}
                 >
-                  <div className="flex items-center justify-center">S/Gear Ordered <SortIcon column="switchgearOrderedDate" /></div>
+                  <div className="flex items-center justify-center">SG Ordered <SortIcon column="switchgearOrderedDate" /></div>
                 </th>
               )}
               {columnVisibility.switchgearDeliveredDate && (
@@ -587,7 +587,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
                   onClick={() => handleSort('switchgearDeliveredDate')}
                 >
-                  <div className="flex items-center justify-center">S/Gear Delivered <SortIcon column="switchgearDeliveredDate" /></div>
+                  <div className="flex items-center justify-center">SG Delivered <SortIcon column="switchgearDeliveredDate" /></div>
                 </th>
               )}
               {columnVisibility.budgetHours && (
