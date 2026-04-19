@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -7,7 +9,8 @@ import {
   Calendar,
   Clock,
   HelpCircle,
-  ArrowUpRight
+  ArrowUpRight,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -18,6 +21,7 @@ interface DashboardSummariesProps {
   dueThisWeekCount: number;
   overdueCount: number;
   thisMonthCount: number;
+  totalValue?: number;
   currentFilter: string;
 }
 
@@ -26,10 +30,21 @@ export function DashboardSummaries({
   dueThisWeekCount,
   overdueCount,
   thisMonthCount,
+  totalValue = 0,
   currentFilter 
 }: DashboardSummariesProps) {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="h-32 w-full animate-pulse bg-slate-100 dark:bg-slate-800 rounded-2xl" />;
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <StatCard 
         title="Active Jobs" 
         value={totalCount.toString()} 
@@ -38,6 +53,13 @@ export function DashboardSummaries({
         href="/"
         isActive={currentFilter === ""}
         tooltip="Total volume of productive projects. Excludes Internal projects (Project No starting with 99)."
+      />
+      <StatCard 
+        title="Total WIP Value" 
+        value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)} 
+        icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
+        description="Total active contract value"
+        tooltip="Combined 'total' field from all active productive projects."
       />
       <StatCard 
         title="Due This Week" 

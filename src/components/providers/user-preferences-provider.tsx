@@ -36,6 +36,7 @@ const defaultPreferences: UserPreferences = {
     actualHours: true,
     remainingHours: true,
     progressPercent: true,
+    total: true,
   },
   theme: 'system',
   filters: {},

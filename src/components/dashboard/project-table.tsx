@@ -249,6 +249,10 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             aVal = a.projectManager || "";
             bVal = b.projectManager || "";
             break;
+          case 'total':
+            aVal = Number(a.total) || 0;
+            bVal = Number(b.total) || 0;
+            break;
           default:
             return 0;
         }
@@ -435,7 +439,8 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                           budgetHours: "Budget",
                           actualHours: "Actual",
                           remainingHours: "Remaining",
-                          progressPercent: "Progress %"
+                          progressPercent: "Progress %",
+                          total: "Value"
                        };
                        return (
                           <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
@@ -628,6 +633,14 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   <div className="flex items-center justify-center">% <SortIcon column="progressPercent" /></div>
                 </th>
               )}
+              {columnVisibility.total && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-right min-w-[100px]"
+                  onClick={() => handleSort('total')}
+                >
+                  <div className="flex items-center justify-end">Value <SortIcon column="total" /></div>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -804,6 +817,13 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                           />
                         </div>
                       </div>
+                    </td>
+                  )}
+                  {columnVisibility.total && (
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                        {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(project.total || 0)}
+                      </span>
                     </td>
                   )}
                 </tr>

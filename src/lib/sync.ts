@@ -258,6 +258,7 @@ export class SyncService {
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
         const status = remote.status || remote.Status || 'UNKNOWN';
         const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
+        const total = Number(remote.total || remote.Total || 0);
         
         // DIAGNOSTIC LOG: Log the first project to see raw structure (including custom fields)
         if (count === 0) {
@@ -333,6 +334,7 @@ export class SyncService {
             switchgearDeliveredDate: null, // Populated during Deep Sync
             deliveryDate: dueDate,
             projectManager,
+            total,
             remoteUpdatedAt,
             updatedAt: new Date(),
             lastSeenAt: new Date(),
@@ -449,6 +451,7 @@ export class SyncService {
         const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
         const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
         const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
+        const total = Number(remoteDetails.total || remoteDetails.Total || localProject.total || 0);
 
         if (bayLocation) {
             console.log(`[Sync] Found Bay Location for ${localProject.projectNumber}: ${bayLocation}`);
@@ -478,6 +481,7 @@ export class SyncService {
             sheetmetalDeliveredDate,
             switchgearOrderedDate,
             switchgearDeliveredDate,
+            total,
             lastDeepSyncAt: new Date(),
             updatedAt: new Date(),
           })

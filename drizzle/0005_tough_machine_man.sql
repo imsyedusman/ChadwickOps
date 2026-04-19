@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "total" double precision DEFAULT 0 NOT NULL;
