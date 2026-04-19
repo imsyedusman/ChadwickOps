@@ -9,6 +9,10 @@ const CF_IDS = {
     PROJECT_TYPE: 8926,
     DRAWING_APPROVAL_DATE: 9450,
     DRAWING_SUBMITTED_DATE: 9451,
+    SHEETMETAL_ORDERED_DATE: 9487,
+    SHEETMETAL_DELIVERED_DATE: 9488,
+    SWITCHGEAR_ORDERED_DATE: 9489,
+    SWITCHGEAR_DELIVERED_DATE: 9490,
 } as const;
 
 export class SyncService {
@@ -320,9 +324,13 @@ export class SyncService {
             clientId: localClient.id,
             rawStatus: status,
             description,
-            drawingApprovalDate,
-            drawingSubmittedDate,
-            bayLocation: this.getCustomFieldValue(remote, 'BayLocation'),
+            drawingApprovalDate: null, // Populated during Deep Sync
+            drawingSubmittedDate: null, // Populated during Deep Sync
+            bayLocation: null, // Populated during Deep Sync
+            sheetmetalOrderedDate: null, // Populated during Deep Sync
+            sheetmetalDeliveredDate: null, // Populated during Deep Sync
+            switchgearOrderedDate: null, // Populated during Deep Sync
+            switchgearDeliveredDate: null, // Populated during Deep Sync
             deliveryDate: dueDate,
             projectManager,
             remoteUpdatedAt,
@@ -435,6 +443,12 @@ export class SyncService {
         const detailResponse = await this.client.getProjectDetails(localProject.workguruId);
         const remoteDetails = detailResponse?.result || detailResponse;
         const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
+        const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
+        const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
+        const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
+        const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
+        const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
+        const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
 
         if (bayLocation) {
             console.log(`[Sync] Found Bay Location for ${localProject.projectNumber}: ${bayLocation}`);
@@ -457,7 +471,13 @@ export class SyncService {
             remainingHours,
             progressPercent,
             hasActualMismatch,
-            bayLocation, // Successfully enriched
+            bayLocation, 
+            drawingApprovalDate,
+            drawingSubmittedDate,
+            sheetmetalOrderedDate,
+            sheetmetalDeliveredDate,
+            switchgearOrderedDate,
+            switchgearDeliveredDate,
             lastDeepSyncAt: new Date(),
             updatedAt: new Date(),
           })
@@ -512,6 +532,18 @@ export class SyncService {
         
     if (lowerKey === 'drawingsubmitteddate' || lowerKey === 'drawing submitted date')
         return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_SUBMITTED_DATE);
+        
+    if (lowerKey === 'sheetmetalordereddate' || lowerKey === 'sheetmetal ordered date')
+        return this.getCustomFieldValueById(remote, CF_IDS.SHEETMETAL_ORDERED_DATE);
+        
+    if (lowerKey === 'sheetmetaldelivereddate' || lowerKey === 'sheetmetal delivered date')
+        return this.getCustomFieldValueById(remote, CF_IDS.SHEETMETAL_DELIVERED_DATE);
+        
+    if (lowerKey === 'switchgearordereddate' || lowerKey === 'switchgear ordered date')
+        return this.getCustomFieldValueById(remote, CF_IDS.SWITCHGEAR_ORDERED_DATE);
+        
+    if (lowerKey === 'switchgeardelivereddate' || lowerKey === 'switchgear delivered date')
+        return this.getCustomFieldValueById(remote, CF_IDS.SWITCHGEAR_DELIVERED_DATE);
 
     // 1. Check flat properties (various casings) for other fields
     if (remote[key] !== undefined) return remote[key];

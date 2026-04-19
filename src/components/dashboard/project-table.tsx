@@ -181,6 +181,22 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             aVal = a.drawingSubmittedDate ? new Date(a.drawingSubmittedDate).getTime() : 0;
             bVal = b.drawingSubmittedDate ? new Date(b.drawingSubmittedDate).getTime() : 0;
             break;
+          case 'sheetmetalOrderedDate':
+            aVal = a.sheetmetalOrderedDate ? new Date(a.sheetmetalOrderedDate).getTime() : 0;
+            bVal = b.sheetmetalOrderedDate ? new Date(b.sheetmetalOrderedDate).getTime() : 0;
+            break;
+          case 'sheetmetalDeliveredDate':
+            aVal = a.sheetmetalDeliveredDate ? new Date(a.sheetmetalDeliveredDate).getTime() : 0;
+            bVal = b.sheetmetalDeliveredDate ? new Date(b.sheetmetalDeliveredDate).getTime() : 0;
+            break;
+          case 'switchgearOrderedDate':
+            aVal = a.switchgearOrderedDate ? new Date(a.switchgearOrderedDate).getTime() : 0;
+            bVal = b.switchgearOrderedDate ? new Date(b.switchgearOrderedDate).getTime() : 0;
+            break;
+          case 'switchgearDeliveredDate':
+            aVal = a.switchgearDeliveredDate ? new Date(a.switchgearDeliveredDate).getTime() : 0;
+            bVal = b.switchgearDeliveredDate ? new Date(b.switchgearDeliveredDate).getTime() : 0;
+            break;
           case 'projectNumber':
             const parseId = (num: string) => {
               const parts = num.split('-');
@@ -412,6 +428,10 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                          deliveryDate: "Due Date",
                          drawingApprovalDate: "Drawing Approval",
                          drawingSubmittedDate: "Drawing Submitted",
+                          sheetmetalOrderedDate: "S/Metal Ordered",
+                          sheetmetalDeliveredDate: "S/Metal Delivered",
+                          switchgearOrderedDate: "S/Gear Ordered",
+                          switchgearDeliveredDate: "S/Gear Delivered",
                          budgetHours: "Budget",
                          actualHours: "Actual",
                          remainingHours: "Remaining",
@@ -538,12 +558,36 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                   <div className="flex items-center justify-center">Drawing Approval <SortIcon column="drawingApprovalDate" /></div>
                 </th>
               )}
-              {columnVisibility.drawingSubmittedDate && (
+              {columnVisibility.sheetmetalOrderedDate && (
                 <th 
                   className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
-                  onClick={() => handleSort('drawingSubmittedDate')}
+                  onClick={() => handleSort('sheetmetalOrderedDate')}
                 >
-                  <div className="flex items-center justify-center">Drawing Submitted <SortIcon column="drawingSubmittedDate" /></div>
+                  <div className="flex items-center justify-center">S/Metal Ordered <SortIcon column="sheetmetalOrderedDate" /></div>
+                </th>
+              )}
+              {columnVisibility.sheetmetalDeliveredDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                  onClick={() => handleSort('sheetmetalDeliveredDate')}
+                >
+                  <div className="flex items-center justify-center">S/Metal Delivered <SortIcon column="sheetmetalDeliveredDate" /></div>
+                </th>
+              )}
+              {columnVisibility.switchgearOrderedDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                  onClick={() => handleSort('switchgearOrderedDate')}
+                >
+                  <div className="flex items-center justify-center">S/Gear Ordered <SortIcon column="switchgearOrderedDate" /></div>
+                </th>
+              )}
+              {columnVisibility.switchgearDeliveredDate && (
+                <th 
+                  className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                  onClick={() => handleSort('switchgearDeliveredDate')}
+                >
+                  <div className="flex items-center justify-center">S/Gear Delivered <SortIcon column="switchgearDeliveredDate" /></div>
                 </th>
               )}
               {columnVisibility.budgetHours && (
@@ -691,10 +735,31 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                        </span>
                     </td>
                   )}
-                  {columnVisibility.drawingSubmittedDate && (
+                  {columnVisibility.sheetmetalOrderedDate && (
                     <td className="px-4 py-3 text-center">
                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                        {project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yy') : '—'}
+                        {project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.sheetmetalDeliveredDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.switchgearOrderedDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.switchgearOrderedDate ? format(new Date(project.switchgearOrderedDate), 'dd MMM yy') : '—'}
+                       </span>
+                    </td>
+                  )}
+                  {columnVisibility.switchgearDeliveredDate && (
+                    <td className="px-4 py-3 text-center">
+                       <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                        {project.switchgearDeliveredDate ? format(new Date(project.switchgearDeliveredDate), 'dd MMM yy') : '—'}
                        </span>
                     </td>
                   )}
