@@ -92,7 +92,7 @@ export function DashboardSummaries({
   );
 }
 
-function StatCard({ 
+export function StatCard({ 
   title, 
   value, 
   icon, 

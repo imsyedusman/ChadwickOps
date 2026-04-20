@@ -24,6 +24,7 @@ import { formatDistanceToNow } from "date-fns";
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
 import { Checkbox } from "../ui/Checkbox";
+import { TableSubtotals } from "./TableSubtotals";
 
 type ProjectTableProps = {
   projects: any[];
@@ -266,6 +267,22 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     return result;
   }, [projects, search, pmFilter, statusFilter, clientFilter, monthFilter, sortConfig]);
 
+  const subtotals = useMemo(() => {
+    const totals = filteredAndSortedProjects.reduce((acc, p) => {
+      acc.totalValue += (Number(p.total) || 0);
+      acc.totalBudget += (Number(p.budgetHours) || 0);
+      acc.totalActual += (Number(p.actualHours) || 0);
+      acc.totalRemaining += (Number(p.remainingHours) || 0);
+      return acc;
+    }, { totalValue: 0, totalBudget: 0, totalActual: 0, totalRemaining: 0 });
+
+    const overallProgress = totals.totalBudget > 0 
+      ? (totals.totalActual / totals.totalBudget) * 100 
+      : 0;
+
+    return { ...totals, overallProgress };
+  }, [filteredAndSortedProjects]);
+
   const totalPages = Math.ceil(filteredAndSortedProjects.length / pageSize);
   const currentProjects = filteredAndSortedProjects.slice(
     (currentPage - 1) * pageSize,
@@ -351,7 +368,15 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col h-full">
+    <div className="space-y-6">
+      <TableSubtotals 
+        totalValue={subtotals.totalValue}
+        totalBudget={subtotals.totalBudget}
+        totalActual={subtotals.totalActual}
+        totalRemaining={subtotals.totalRemaining}
+        overallProgress={subtotals.overallProgress}
+      />
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col h-full">
       {/* Table Toolbar */}
       <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
         <div className="relative flex-1 max-w-sm">
@@ -903,6 +928,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
