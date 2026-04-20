@@ -2,6 +2,77 @@ import axios from 'axios';
 
 const BASE_URL = 'https://api.workguru.io';
 
+export interface WorkGuruProject {
+  id?: number;
+  ProjectID?: number;
+  projectNo?: string;
+  ProjectNumber?: string;
+  projectName?: string;
+  ProjectName?: string;
+  name?: string;
+  clientId?: number;
+  ClientID?: number;
+  status?: string;
+  Status?: string;
+  dueDate?: string;
+  DueDate?: string;
+  total?: number;
+  Total?: number;
+  description?: string;
+  Description?: string;
+  projectManager?: string | { name?: string; Name?: string };
+  customFieldValues?: Array<{ customFieldId: number; value?: string; Value?: string }>;
+  CustomFieldValues?: Array<{ CustomFieldID: number; Value?: string }>;
+  customFields?: Array<{ key?: string; Key?: string; name?: string; Name?: string; value?: string; Value?: string; customField?: { name?: string; Name?: string } }>;
+  lastModificationTime?: string;
+  LastModificationTime?: string;
+}
+
+export interface WorkGuruClient {
+  id?: number;
+  tenantId?: number;
+  ClientID?: number;
+  name?: string;
+  ClientName?: string;
+}
+
+export interface WorkGuruTask {
+  id?: number;
+  TaskID?: number;
+  name?: string;
+  TaskName?: string;
+  quantity?: number;
+  Quantity?: number;
+  actualHours?: number;
+  ActualHours?: number;
+}
+
+export interface WorkGuruTimeSheet {
+  id?: number;
+  TimeSheetID?: number;
+  projectId?: number;
+  ProjectID?: number;
+  taskId?: number;
+  TaskID?: number;
+  length?: number;
+  Hours?: number;
+  hours?: number;
+  status?: string;
+  Status?: string;
+  date?: string;
+  Date?: string;
+  startTime?: string;
+  user?: string;
+  UserName?: string;
+  StaffName?: string;
+}
+
+export interface WorkGuruApiResponse<T> {
+  result?: T | { items: T[] };
+  items?: T[];
+  success?: boolean;
+}
+
 export class WorkGuruClient {
   private token: string | null = null;
 
@@ -11,9 +82,9 @@ export class WorkGuruClient {
     console.log(`[WorkGuru API] Request: ${method} ${url}`);
   }
 
-  private logResponse(url: string, status: number, data: unknown) {
+  private logResponse(url: string, status: number, data: any) {
     // Mask sensitive data in response logging
-    const maskedData = { ...data };
+    const maskedData = data && typeof data === 'object' ? { ...data } : { data };
     if (maskedData.result?.token || maskedData.token) {
         maskedData.token = '********';
     }
@@ -46,7 +117,7 @@ export class WorkGuruClient {
       }
       
       this.token = token;
-    } catch (error: unknown) {
+    } catch (error: any) {
       const status = error.response?.status;
       const data = error.response?.data;
       this.logResponse(url, status || 0, data || error.message);
@@ -79,7 +150,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }
@@ -94,7 +165,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params: { MaxResultCount: 5000 } });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }
@@ -109,7 +180,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }
@@ -125,7 +196,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }
@@ -141,7 +212,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }
@@ -157,7 +228,7 @@ export class WorkGuruClient {
       const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
     }

@@ -48,7 +48,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
       setIsSaving(true);
       await updateCapacitySettings(settings);
       toast.success('Capacity settings updated');
-    } catch (e: unknown) {
+    } catch (e: any) {
       toast.error(e.message || 'Failed to update settings');
     } finally {
       setIsSaving(false);

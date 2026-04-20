@@ -91,7 +91,7 @@ export default async function LogsPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const configs: unknown = {
+  const configs: any = {
     'SUCCESS': { label: 'SUCCESS', classes: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20 shadow-emerald-500/5' },
     'WARNING': { label: 'WARNING', classes: 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-500/20 shadow-orange-500/5' },
     'FAILURE': { label: 'FAILURE', classes: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20 shadow-red-500/5' },

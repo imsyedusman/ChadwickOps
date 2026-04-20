@@ -67,12 +67,17 @@ export function Header() {
   );
 }
 
-function Button({ className, variant, size, ...props }: unknown) {
-  const variants: unknown = {
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "outline" | "ghost";
+  size?: "sm" | "icon";
+}
+
+function Button({ className, variant, size, ...props }: ButtonProps) {
+  const variants = {
     outline: "border border-slate-200 dark:border-slate-700 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100",
     ghost: "hover:bg-slate-100 dark:hover:bg-slate-800",
   };
-  const sizes: unknown = {
+  const sizes = {
     sm: "px-3 py-1.5 text-xs",
     icon: "p-2",
   };

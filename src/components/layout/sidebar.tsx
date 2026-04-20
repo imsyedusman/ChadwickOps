@@ -138,7 +138,17 @@ export function Sidebar() {
   );
 }
 
-function SidebarLink({ item, isActive, isCollapsed }: unknown) {
+interface SidebarLinkProps {
+  item: {
+    name: string;
+    href: string;
+    icon: any;
+  };
+  isActive: boolean;
+  isCollapsed: boolean;
+}
+
+function SidebarLink({ item, isActive, isCollapsed }: SidebarLinkProps) {
   return (
     <Link
       href={item.href}

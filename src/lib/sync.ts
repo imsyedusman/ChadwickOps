@@ -44,21 +44,21 @@ export class SyncService {
         }
         
         if (attempt === maxRetries) {
-          console.error(`[Sync] ${label} failed after ${maxRetries} attempts:`, error.message);
+          console.error(`[Sync] ${label} failed after ${maxRetries} attempts:`, error instanceof Error ? error.message : String(error));
           return null;
         }
         
         // Permanent error or other failure
-        console.error(`[Sync] ${label} encountered non-retryable error:`, error.message);
+        console.error(`[Sync] ${label} encountered non-retryable error:`, error instanceof Error ? error.message : String(error));
         return null;
       }
     }
     return null;
   }
 
-  public extractItems(data: unknown, entityName: string): unknown[] {
+  public extractItems<T>(data: any, entityName: string): T[] {
     const result = data?.result;
-    let items: unknown[] | undefined;
+    let items: T[] | undefined;
 
     if (Array.isArray(result)) {
         // Pattern 1: result is directly an array (e.g. Tasks)
@@ -94,14 +94,14 @@ export class SyncService {
       
       const clientData = await this.withRetry(() => this.client.getClients(), 'Fetch Clients');
       if (clientData) {
-        const remoteClients = this.extractItems(clientData, 'Client');
+        const remoteClients = this.extractItems<import('./workguru').WorkGuruClient>(clientData, 'Client');
         await this.syncClients(remoteClients);
       }
 
       const projectFetchMethod = mode === 'FULL' ? () => this.client.getAllProjects() : () => this.client.getProjects();
       const projectData = await this.withRetry(projectFetchMethod, `Fetch ${mode} Projects`);
       if (projectData) {
-        const remoteProjects = this.extractItems(projectData, 'Project');
+        const remoteProjects = this.extractItems<import('./workguru').WorkGuruProject>(projectData, 'Project');
         console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects for ${mode} sync.`);
         await this.cleanDatabase();
         await this.syncProjects(remoteProjects, stats);
@@ -116,7 +116,16 @@ export class SyncService {
       await this.syncGlobalTimeEntries();
 
       // Progression Sync Logic
-      let syncResults;
+      let syncResults: { 
+        syncedCount: number; 
+        restoredCount: number; 
+        archivedCount: number; 
+        totalToProcess: number; 
+        processedCount: number; 
+        failedCount: number; 
+        mismatchCount: number; 
+      };
+
       if (mode === 'QUICK') {
         const deepSyncStats = await this.runDeepSyncQueue(15);
         syncResults = { ...stats, ...deepSyncStats, totalToProcess: 15 };
@@ -128,11 +137,12 @@ export class SyncService {
       
       const summary = {
         mode,
-        total: syncResults.totalToProcess,
-        success: syncResults.processedCount,
-        failed: syncResults.failedCount,
-        archived: syncResults.archivedCount,
-        restored: syncResults.restoredCount,
+        total: syncResults.totalToProcess || 0,
+        success: syncResults.processedCount || 0,
+        failed: syncResults.failedCount || 0,
+        archived: syncResults.archivedCount || 0,
+        restored: syncResults.restoredCount || 0,
+        synced: syncResults.syncedCount || 0,
         timestamp: startTime.toISOString()
       };
 
@@ -169,7 +179,7 @@ export class SyncService {
     }
   }
 
-  private async runFullDeepSyncCycle(initialStats: Record<string, number>) {
+  private async runFullDeepSyncCycle(initialStats: { syncedCount: number; restoredCount: number; archivedCount: number }) {
     const BATCH_SIZE = 25;
     let totalProcessed = 0;
     let totalFailed = 0;
@@ -225,7 +235,7 @@ export class SyncService {
     };
   }
 
-  private async syncClients(remoteClients: unknown[]) {
+  private async syncClients(remoteClients: import('./workguru').WorkGuruClient[]) {
     let count = 0;
     for (const remote of remoteClients) {
       const workguruId = (remote.id || remote.tenantId || remote.ClientID)?.toString();
@@ -245,7 +255,7 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} clients.`);
   }
 
-  private async syncProjects(remoteProjects: unknown[], stats?: { syncedCount: number, restoredCount: number }) {
+  private async syncProjects(remoteProjects: import('./workguru').WorkGuruProject[], stats?: { syncedCount: number, restoredCount: number }) {
     let count = 0;
     for (const remote of remoteProjects) {
         // Detailed mapping based on API response
@@ -266,13 +276,13 @@ export class SyncService {
         // New Field Mapping: Project Description -> Item Name
         const description = remote.description || remote.Description || null;
 
-        // Custom Fields Mapping
-        this.parseDate(this.getCustomFieldValue(remote, 'DrawingSubmittedDate'));
+        // Custom Fields Mapping - Just used for side effect or testing here?
+        this.getCustomFieldValue(remote, 'DrawingSubmittedDate');
 
         let projectManager = 'Unassigned';
         if (remote.projectManager) {
-            if (typeof remote.projectManager === 'object') {
-                projectManager = remote.projectManager.name || remote.projectManager.Name || 'Unassigned';
+            if (typeof remote.projectManager === 'object' && remote.projectManager !== null) {
+                projectManager = (remote.projectManager as any).name || (remote.projectManager as any).Name || 'Unassigned';
             } else {
                 projectManager = String(remote.projectManager);
             }
@@ -291,7 +301,7 @@ export class SyncService {
             continue;
         }
 
-        this.parseDate(r.lastModificationTime || r.LastModificationTime);
+        const remoteUpdatedAt = this.parseDate(remote.lastModificationTime || remote.LastModificationTime);
 
         // Check for unarchive logic
         if (stats) {
@@ -435,7 +445,7 @@ export class SyncService {
         // 3. Fetch Full Project Details for Custom Fields (Enrichment)
         console.log(`[Sync] Fetching deep details for project ${localProject.projectNumber}...`);
         const detailResponse = await this.client.getProjectDetails(localProject.workguruId);
-        const remoteDetails = detailResponse?.result || detailResponse;
+        const remoteDetails = (detailResponse?.result || detailResponse) as import('./workguru').WorkGuruProject;
         const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
         const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
         const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
@@ -501,20 +511,20 @@ export class SyncService {
     return { processedCount, failedCount, mismatchCount };
   }
 
-  private getCustomFieldValueById(remote: unknown, id: number): string | null {
+  private getCustomFieldValueById(remote: import('./workguru').WorkGuruProject, id: number): string | null {
     if (!remote) return null;
     
     // Check customFieldValues array (the most reliable source)
     const values = remote.customFieldValues || remote.CustomFieldValues || [];
     if (Array.isArray(values)) {
-        const found = values.find((v: Record<string, unknown>) => v.customFieldId === id);
+        const found = values.find((v: any) => v.customFieldId === id || v.CustomFieldID === id) as any;
         if (found) return found.value || found.Value || null;
     }
     
     return null;
   }
 
-  private getCustomFieldValue(remote: unknown, key: string): string | null {
+  private getCustomFieldValue(remote: import('./workguru').WorkGuruProject, key: string): string | null {
     if (!remote) return null;
     
     // Map key to confirmed deterministic IDs for target fields
@@ -542,9 +552,9 @@ export class SyncService {
         return this.getCustomFieldValueById(remote, CF_IDS.SWITCHGEAR_DELIVERED_DATE);
 
     // 1. Check flat properties (various casings) for other fields
-    if (remote[key] !== undefined) return remote[key];
+    if ((remote as any)[key] !== undefined) return (remote as any)[key];
     for (const k of Object.keys(remote)) {
-        if (k.toLowerCase() === lowerKey) return remote[k];
+        if (k.toLowerCase() === lowerKey) return (remote as any)[k];
     }
     
     // 2. Fallback to old name-based search for non-deterministic fields
@@ -552,7 +562,7 @@ export class SyncService {
                         Array.isArray(remote.customFieldValues) ? remote.customFieldValues : null;
 
     if (fieldsArray) {
-      const field = fieldsArray.find((f: Record<string, unknown>) => {
+      const field = (fieldsArray as any[]).find((f: any) => {
         const fieldKey = (f.key || f.Key || f.name || f.Name || f.customField?.name || f.customField?.Name || '').toLowerCase();
         return fieldKey === lowerKey;
       });
@@ -589,7 +599,7 @@ export class SyncService {
     const taskResponse = await this.client.getProjectTasks(projectWorkGuruId);
     if (!taskResponse || typeof taskResponse === 'string') return 0;
     
-    const tasksData = this.extractItems(taskResponse, 'Task');
+    const tasksData = this.extractItems<import('./workguru').WorkGuruTask>(taskResponse, 'Task');
     
     const localProjectResults = await db.select().from(projects).where(eq(projects.workguruId, projectWorkGuruId)).limit(1);
     const localProject = localProjectResults[0];
@@ -611,7 +621,7 @@ export class SyncService {
       const taskData = {
         workguruId,
         projectId: localProject.id,
-        name,
+        name: String(name),
         budgetHours: taskBudget,
         actualHours: actualHours,
         updatedAt: new Date(),
@@ -637,7 +647,7 @@ export class SyncService {
     const entryResponse = await this.withRetry(() => this.client.getProjectTimeEntries(''), 'Global Fetch Timesheets');
     if (!entryResponse || typeof entryResponse === 'string') return;
 
-    const timesheets = this.extractItems(entryResponse, 'TimeSheet');
+    const timesheets = this.extractItems<import('./workguru').WorkGuruTimeSheet>(entryResponse, 'TimeSheet');
     console.log(`[Sync] Processing ${timesheets.length} global timesheets...`);
 
     // Pre-fetch all projects and tasks for in-memory lookup

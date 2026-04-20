@@ -4,6 +4,7 @@ import React, { createContext, useContext, useSyncExternalStore, useMemo } from 
 
 type UserPreferences = {
   userId?: string;
+  isAdmin?: boolean;
   columnVisibility: Record<string, boolean>;
   pageSize: number;
 };
@@ -29,6 +30,7 @@ const defaultPreferences: UserPreferences = {
     total: true,
   },
   pageSize: 20,
+  isAdmin: false,
 };
 
 type UserPreferencesContextType = {

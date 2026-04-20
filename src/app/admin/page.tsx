@@ -164,11 +164,11 @@ export default async function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {(() => {
                 const latest = logs[0];
-                let summary: Record<string, unknown> | null = null;
+                let summary: any = null;
                 try {
-                  summary = JSON.parse(latest.details || '{}') as Record<string, unknown>;
+                  summary = JSON.parse(latest.details || '{}');
                 } catch (e) {
-                  summary = { legacy: true, details: latest.details } as Record<string, unknown>;
+                  summary = { legacy: true, details: latest.details };
                 }
 
                 return (
