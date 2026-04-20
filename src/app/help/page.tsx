@@ -43,7 +43,7 @@ export default function HelpPage() {
           </div>
           
           <p className="text-slate-600 dark:text-slate-400">
-            The dashboard only tracks projects that are considered "In Production". This filters out noise from sales quotes or completed deliveries.
+            The dashboard only tracks projects that are considered &quot;In Production&quot;. This filters out noise from sales quotes or completed deliveries.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -76,7 +76,7 @@ export default function HelpPage() {
                 ))}
               </ul>
               <p className="mt-4 text-[11px] text-slate-400 italic">
-                * Projects starting with internal code "99xxx" are also excluded from capacity metrics.
+                * Projects starting with internal code &quot;99xxx&quot; are also excluded from capacity metrics.
               </p>
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function HelpPage() {
                 Quick Sync
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Happens automatically every hour. It updates the 15 most recently modified projects to ensure today's changes reflect quickly.
+                Happens automatically every hour. It updates the 15 most recently modified projects to ensure today&apos;s changes reflect quickly.
               </p>
             </div>
             <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -153,9 +153,9 @@ export default function HelpPage() {
           <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-2xl p-6 flex gap-4">
             <Info className="h-6 w-6 text-amber-500 shrink-0" />
             <div>
-              <h4 className="font-bold text-amber-800 dark:text-amber-400 text-sm mb-1">What does "Stale" mean?</h4>
+              <h4 className="font-bold text-amber-800 dark:text-amber-400 text-sm mb-1">What does &quot;Stale&quot; mean?</h4>
               <p className="text-xs text-amber-700 dark:text-amber-500 leading-relaxed">
-                If a project hasn't been synced in over 24 hours, it may be marked as stale. This usually indicates the project was not found in the latest WorkGuru scan and may be a candidate for archiving.
+                If a project hasn&apos;t been synced in over 24 hours, it may be marked as stale. This usually indicates the project was not found in the latest WorkGuru scan and may be a candidate for archiving.
               </p>
             </div>
           </div>

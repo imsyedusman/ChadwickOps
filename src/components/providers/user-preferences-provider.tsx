@@ -1,13 +1,34 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useSyncExternalStore, useMemo } from 'react';
 
 type UserPreferences = {
   userId?: string;
   columnVisibility: Record<string, boolean>;
-  theme: 'light' | 'dark' | 'system';
-  filters: Record<string, any>;
-  isAdmin?: boolean; // For future role-based access
+  pageSize: number;
+};
+
+const defaultPreferences: UserPreferences = {
+  columnVisibility: {
+    projectNumber: true,
+    name: true,
+    rawStatus: true,
+    budgetHours: true,
+    actualHours: true,
+    remainingHours: true,
+    progressPercent: true,
+    deliveryDate: true,
+    bayLocation: true,
+    drawingApprovalDate: false,
+    drawingSubmittedDate: false,
+    sheetmetalOrderedDate: false,
+    sheetmetalDeliveredDate: false,
+    switchgearOrderedDate: false,
+    switchgearDeliveredDate: false,
+    projectManager: true,
+    total: true,
+  },
+  pageSize: 20,
 };
 
 type UserPreferencesContextType = {
@@ -16,82 +37,82 @@ type UserPreferencesContextType = {
   isLoading: boolean;
 };
 
-const defaultPreferences: UserPreferences = {
-  columnVisibility: {
-    projectNumber: true,
-    itemName: true,
-    projectName: true,
-    client: true,
-    projectManager: true,
-    status: true,
-    bayLocation: true,
-    deliveryDate: true,
-    drawingApprovalDate: false,
-    drawingSubmittedDate: false,
-    sheetmetalOrderedDate: true,
-    sheetmetalDeliveredDate: true,
-    switchgearOrderedDate: true,
-    switchgearDeliveredDate: true,
-    budgetHours: true,
-    actualHours: true,
-    remainingHours: true,
-    progressPercent: true,
-    total: true,
-  },
-  theme: 'system',
-  filters: {},
-  isAdmin: false,
-};
-
 const UserPreferencesContext = createContext<UserPreferencesContextType | undefined>(undefined);
 
-export function UserPreferencesProvider({ children }: { children: React.ReactNode }) {
-  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
-  const [isLoading, setIsLoading] = useState(true);
+// Simple external store to ensure stable references
+let cachedPreferences: UserPreferences = defaultPreferences;
+let isInitialized = false;
 
-  useEffect(() => {
-    // Load from localStorage for now, can be replaced with DB call later
-    const saved = localStorage.getItem('user_preferences');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Deep merge columnVisibility to ensure new defaults (like bayLocation) are added
-        const mergedColumnVisibility = {
-          ...defaultPreferences.columnVisibility,
-          ...(parsed.columnVisibility || {})
-        };
-        
-        setPreferences({ 
-          ...defaultPreferences, 
-          ...parsed,
-          columnVisibility: mergedColumnVisibility 
-        });
-      } catch (e) {
-        console.error('Failed to parse preferences', e);
-      }
+const getSnapshot = () => {
+    if (typeof window === 'undefined') return defaultPreferences;
+    
+    if (!isInitialized) {
+        const saved = localStorage.getItem('user_preferences');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                cachedPreferences = {
+                    ...defaultPreferences,
+                    ...parsed,
+                    columnVisibility: {
+                        ...defaultPreferences.columnVisibility,
+                        ...(parsed.columnVisibility || {})
+                    }
+                };
+            } catch {
+                cachedPreferences = defaultPreferences;
+            }
+        }
+        isInitialized = true;
     }
-    setIsLoading(false);
-  }, []);
+    return cachedPreferences;
+};
 
-  const setPreference = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
-    setPreferences(prev => {
-      const updated = { ...prev, [key]: value };
-      localStorage.setItem('user_preferences', JSON.stringify(updated));
-      return updated;
-    });
+// Helper to subscribe to localStorage changes
+const subscribe = (callback: () => void) => {
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === 'user_preferences') {
+        isInitialized = false; // Force re-parse on next snapshot
+        callback();
+    }
+  };
+  
+  const handleInternal = () => {
+    isInitialized = false; // Force re-parse on next snapshot
+    callback();
   };
 
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener('preferences-updated', handleInternal);
+  
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener('preferences-updated', handleInternal);
+  };
+};
+
+export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const preferences = useSyncExternalStore(subscribe, getSnapshot, () => defaultPreferences);
+
+  const setPreference = useMemo(() => <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+    const currentRaw = localStorage.getItem('user_preferences');
+    const current = currentRaw ? JSON.parse(currentRaw) : {};
+    const updated = { ...current, [key]: value };
+    localStorage.setItem('user_preferences', JSON.stringify(updated));
+    window.dispatchEvent(new Event('preferences-updated'));
+  }, []);
+
   return (
-    <UserPreferencesContext.Provider value={{ preferences, setPreference, isLoading }}>
+    <UserPreferencesContext.Provider value={{ preferences, setPreference, isLoading: false }}>
       {children}
     </UserPreferencesContext.Provider>
   );
-}
+};
 
-export function useUserPreferences() {
+export const useUserPreferences = () => {
   const context = useContext(UserPreferencesContext);
   if (context === undefined) {
     throw new Error('useUserPreferences must be used within a UserPreferencesProvider');
   }
   return context;
-}
+};

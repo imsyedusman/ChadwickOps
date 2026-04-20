@@ -67,15 +67,20 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
   };
 
   useEffect(() => {
-    fetchStatus();
-    // REMOVED: Automatic polling disabled to respect API limits
+    const timeout = setTimeout(() => {
+      void fetchStatus();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, []);
 
   // Also refetch when a global sync finishes
   useEffect(() => {
     if (!isSyncingGlobal && !isSyncing) {
-      fetchStatus();
-      setProgress(null);
+      const timeout = setTimeout(() => {
+        void fetchStatus();
+        setProgress(null);
+      }, 0);
+      return () => clearTimeout(timeout);
     }
   }, [isSyncingGlobal, isSyncing]);
 

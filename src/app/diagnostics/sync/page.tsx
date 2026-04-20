@@ -12,7 +12,7 @@ export default function SyncDiagPage() {
       try {
         const res = await triggerQuickSync();
         setStatus(`Sync Complete: ${JSON.stringify(res)}`);
-      } catch (e: any) {
+      } catch (e: unknown) {
         setStatus(`Sync Failed: ${e.message}`);
       }
     }

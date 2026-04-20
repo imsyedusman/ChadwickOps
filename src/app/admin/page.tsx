@@ -71,7 +71,7 @@ export default async function AdminPage() {
               <div className="pt-2 flex flex-col gap-2">
                  <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Recommended Key (copy to .env):</span>
                  <code className="bg-white/50 dark:bg-black/20 p-2 rounded-lg text-xs font-mono border border-red-100 dark:border-red-900/40 break-all select-all">
-                    ENCRYPTION_KEY="8a07cf0a4e89f1b4e927e4c6ea2eafbd"
+                    ENCRYPTION_KEY=&quot;8a07cf0a4e89f1b4e927e4c6ea2eafbd&quot;
                  </code>
               </div>
            </div>
@@ -164,11 +164,11 @@ export default async function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {(() => {
                 const latest = logs[0];
-                let summary: any = null;
+                let summary: Record<string, unknown> | null = null;
                 try {
-                  summary = JSON.parse(latest.details || '{}');
+                  summary = JSON.parse(latest.details || '{}') as Record<string, unknown>;
                 } catch (e) {
-                  summary = { legacy: true, details: latest.details };
+                  summary = { legacy: true, details: latest.details } as Record<string, unknown>;
                 }
 
                 return (

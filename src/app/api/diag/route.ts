@@ -12,7 +12,7 @@ export async function GET() {
     const config = configRes[0];
 
     if (!config) return NextResponse.json({ error: 'No config' });
-    const { apiKey, apiSecret } = config.value as any;
+    const { apiKey, apiSecret } = config.value as { apiKey: string, apiSecret: string };
     const syncService = new SyncService(decrypt(apiKey), decrypt(apiSecret));
     
     // Fetch one specific project with workguruId to see its details
@@ -41,7 +41,9 @@ export async function GET() {
       customFieldValues: project.customFieldValues,
       fullProject: project // We need to see why BayLocation is null
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    return NextResponse.json({ error: message, stack }, { status: 500 });
   }
 }

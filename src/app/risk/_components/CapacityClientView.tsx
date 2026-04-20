@@ -48,7 +48,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
       setIsSaving(true);
       await updateCapacitySettings(settings);
       toast.success('Capacity settings updated');
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e.message || 'Failed to update settings');
     } finally {
       setIsSaving(false);
@@ -83,11 +83,14 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
 
   useEffect(() => {
     if (!selectedMonth || !months.includes(selectedMonth)) {
-       setSelectedMonth(months[0] || null);
+       const timeout = setTimeout(() => {
+         setSelectedMonth(months[0] || null);
+       }, 0);
+       return () => clearTimeout(timeout);
     }
   }, [months, selectedMonth]);
 
-    // Aggregate Data
+  // Aggregate Data
   const monthlyData = useMemo(() => {
     const data: Record<string, { budget: number; actual: number; remaining: number; internalRemaining: number; projects: Project[] }> = {};
     months.forEach(m => data[m] = { budget: 0, actual: 0, remaining: 0, internalRemaining: 0, projects: [] });
@@ -475,7 +478,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
 }
 
 // Icon component
-function SettingsIcon(props: any) {
+function SettingsIcon(props: React.SVGProps<SVGSVGElement>) {
     return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 }
 
@@ -494,7 +497,16 @@ function SettingField({ label, value, onChange, min, max, step }: { label: strin
     );
 }
 
-function SummaryCard({ title, value, suffix, subtitle, highlight, icon }: any) {
+interface SummaryCardProps {
+  title: string;
+  value: string | number;
+  suffix?: string;
+  subtitle: string;
+  highlight?: 'red' | 'green' | 'orange' | 'neutral';
+  icon?: React.ReactNode;
+}
+
+function SummaryCard({ title, value, suffix, subtitle, highlight, icon }: SummaryCardProps) {
     return (
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 p-6 opacity-[0.03] dark:opacity-5 group-hover:scale-110 transition-transform duration-500 pointer-events-none">

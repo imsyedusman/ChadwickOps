@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useSyncExternalStore, useMemo } from "react";
 
 type SidebarContextType = {
   isCollapsed: boolean;
@@ -9,24 +9,32 @@ type SidebarContextType = {
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
-export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // Initialize from localStorage if available
-  useEffect(() => {
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved !== null) {
-      setIsCollapsed(saved === "true");
-    }
-  }, []);
-
-  const toggle = () => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
-      return next;
-    });
+// Helper to subscribe to localStorage changes
+const subscribe = (callback: () => void) => {
+  window.addEventListener('storage', callback);
+  window.addEventListener('sidebar-toggle', callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener('sidebar-toggle', callback);
   };
+};
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const isCollapsed = useSyncExternalStore(
+    subscribe,
+    () => {
+      if (typeof window === 'undefined') return false;
+      const saved = localStorage.getItem("sidebar-collapsed");
+      return saved === "true";
+    },
+    () => false
+  );
+
+  const toggle = useMemo(() => () => {
+    const next = !isCollapsed;
+    localStorage.setItem("sidebar-collapsed", String(next));
+    window.dispatchEvent(new Event('sidebar-toggle'));
+  }, [isCollapsed]);
 
   return (
     <SidebarContext.Provider value={{ isCollapsed, toggle }}>

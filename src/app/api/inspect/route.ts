@@ -11,7 +11,7 @@ export async function GET() {
     const config = configRes[0];
     if (!config) return NextResponse.json({ error: 'No config' });
     
-    const { apiKey, apiSecret } = config.value as any;
+    const { apiKey, apiSecret } = config.value as { apiKey: string, apiSecret: string };
     const tokenRes = await axios.post('https://api.workguru.io/api/ClientTokenAuth/Authenticate/api/client/v1/tokenauth', {
       apiKey: decrypt(apiKey),
       secret: decrypt(apiSecret),
@@ -26,8 +26,8 @@ export async function GET() {
     const project = response.data.result.items[0];
     
     // Deep search helper
-    const findKeys = (obj: any, term: string, path: string = ''): any[] => {
-      let results: any[] = [];
+    const findKeys = (obj: unknown, term: string, path: string = ''): unknown[] => {
+      let results: unknown[] = [];
       if (!obj || typeof obj !== 'object') return results;
       for (const [key, val] of Object.entries(obj)) {
         const fullPath = path ? `${path}.${key}` : key;
@@ -50,7 +50,9 @@ export async function GET() {
       locationFindings,
       fullProject: project
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message, data: error.response?.data });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const data = (error as { response?: { data?: unknown } })?.response?.data;
+    return NextResponse.json({ error: message, data });
   }
 }

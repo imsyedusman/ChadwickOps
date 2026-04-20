@@ -10,17 +10,19 @@ import {
   Bell,
   Command
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { SyncIndicator } from "@/components/dashboard/SyncIndicator";
 
 export function Header() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
   // Avoid hydration mismatch
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   return (
     <header className="h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 transition-all duration-300 w-full">
@@ -65,12 +67,12 @@ export function Header() {
   );
 }
 
-function Button({ className, variant, size, ...props }: any) {
-  const variants: any = {
+function Button({ className, variant, size, ...props }: unknown) {
+  const variants: unknown = {
     outline: "border border-slate-200 dark:border-slate-700 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100",
     ghost: "hover:bg-slate-100 dark:hover:bg-slate-800",
   };
-  const sizes: any = {
+  const sizes: unknown = {
     sm: "px-3 py-1.5 text-xs",
     icon: "p-2",
   };

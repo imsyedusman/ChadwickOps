@@ -133,28 +133,27 @@ export default async function DashboardPage({
 
   const sortedStages = Object.values(stageCounts).sort((a, b) => b.count - a.count);
 
-  let displayedProjects = projectsWithRisk;
-  let initialTableFilter = "";
+  const displayedProjects = filter === "due_this_week" 
+    ? projectsWithRisk.filter(p => {
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        const d = new Date(p.deliveryDate);
+        return d >= todayStart && d <= weekEnd;
+      })
+    : filter === "overdue"
+    ? projectsWithRisk.filter(p => {
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        const d = new Date(p.deliveryDate);
+        return d < todayStart;
+      })
+    : filter === "this_month"
+    ? projectsWithRisk.filter(p => {
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        const d = new Date(p.deliveryDate);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })
+    : projectsWithRisk;
 
-  if (filter === "due_this_week") {
-    displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
-      const d = new Date(p.deliveryDate);
-      return d >= todayStart && d <= weekEnd;
-    });
-  } else if (filter === "overdue") {
-    displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
-      const d = new Date(p.deliveryDate);
-      return d < todayStart;
-    });
-  } else if (filter === "this_month") {
-    displayedProjects = projectsWithRisk.filter(p => {
-      if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
-      const d = new Date(p.deliveryDate);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-  }
+  const initialTableFilter = "";
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -218,7 +217,7 @@ export default async function DashboardPage({
             <div className="pt-2">
                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
                  <p className="text-[10px] font-medium text-slate-500 leading-relaxed italic">
-                   "The bottleneck is currently in <span className="font-bold text-slate-700 dark:text-slate-300">{sortedStages[0]?.name || 'N/A'}</span> with {sortedStages[0]?.count || 0} active jobs awaiting processing."
+                   &quot;The bottleneck is currently in <span className="font-bold text-slate-700 dark:text-slate-300">{sortedStages[0]?.name || 'N/A'}</span> with {sortedStages[0]?.count || 0} active jobs awaiting processing.&quot;
                  </p>
                </div>
             </div>
@@ -227,7 +226,7 @@ export default async function DashboardPage({
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-6">
                <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest mb-4">Operations Tip</h3>
                <p className="text-xs text-slate-500 leading-relaxed font-medium italic">
-                 "Data freshness is tracked per-project. If a project is flagged as <span className="text-amber-500 font-bold uppercase tracking-tighter">Stale</span>, use <span className="font-bold whitespace-nowrap">Quick Sync</span> to prioritize its refresh."
+                 &quot;Data freshness is tracked per-project. If a project is flagged as <span className="text-amber-500 font-bold uppercase tracking-tighter">Stale</span>, use <span className="font-bold whitespace-nowrap">Quick Sync</span> to prioritize its refresh.&quot;
                </p>
             </section>
         </div>
@@ -236,7 +235,16 @@ export default async function DashboardPage({
   );
 }
 
-function StatCard({ title, value, icon, trend, trendColor, description }: any) {
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  trend?: string;
+  trendColor?: string;
+  description: string;
+}
+
+function StatCard({ title, value, icon, trend, trendColor, description }: StatCardProps) {
   return (
     <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm group hover:shadow-md hover:border-brand/20 transition-all duration-300 overflow-hidden relative">
       <div className="absolute top-0 right-0 p-8 transform translate-x-4 -translate-y-4 opacity-[0.03] dark:opacity-[0.05] group-hover:scale-110 group-hover:text-brand transition-all duration-500 pointer-events-none">
@@ -264,7 +272,7 @@ function StatCard({ title, value, icon, trend, trendColor, description }: any) {
 }
 
 function RiskBadge({ risk }: { risk: string }) {
-  const configs: any = {
+  const configs: Record<string, { label: string; classes: string }> = {
     'HIGH_RISK': { label: 'CRITICAL', classes: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20 shadow-red-500/5' },
     'MEDIUM_RISK': { label: 'AT RISK', classes: 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-500/20 shadow-orange-500/5' },
     'ON_TRACK': { label: 'HEALTHY', classes: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20 shadow-emerald-500/5' },

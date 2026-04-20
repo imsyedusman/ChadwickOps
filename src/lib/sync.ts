@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
-import { eq, sql, asc, desc, inArray, and, notInArray, lt, lte, or, count } from 'drizzle-orm';
+import { eq, sql, asc, inArray, and, notInArray, lt } from 'drizzle-orm';
 
 // Deterministic Custom Field IDs from WorkGuru
 const CF_IDS = {
@@ -28,13 +28,12 @@ export class SyncService {
   }
 
   private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T | null> {
-    let lastError: any;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await fn();
-      } catch (error: any) {
-        lastError = error;
-        const status = error.response?.status || error.status;
+      } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; status?: number };
+        const status = err.response?.status || err.status;
         const isRetryable = status === 429 || status === 503;
         
         if (isRetryable && attempt < maxRetries) {
@@ -57,9 +56,9 @@ export class SyncService {
     return null;
   }
 
-  public extractItems(data: any, entityName: string): any[] {
+  public extractItems(data: unknown, entityName: string): unknown[] {
     const result = data?.result;
-    let items: any[] | undefined;
+    let items: unknown[] | undefined;
 
     if (Array.isArray(result)) {
         // Pattern 1: result is directly an array (e.g. Tasks)
@@ -170,7 +169,7 @@ export class SyncService {
     }
   }
 
-  private async runFullDeepSyncCycle(initialStats: any) {
+  private async runFullDeepSyncCycle(initialStats: Record<string, number>) {
     const BATCH_SIZE = 25;
     let totalProcessed = 0;
     let totalFailed = 0;
@@ -181,7 +180,6 @@ export class SyncService {
       .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
     
     const totalCount = activeProjectsCount[0].count;
-    let offset = 0;
 
     console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} projects`);
 
@@ -227,7 +225,7 @@ export class SyncService {
     };
   }
 
-  private async syncClients(remoteClients: any[]) {
+  private async syncClients(remoteClients: unknown[]) {
     let count = 0;
     for (const remote of remoteClients) {
       const workguruId = (remote.id || remote.tenantId || remote.ClientID)?.toString();
@@ -247,7 +245,7 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} clients.`);
   }
 
-  private async syncProjects(remoteProjects: any[], stats?: { syncedCount: number, restoredCount: number }) {
+  private async syncProjects(remoteProjects: unknown[], stats?: { syncedCount: number, restoredCount: number }) {
     let count = 0;
     for (const remote of remoteProjects) {
         // Detailed mapping based on API response
@@ -269,8 +267,7 @@ export class SyncService {
         const description = remote.description || remote.Description || null;
 
         // Custom Fields Mapping
-        const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remote, 'ClientDrawingApprovalDate'));
-        const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remote, 'DrawingSubmittedDate'));
+        this.parseDate(this.getCustomFieldValue(remote, 'DrawingSubmittedDate'));
 
         let projectManager = 'Unassigned';
         if (remote.projectManager) {
@@ -294,12 +291,7 @@ export class SyncService {
             continue;
         }
 
-        const budgetHours = remote.estimatedHours || remote.EstimatedHours || 0;
-        const actualHours = remote.actualHours || remote.ActualHours || 0;
-        const remainingHours = Math.max(0, budgetHours - actualHours);
-        const progressPercent = budgetHours > 0 ? (actualHours / budgetHours) * 100 : 0;
-
-        const remoteUpdatedAt = this.parseDate(remote.lastModificationTime || remote.LastModificationTime);
+        this.parseDate(r.lastModificationTime || r.LastModificationTime);
 
         // Check for unarchive logic
         if (stats) {
@@ -376,7 +368,7 @@ export class SyncService {
       return 0;
     }
 
-    const prevSyncStart = new Date((config.value as any).timestamp);
+    const prevSyncStart = new Date((config.value as { timestamp: string }).timestamp);
     
     // Check for global override flag
     const overrideConfig = await db.query.systemConfig.findFirst({
@@ -509,20 +501,20 @@ export class SyncService {
     return { processedCount, failedCount, mismatchCount };
   }
 
-  private getCustomFieldValueById(remote: any, id: number): string | null {
+  private getCustomFieldValueById(remote: unknown, id: number): string | null {
     if (!remote) return null;
     
     // Check customFieldValues array (the most reliable source)
     const values = remote.customFieldValues || remote.CustomFieldValues || [];
     if (Array.isArray(values)) {
-        const found = values.find((v: any) => v.customFieldId === id);
+        const found = values.find((v: Record<string, unknown>) => v.customFieldId === id);
         if (found) return found.value || found.Value || null;
     }
     
     return null;
   }
 
-  private getCustomFieldValue(remote: any, key: string): string | null {
+  private getCustomFieldValue(remote: unknown, key: string): string | null {
     if (!remote) return null;
     
     // Map key to confirmed deterministic IDs for target fields
@@ -560,7 +552,7 @@ export class SyncService {
                         Array.isArray(remote.customFieldValues) ? remote.customFieldValues : null;
 
     if (fieldsArray) {
-      const field = fieldsArray.find((f: any) => {
+      const field = fieldsArray.find((f: Record<string, unknown>) => {
         const fieldKey = (f.key || f.Key || f.name || f.Name || f.customField?.name || f.customField?.Name || '').toLowerCase();
         return fieldKey === lowerKey;
       });
@@ -570,7 +562,7 @@ export class SyncService {
     return null;
   }
 
-  private parseDate(dateStr: any): Date | null {
+  private parseDate(dateStr: unknown): Date | null {
     if (!dateStr) return null;
     const str = String(dateStr).trim();
     if (!str) return null;
@@ -604,16 +596,15 @@ export class SyncService {
 
     if (!localProject) return 0;
 
-    let count = 0;
     let totalBudget = 0;
     for (const remote of tasksData) {
-      const workguruId = (remote.id || remote.TaskID)?.toString();
-      const name = remote.name || remote.TaskName;
+      const r = remote as Record<string, unknown>;
+      const workguruId = (r.id || r.TaskID)?.toString();
+      const name = r.name || r.TaskName;
       if (!workguruId || !name) continue;
 
-      // In WorkGuru, quantity is typically the quoted/budgeted amount for the task line
-      const taskBudget = Number(remote.quantity || remote.Quantity || 0);
-      const actualHours = Number(remote.actualHours || remote.ActualHours || 0);
+      const taskBudget = Number(r.quantity || r.Quantity || 0);
+      const actualHours = Number(r.actualHours || r.ActualHours || 0);
       
       totalBudget += taskBudget;
 
@@ -636,7 +627,6 @@ export class SyncService {
           updatedAt: new Date(),
         },
       });
-      count++;
     }
     return totalBudget;
   }

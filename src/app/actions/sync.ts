@@ -53,7 +53,7 @@ export async function testApiConnection(apiKey: string, apiSecret: string) {
       message: "Connection successful!",
       details: "Token received. Credentials validated."
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[SyncAction] Test Connection failed:', error.status, error.apiMessage || error.message);
     
     // Explicitly check for our custom auth error message or status

@@ -138,7 +138,7 @@ export function Sidebar() {
   );
 }
 
-function SidebarLink({ item, isActive, isCollapsed }: any) {
+function SidebarLink({ item, isActive, isCollapsed }: unknown) {
   return (
     <Link
       href={item.href}
