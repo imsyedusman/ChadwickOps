@@ -66,6 +66,109 @@ const SortIcon = ({ column, sortConfig }: SortIconProps) => {
   return sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3 ml-1 text-brand" /> : <ArrowDown className="h-3 w-3 ml-1 text-brand" />;
 };
 
+function FilterPopover({ 
+  label, 
+  icon: Icon, 
+  options, 
+  selected, 
+  onChange 
+}: { 
+  label: string; 
+  icon: any; 
+  options: string[]; 
+  selected: string[]; 
+  onChange: (selected: string[]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "flex items-center gap-2 bg-white dark:bg-slate-950 border rounded-xl px-2.5 py-1.5 transition-all",
+          selected.length > 0 
+            ? "border-brand ring-2 ring-brand/5 bg-brand/[0.02]" 
+            : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+        )}
+      >
+        <Icon className={cn("h-3.5 w-3.5", selected.length > 0 ? "text-brand" : "text-slate-400")} />
+        <span className={cn("text-[11px] font-bold whitespace-nowrap", selected.length > 0 ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400")}>
+          {selected.length === 0 ? label : `${label}: ${selected.length}`}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 mt-2 w-56 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-brand/10 transition-all font-medium"
+            />
+            
+            <div className="flex items-center justify-between px-1">
+              <button 
+                onClick={() => onChange(options)}
+                className="text-[10px] font-bold text-brand hover:underline"
+              >
+                Select All
+              </button>
+              <button 
+                onClick={() => onChange([])}
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="space-y-0.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+              {filteredOptions.length > 0 ? filteredOptions.map((opt) => (
+                <div 
+                  key={opt}
+                  onClick={() => {
+                    const next = selected.includes(opt) 
+                      ? selected.filter(s => s !== opt) 
+                      : [...selected, opt];
+                    onChange(next);
+                  }}
+                  className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer group transition-colors"
+                >
+                  <Checkbox checked={selected.includes(opt)} onChange={() => {}} className="pointer-events-none" />
+                  <span className={cn(
+                    "text-[11px] font-medium transition-colors line-clamp-1",
+                    selected.includes(opt) ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"
+                  )}>
+                    {opt}
+                  </span>
+                </div>
+              )) : (
+                <div className="py-4 text-center text-[10px] text-slate-400 font-medium italic">No results found</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps) {
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
@@ -86,10 +189,22 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'deliveryDate', direction: 'asc' });
 
   // Advanced filters
-  const [pmFilter, setPmFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [pmFilter, setPmFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [clientFilter, setClientFilter] = useState("");
-  const [monthFilter, setMonthFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const handleClearFilters = () => {
+    setPmFilter([]);
+    setStatusFilter([]);
+    setClientFilter("");
+    setStartDate("");
+    setEndDate("");
+    setSearch("");
+  };
+
+  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || clientFilter !== "" || startDate !== "" || endDate !== "" || search !== "";
 
   const { preferences, setPreference } = useUserPreferences();
   const { columnVisibility } = preferences;
@@ -192,12 +307,15 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
         p.projectNumber?.toLowerCase().includes(searchLower) ||
         p.client?.name?.toLowerCase().includes(searchLower);
 
-      const matchesPm = !pmFilter || p.projectManager === pmFilter;
-      const matchesStatus = !statusFilter || p.rawStatus === statusFilter;
+      const matchesPm = pmFilter.length === 0 || (p.projectManager && pmFilter.includes(p.projectManager));
+      const matchesStatus = statusFilter.length === 0 || (p.rawStatus && statusFilter.includes(p.rawStatus));
       const matchesClient = !clientFilter || p.client?.name === clientFilter;
-      const matchesMonth = !monthFilter || (p.deliveryDate && format(new Date(p.deliveryDate), 'yyyy-MM') === monthFilter);
+      
+      const pDate = p.deliveryDate ? new Date(p.deliveryDate) : null;
+      const matchesDate = (!startDate || (pDate && format(pDate, 'yyyy-MM-dd') >= startDate)) && 
+                          (!endDate || (pDate && format(pDate, 'yyyy-MM-dd') <= endDate));
 
-      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesMonth;
+      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDate;
     });
 
     if (sortConfig) {
@@ -308,7 +426,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     }
 
     return result;
-  }, [projects, search, pmFilter, statusFilter, clientFilter, monthFilter, sortConfig]);
+  }, [projects, search, pmFilter, statusFilter, clientFilter, startDate, endDate, sortConfig]);
 
   const subtotals = useMemo(() => {
     const totals = filteredAndSortedProjects.reduce((acc, p) => {
@@ -432,39 +550,51 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
             />
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
-              <User className="h-3.5 w-3.5 text-slate-400" />
-              <select
-                value={pmFilter}
-                onChange={(e) => setPmFilter(e.target.value)}
-                className="bg-transparent text-[11px] font-bold outline-none border-none pr-6 focus:ring-0"
-              >
-                <option value="">All PMs</option>
-                {filterOptions.pms.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-              </select>
+            <FilterPopover 
+              label="PM"
+              icon={User}
+              options={filterOptions.pms}
+              selected={pmFilter}
+              onChange={setPmFilter}
+            />
+
+            <FilterPopover 
+              label="Status"
+              icon={Activity}
+              options={filterOptions.statuses}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+            />
+
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700">
+              <CalendarDays className={cn("h-3.5 w-3.5", (startDate || endDate) ? "text-brand" : "text-slate-400")} />
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent text-[11px] font-bold outline-none border-none p-0 focus:ring-0 text-slate-600 dark:text-slate-300 h-4 w-[90px]"
+                />
+                <span className="text-[10px] font-bold text-slate-300 mx-0.5">-</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent text-[11px] font-bold outline-none border-none p-0 focus:ring-0 text-slate-600 dark:text-slate-300 h-4 w-[90px]"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
-              <Activity className="h-3.5 w-3.5 text-slate-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-transparent text-[11px] font-bold outline-none border-none pr-6 focus:ring-0"
+            {hasActiveFilters && (
+              <button
+                onClick={handleClearFilters}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-slate-500 hover:text-red-500 transition-colors"
+                title="Clear All Filters"
               >
-                <option value="">All Statuses</option>
-                {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
-              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="month"
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="bg-transparent text-[11px] font-bold outline-none border-none pr-2 focus:ring-0 text-slate-600 dark:text-slate-300 h-[22px]"
-              />
-            </div>
+                <Filter className="h-3.5 w-3.5" />
+                Clear
+              </button>
+            )}
 
             <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2">
               {filteredAndSortedProjects.length} records
