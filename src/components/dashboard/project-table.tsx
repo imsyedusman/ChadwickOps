@@ -16,7 +16,8 @@ import {
   Activity,
   Briefcase,
   AlertTriangle,
-  History
+  History,
+  LayoutTemplate
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -170,14 +171,60 @@ function FilterPopover({
 }
 
 export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps) {
+  const [isPresetPickerOpen, setIsPresetPickerOpen] = useState(false);
+  const presetPickerRef = useRef<HTMLDivElement>(null);
+
+  const { preferences, setPreference } = useUserPreferences();
+  const { columnVisibility } = preferences;
+
+  const CORE_COLUMNS = ['projectNumber', 'projectName', 'itemName'];
+
+  const handleApplyPreset = (presetName: string) => {
+    const newVisibility: Record<string, boolean> = {};
+    
+    const hides: Record<string, string[]> = {
+      Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate'],
+      Operations: [],
+      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      'Project Managers': ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation'],
+      Management: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation', 'drawingSubmittedDate', 'drawingApprovalDate']
+    };
+
+    const ALL_COLUMNS = [
+      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 
+      'bayLocation', 'deliveryDate', 'drawingApprovalDate', 'drawingSubmittedDate',
+      'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate',
+      'budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'total'
+    ];
+
+    const targetHides = hides[presetName] || [];
+
+    ALL_COLUMNS.forEach(key => {
+      if (CORE_COLUMNS.includes(key)) {
+        newVisibility[key] = true;
+      } else {
+        newVisibility[key] = !targetHides.includes(key);
+      }
+    });
+
+    startTransition(() => {
+      setPreference('columnVisibility', newVisibility);
+    });
+    setIsPresetPickerOpen(false);
+  };
+
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
 
-  // Close popover when clicking outside
+  // Close popovers when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (columnPickerRef.current && !columnPickerRef.current.contains(event.target as Node)) {
         setIsColumnPickerOpen(false);
+      }
+      if (presetPickerRef.current && !presetPickerRef.current.contains(event.target as Node)) {
+        setIsPresetPickerOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -205,9 +252,6 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   };
 
   const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || clientFilter !== "" || startDate !== "" || endDate !== "" || search !== "";
-
-  const { preferences, setPreference } = useUserPreferences();
-  const { columnVisibility } = preferences;
 
   const [isScrolled, setIsScrolled] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -598,6 +642,48 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
 
             <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2">
               {filteredAndSortedProjects.length} records
+            </div>
+
+            <div className="relative" ref={presetPickerRef}>
+              <button
+                onClick={() => setIsPresetPickerOpen(!isPresetPickerOpen)}
+                className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                title="Department View Presets"
+              >
+                <LayoutTemplate className="h-3.5 w-3.5 text-slate-400" />
+                View Presets
+              </button>
+
+              {isPresetPickerOpen && (
+                <div className="absolute right-0 mt-2 w-64 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 px-1">Department Presets</h4>
+                    <div className="space-y-1">
+                      {[
+                        { name: 'Engineering', desc: 'Focus on drawings & progress' },
+                        { name: 'Operations', desc: 'Full master view - all columns' },
+                        { name: 'Production', desc: 'Execution & materials readiness' },
+                        { name: 'Procurement', desc: 'Ordering & delivery tracking' },
+                        { name: 'Project Managers', desc: 'Timelines, cost & risk' },
+                        { name: 'Management', desc: 'High-level performance' }
+                      ].map((preset) => (
+                        <button
+                          key={preset.name}
+                          onClick={() => handleApplyPreset(preset.name)}
+                          className="w-full flex flex-col items-start gap-0.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-all group border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
+                        >
+                          <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 group-hover:text-brand transition-colors">
+                            {preset.name}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                            {preset.desc}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="relative" ref={columnPickerRef}>

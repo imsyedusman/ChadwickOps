@@ -12,8 +12,9 @@ type UserPreferences = {
 const defaultPreferences: UserPreferences = {
   columnVisibility: {
     projectNumber: true,
-    name: true,
-    rawStatus: true,
+    projectName: true,
+    itemName: true,
+    status: true,
     budgetHours: true,
     actualHours: true,
     remainingHours: true,
