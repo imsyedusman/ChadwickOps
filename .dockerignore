@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+.npm
+npm-debug.log*
+
+# Build artifacts
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Configuration and Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vercel
+
+# Diagnostic and Scratch files (Root)
+diag_*.ts
+find_*.ts
+verify_*.ts
+test_*.ts
+final_*.ts
+scratch_*.ts
+check_*.ts
+*.js
+!next.config.ts
+!postcss.config.mjs
+!tailwind.config.ts
+!eslint.config.mjs
+!drizzle.config.ts
+
+# Directory based scratch/logs
+scratch/
+tmp/
+*.log
+eslint-report.json
+
+# Misc
+.DS_Store
+.git
+.vscode
