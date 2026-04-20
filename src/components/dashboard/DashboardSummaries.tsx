@@ -44,7 +44,12 @@ export function DashboardSummaries({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 px-1">
+        <div className="h-4 w-1 bg-indigo-500 rounded-full" />
+        <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Overview (Global Business View)</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <StatCard 
         title="Active Jobs" 
         value={totalCount.toString()} 
@@ -53,13 +58,6 @@ export function DashboardSummaries({
         href="/"
         isActive={currentFilter === ""}
         tooltip="Total volume of productive projects. Excludes Internal projects (Project No starting with 99)."
-      />
-      <StatCard 
-        title="Total WIP Value" 
-        value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)} 
-        icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
-        description="Total active contract value"
-        tooltip="Combined 'total' field from all active productive projects."
       />
       <StatCard 
         title="Due This Week" 
@@ -88,6 +86,14 @@ export function DashboardSummaries({
         isActive={currentFilter === "this_month"}
         tooltip="Projects with a delivery date in the current calendar month. Excludes Internal projects (Project No starting with 99)."
       />
+      <StatCard 
+        title="Total WIP Value" 
+        value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)} 
+        icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
+        description="Total active contract value"
+        tooltip="Combined 'total' field from all active productive projects."
+      />
+      </div>
     </div>
   );
 }

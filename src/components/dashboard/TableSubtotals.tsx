@@ -43,7 +43,12 @@ export function TableSubtotals({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+    <div className="space-y-4 mb-6">
+      <div className="flex items-center gap-2 px-1">
+        <div className="h-4 w-1 bg-brand rounded-full" />
+        <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Subtotals (Filtered Results)</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <StatCard 
         title="Filtered Value" 
         value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)} 
@@ -79,6 +84,7 @@ export function TableSubtotals({
         description="Combined completion"
         tooltip="Overall progress percentage: (Total Actual / Total Budget) * 100"
       />
+      </div>
     </div>
   );
 }
