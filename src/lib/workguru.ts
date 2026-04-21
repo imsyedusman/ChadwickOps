@@ -26,6 +26,27 @@ export interface WorkGuruProject {
   customFields?: Array<{ key?: string; Key?: string; name?: string; Name?: string; value?: string; Value?: string; customField?: { name?: string; Name?: string } }>;
   lastModificationTime?: string;
   LastModificationTime?: string;
+  productLineItems?: WorkGuruLineItem[];
+  ProductLineItems?: WorkGuruLineItem[];
+}
+
+export interface WorkGuruLineItem {
+  id?: number;
+  LineItemID?: number;
+  productID?: number;
+  ProductID?: number;
+  name?: string;
+  Name?: string;
+  description?: string;
+  Description?: string;
+  quantity?: number;
+  Quantity?: number;
+  unitAmount?: number;
+  unitPrice?: number;
+  UnitPrice?: number;
+  lineTotal?: number;
+  total?: number;
+  Total?: number;
 }
 
 export interface WorkGuruClient {

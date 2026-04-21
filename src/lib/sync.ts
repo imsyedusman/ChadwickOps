@@ -455,7 +455,7 @@ export class SyncService {
         if (total === 0) {
             const lineItems = remoteDetails.productLineItems || remoteDetails.ProductLineItems || [];
             if (lineItems.length > 0) {
-                total = lineItems.reduce((acc, li) => {
+                total = (lineItems as import('./workguru').WorkGuruLineItem[]).reduce((acc: number, li) => {
                     const price = Number(li.unitAmount || li.unitPrice || li.UnitPrice || 0);
                     const qty = Number(li.quantity || li.Quantity || 0);
                     const lineTotal = Number(li.lineTotal || li.total || li.Total || (price * qty));
