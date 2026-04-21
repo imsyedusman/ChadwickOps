@@ -185,11 +185,10 @@ export class SyncService {
     let totalFailed = 0;
     let totalMismatched = 0;
     
-    const activeProjectsCount = await db.select({ count: sql<number>`count(*)` })
-      .from(projects)
-      .where(notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']));
+    const projectsCount = await db.select({ count: sql<number>`count(*)` })
+      .from(projects);
     
-    const totalCount = activeProjectsCount[0].count;
+    const totalCount = projectsCount[0].count;
 
     console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} projects`);
 
@@ -418,10 +417,7 @@ export class SyncService {
   public async runDeepSyncQueue(limit = 15) {
     console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}).`);
     
-    const conditions = notInArray(projects.rawStatus, ['Completed', 'Archived', 'Declined']);
-    
     const projectsToDeepSync = await db.select().from(projects)
-      .where(conditions)
       .orderBy(asc(projects.lastDeepSyncAt))
       .limit(limit);
 
@@ -453,7 +449,30 @@ export class SyncService {
         const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
         const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
         const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
-        const total = Number(remoteDetails.total || remoteDetails.Total || localProject.total || 0);
+        let total = Number(remoteDetails.total || remoteDetails.Total || 0);
+        
+        // Fallback to product line items if top-level total is $0
+        if (total === 0) {
+            const lineItems = remoteDetails.productLineItems || remoteDetails.ProductLineItems || [];
+            if (lineItems.length > 0) {
+                total = lineItems.reduce((acc, li) => {
+                    const price = Number(li.unitAmount || li.unitPrice || li.UnitPrice || 0);
+                    const qty = Number(li.quantity || li.Quantity || 0);
+                    const lineTotal = Number(li.lineTotal || li.total || li.Total || (price * qty));
+                    return acc + lineTotal;
+                }, 0);
+                
+                if (total > 0) {
+                    console.log(`[Sync] Project ${localProject.projectNumber} value derived from ${lineItems.length} line items: $${total}`);
+                }
+            }
+        }
+
+        // Final fallback to existing local total if both API sources are 0
+        // (Prevents accidental reset of non-zero values due to transient API gaps)
+        if (total === 0 && localProject.total > 0) {
+            total = Number(localProject.total);
+        }
 
         if (bayLocation) {
             console.log(`[Sync] Found Bay Location for ${localProject.projectNumber}: ${bayLocation}`);
