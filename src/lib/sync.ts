@@ -422,6 +422,9 @@ export class SyncService {
     // FINISHED STATUSES for Cooldown Logic
     const finishedStatuses = ['completed', 'invoiced', 'closed', 'cancelled'];
     
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
     const projectsToDeepSync = await db.select().from(projects)
       .where(
         and(
@@ -434,7 +437,12 @@ export class SyncService {
           )
         )
       )
-      .orderBy(asc(projects.lastDeepSyncAt))
+      .orderBy(
+        sql`(${projects.lastDeepSyncAt} IS NULL) DESC`, // Priority 1: Never synced
+        sql`(${projects.remoteUpdatedAt} > ${oneDayAgo.toISOString()}) DESC`, // Priority 2: Recently updated in WorkGuru
+        asc(projects.lastDeepSyncAt), // Priority 3: Least recently deep synced (fair rotation)
+        asc(projects.remoteUpdatedAt) // Final tie-breaker
+      )
       .limit(limit);
 
     // Log visibility for skipped projects
@@ -455,96 +463,12 @@ export class SyncService {
     let mismatchCount = 0;
 
     for (const localProject of projectsToDeepSync) {
-      const result = await this.withRetry(async () => {
-        // Enforce safe pace: 1300ms total delay
-        await this.sleep(1000); 
-        
-        // 1. Fetch Task Metadata (Budget source)
-        const calculatedBudget = await this.syncTasks(localProject.workguruId) || 0;
-        
-        // 2. Aggregate Hours LOCALLY from time_entries table
-        const hoursData = await this.aggregateProjectHoursLocally(localProject.id);
-        
-        // 3. Fetch Full Project Details for Custom Fields (Enrichment)
-        console.log(`[Sync] Fetching deep details for project ${localProject.projectNumber}...`);
-        const detailResponse = await this.client.getProjectDetails(localProject.workguruId);
-        const remoteDetails = (detailResponse?.result || detailResponse) as import('./workguru').WorkGuruProject;
-        const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
-        const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
-        const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
-        const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
-        const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
-        const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
-        const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
-        let total = Number(remoteDetails.total || remoteDetails.Total || 0);
-        
-        // Fallback to product line items if top-level total is $0
-        if (total === 0) {
-            const lineItems = remoteDetails.productLineItems || remoteDetails.ProductLineItems || [];
-            if (lineItems.length > 0) {
-                total = (lineItems as import('./workguru').WorkGuruLineItem[]).reduce((acc: number, li) => {
-                    const price = Number(li.unitAmount || li.unitPrice || li.UnitPrice || 0);
-                    const qty = Number(li.quantity || li.Quantity || 0);
-                    const lineTotal = Number(li.lineTotal || li.total || li.Total || (price * qty));
-                    return acc + lineTotal;
-                }, 0);
-                
-                if (total > 0) {
-                    console.log(`[Sync] Project ${localProject.projectNumber} value derived from ${lineItems.length} line items: $${total}`);
-                }
-            }
-        }
-
-        // Final fallback to existing local total if both API sources are 0
-        // (Prevents accidental reset of non-zero values due to transient API gaps)
-        if (total === 0 && localProject.total > 0) {
-            total = Number(localProject.total);
-        }
-
-        if (bayLocation) {
-            console.log(`[Sync] Found Bay Location for ${localProject.projectNumber}: ${bayLocation}`);
-        }
-
-        const calculatedActual = hoursData.totalActual;
-        const calculatedApproved = hoursData.totalApproved;
-        const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
-        
-        const hasActualMismatch = (calculatedActual === 0 && calculatedBudget > 0) ? 1 : 0;
-        const remainingHours = calculatedBudget - calculatedActual;
-        const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
-        
-        await db.update(projects)
-          .set({
-            budgetHours: calculatedBudget,
-            actualHours: calculatedActual,
-            approvedHours: calculatedApproved,
-            hasUnapprovedHours,
-            remainingHours,
-            progressPercent,
-            hasActualMismatch,
-            bayLocation, 
-            drawingApprovalDate,
-            drawingSubmittedDate,
-            sheetmetalOrderedDate,
-            sheetmetalDeliveredDate,
-            switchgearOrderedDate,
-            switchgearDeliveredDate,
-            total,
-            lastDeepSyncAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(projects.workguruId, localProject.workguruId));
-          
-        return { hasActualMismatch };
-      }, `Deep Sync Project ${localProject.projectNumber}`);
-
-      if (result) {
+      try {
+        await this.processProjectDetail(localProject.workguruId);
         processedCount++;
-        if (result.hasActualMismatch) mismatchCount++;
-      } else {
-        console.error(`[Sync] HARD FAILURE: Project ${localProject.projectNumber} (${localProject.workguruId}) failed deep sync after all retries. Continuing...`);
-        // Rule: DO NOT update lastDeepSyncAt on failure so it remains pending for next run.
+      } catch (err: any) {
         failedCount++;
+        console.error(`[Sync] Failed to process ${localProject.projectNumber}:`, err.message);
       }
     }
     
@@ -785,5 +709,104 @@ export class SyncService {
     } catch (error) {
         console.error('[Sync] Database cleanup failed:', error);
     }
+  }
+
+  /**
+   * High-priority manual sync for a specific project.
+   * Bypasses the queue and force-updates all calculated fields.
+   */
+  public async syncProjectById(workguruId: string) {
+    console.log(`[Sync] Manual sync requested for project ${workguruId}`);
+    return this.processProjectDetail(workguruId);
+  }
+
+  /**
+   * Internal core logic for a single project deep sync.
+   * Fetches tasks, aggregates hours locally, and enriches from detail API.
+   */
+  private async processProjectDetail(workguruId: string) {
+    const localProjectResults = await db.select().from(projects).where(eq(projects.workguruId, workguruId)).limit(1);
+    const localProject = localProjectResults[0];
+
+    if (!localProject) {
+        throw new Error(`Project ${workguruId} not found in database.`);
+    }
+
+    return this.withRetry(async () => {
+        // Enforce safe pace for background vs foreground
+        // (Manual sync is fast, background takes its time)
+        // await this.sleep(500); 
+        
+        // 1. Fetch Task Metadata (Budget source)
+        const calculatedBudget = await this.syncTasks(localProject.workguruId) || 0;
+        
+        // 2. Aggregate Hours LOCALLY from time_entries table
+        const hoursData = await this.aggregateProjectHoursLocally(localProject.id);
+        
+        // 3. Fetch Full Project Details for Custom Fields (Enrichment)
+        console.log(`[Sync] Fetching deep details for project ${localProject.projectNumber}...`);
+        const detailResponse = await this.client.getProjectDetails(localProject.workguruId);
+        const remoteDetails = (detailResponse?.result || detailResponse) as import('./workguru').WorkGuruProject;
+        
+        const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
+        const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
+        const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
+        const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
+        const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
+        const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
+        const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
+        
+        let total = Number(remoteDetails.total || remoteDetails.Total || 0);
+        
+        // Fallback to product line items if top-level total is $0
+        if (total === 0) {
+            const lineItems = remoteDetails.productLineItems || remoteDetails.ProductLineItems || [];
+            if (lineItems.length > 0) {
+                total = (lineItems as import('./workguru').WorkGuruLineItem[]).reduce((acc: number, li) => {
+                    const price = Number(li.unitAmount || li.unitPrice || li.UnitPrice || 0);
+                    const qty = Number(li.quantity || li.Quantity || 0);
+                    const lineTotal = Number(li.lineTotal || li.total || li.Total || (price * qty));
+                    return acc + lineTotal;
+                }, 0);
+            }
+        }
+
+        // Final fallback to existing local total if both API sources are 0
+        if (total === 0 && localProject.total > 0) {
+            total = Number(localProject.total);
+        }
+
+        const calculatedActual = hoursData.totalActual;
+        const calculatedApproved = hoursData.totalApproved;
+        const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
+        
+        const hasActualMismatch = (calculatedActual === 0 && calculatedBudget > 0) ? 1 : 0;
+        const remainingHours = calculatedBudget - calculatedActual;
+        const progressPercent = calculatedBudget > 0 ? (calculatedActual / calculatedBudget) * 100 : 0;
+        
+        await db.update(projects)
+          .set({
+            budgetHours: calculatedBudget,
+            actualHours: calculatedActual,
+            approvedHours: calculatedApproved,
+            hasUnapprovedHours,
+            remainingHours,
+            progressPercent,
+            hasActualMismatch,
+            bayLocation, 
+            drawingApprovalDate,
+            drawingSubmittedDate,
+            sheetmetalOrderedDate,
+            sheetmetalDeliveredDate,
+            switchgearOrderedDate,
+            switchgearDeliveredDate,
+            total,
+            lastDeepSyncAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.workguruId, localProject.workguruId));
+          
+        return { success: true, projectNumber: localProject.projectNumber, total };
+    }, `Sync Project ${localProject.projectNumber}`);
   }
 }

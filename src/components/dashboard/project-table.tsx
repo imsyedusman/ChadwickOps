@@ -17,7 +17,9 @@ import {
   Briefcase,
   AlertTriangle,
   History,
-  LayoutTemplate
+  LayoutTemplate,
+  RefreshCcw,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -26,6 +28,7 @@ import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-ut
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
 import { Checkbox } from "../ui/Checkbox";
 import { TableSubtotals } from "./TableSubtotals";
+import { handleSyncProject } from "@/app/actions/sync-project";
 
 interface Project {
   id: number;
@@ -66,6 +69,50 @@ const SortIcon = ({ column, sortConfig }: SortIconProps) => {
   if (sortConfig?.key !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-20" />;
   return sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3 ml-1 text-brand" /> : <ArrowDown className="h-3 w-3 ml-1 text-brand" />;
 };
+
+function SyncRowButton({ workguruId, onSyncComplete }: { workguruId: string; onSyncComplete: () => void }) {
+  const [status, setStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+
+  const onSync = async () => {
+    if (status === 'syncing') return;
+    setStatus('syncing');
+    try {
+      const result = await handleSyncProject(workguruId);
+      if (result.success) {
+        setStatus('success');
+        onSyncComplete();
+        setTimeout(() => setStatus('idle'), 3000);
+      } else {
+        setStatus('error');
+        setTimeout(() => setStatus('idle'), 3000);
+      }
+    } catch (err) {
+      setStatus('error');
+      setTimeout(() => setStatus('idle'), 3000);
+    }
+  };
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onSync(); }}
+      disabled={status === 'syncing'}
+      className={cn(
+        "p-1.5 rounded-lg transition-all duration-200",
+        status === 'idle' && "hover:bg-brand/5 text-slate-300 hover:text-brand",
+        status === 'syncing' && "text-brand animate-spin",
+        status === 'success' && "text-green-500 bg-green-50 dark:bg-green-500/10",
+        status === 'error' && "text-red-500 bg-red-50 dark:bg-red-500/10"
+      )}
+      title="Sync project data from WorkGuru"
+    >
+      {status === 'success' ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : (
+        <RefreshCcw className={cn("h-3.5 w-3.5", status === 'syncing' && "animate-spin")} />
+      )}
+    </button>
+  );
+}
 
 function FilterPopover({ 
   label, 
@@ -942,7 +989,16 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                         }}
                         className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
                       >
-                        {project.projectNumber}
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{project.projectNumber}</span>
+                          <SyncRowButton 
+                            workguruId={project.workguruId} 
+                            onSyncComplete={() => {
+                               // Optional: handle local state refresh if needed, 
+                               // handled by revalidatePath for now.
+                            }} 
+                          />
+                        </div>
                       </td>
                     )}
                     {columnVisibility.projectName && (
