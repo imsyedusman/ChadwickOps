@@ -32,13 +32,13 @@ async function trace() {
     console.log(`Auth took: ${Date.now() - authStart}ms`);
     const token = tokenRes.data.accessToken;
 
-    // 1. Check BASE API (List)
-    const listUrl = 'https://api.workguru.io/api/services/app/Project/GetAllCurrentProjects?MaxResultCount=1000';
+    // 1. Check BASE API (Most Inclusive - GetAllProjects)
+    const listUrl = 'https://api.workguru.io/api/services/app/Project/GetAllProjects?MaxResultCount=1000';
     const listStart = Date.now();
     const listResponse = await axios.get(listUrl, {
         headers: { Authorization: `Bearer ${token}` }
     });
-    console.log(`Base List fetch took: ${Date.now() - listStart}ms`);
+    console.log(`Base GetAllProjects fetch took: ${Date.now() - listStart}ms`);
     
     const baseProject = (listResponse.data.result?.items || listResponse.data.result || []).find((p: any) => 
         String(p.id || p.ProjectID) === '1286812' || (p.projectNo || p.ProjectNumber) === '12394-02'
