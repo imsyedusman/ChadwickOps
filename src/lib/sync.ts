@@ -28,28 +28,41 @@ export class SyncService {
   }
 
   private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T | null> {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // If it's a sync process, we want a much higher retry limit for rate limits
+    const actualMax = Math.max(maxRetries, 50);
+
+    for (let attempt = 1; attempt <= actualMax; attempt++) {
       try {
         return await fn();
       } catch (error: unknown) {
         const err = error as { response?: { status?: number }; status?: number };
         const status = err.response?.status || err.status;
-        const isRetryable = status === 429 || status === 503;
+        const isRateLimit = status === 429;
+        const isRetryable = isRateLimit || status === 503;
         
-        if (isRetryable && attempt < maxRetries) {
-          const delay = status === 429 ? Math.pow(2, attempt) * 1000 : 2000;
-          console.warn(`[Sync] ${status === 429 ? 'Rate limit' : 'Service error (503)'} hit on ${label}. Attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+        if (isRetryable && attempt < actualMax) {
+          // Rule: For 429, wait 30-60s. For others, use exponential backoff.
+          let delay: number;
+          if (isRateLimit) {
+            // Start at 30s, increase slightly up to 60s
+            delay = Math.min(30000 + (attempt * 2000), 60000);
+            console.warn(`[Sync] Rate limit (429) hit on ${label}. Attempt ${attempt}/${actualMax}. Waiting ${delay/1000}s before retrying SAME project...`);
+          } else {
+            delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[Sync] Service error (${status}) hit on ${label}. Attempt ${attempt}/${actualMax}. Retrying in ${delay/1000}s...`);
+          }
+          
           await this.sleep(delay);
           continue;
         }
         
-        if (attempt === maxRetries) {
-          console.error(`[Sync] ${label} failed after ${maxRetries} attempts:`, error instanceof Error ? error.message : String(error));
+        if (attempt === actualMax) {
+          console.error(`[Sync] ${label} exhausted all ${actualMax} retries. Final error:`, error instanceof Error ? error.message : String(error));
           return null;
         }
         
-        // Permanent error or other failure
-        console.error(`[Sync] ${label} encountered non-retryable error:`, error instanceof Error ? error.message : String(error));
+        // Permanent error (401, 404, etc.)
+        console.error(`[Sync] ${label} encountered non-retryable error (${status}):`, error instanceof Error ? error.message : String(error));
         return null;
       }
     }
@@ -115,10 +128,9 @@ export class SyncService {
       // 1. Global Time Entry Sync (Fetch all recent/open time once)
       await this.syncGlobalTimeEntries();
 
-      // Progression Sync Logic - Enforce a full cycle for consistency
       const syncResults = await this.runFullDeepSyncCycle(stats);
 
-      const status = syncResults.failedCount > 0 ? 'PARTIAL' : 'SUCCESS';
+      const status = syncResults.failedCount > 0 ? 'SUCCESS_WITH_ERRORS' : 'SUCCESS';
       
       const summary = {
         mode,
@@ -171,11 +183,12 @@ export class SyncService {
     let totalMismatched = 0;
     
     const projectsCount = await db.select({ count: sql<number>`count(*)` })
-      .from(projects);
+      .from(projects)
+      .where(eq(projects.isArchived, false));
     
     const totalCount = projectsCount[0].count;
 
-    console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} projects`);
+    console.log(`[Sync] Starting continuous Full Deep Sync for ${totalCount} active projects`);
 
     while (totalProcessed + totalFailed < totalCount) {
       // Update progress
@@ -410,10 +423,11 @@ export class SyncService {
     console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}).`);
     
     const projectsToDeepSync = await db.select().from(projects)
+      .where(eq(projects.isArchived, false))
       .orderBy(asc(projects.lastDeepSyncAt))
       .limit(limit);
 
-    console.log(`[Sync] Selected ${projectsToDeepSync.length} projects for Deep Sync.`);
+    console.log(`[Sync] Selected ${projectsToDeepSync.length} active projects for Deep Sync.`);
     
     let processedCount = 0;
     let failedCount = 0;
@@ -507,14 +521,8 @@ export class SyncService {
         processedCount++;
         if (result.hasActualMismatch) mismatchCount++;
       } else {
-        console.warn(`[Sync] Skipping project ${localProject.projectNumber} due to persistent errors.`);
-        // Mark as "attempted" so it moves to back of queue
-        await db.update(projects)
-          .set({ 
-            lastDeepSyncAt: new Date(),
-            updatedAt: new Date() 
-          })
-          .where(eq(projects.workguruId, localProject.workguruId));
+        console.error(`[Sync] HARD FAILURE: Project ${localProject.projectNumber} (${localProject.workguruId}) failed deep sync after all retries. Continuing...`);
+        // Rule: DO NOT update lastDeepSyncAt on failure so it remains pending for next run.
         failedCount++;
       }
     }
