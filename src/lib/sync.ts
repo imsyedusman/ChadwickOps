@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
-import { eq, sql, asc, inArray, and, notInArray, lt } from 'drizzle-orm';
+import { eq, sql, asc, inArray, and, notInArray, lt, or, gt, isNull } from 'drizzle-orm';
 
 // Deterministic Custom Field IDs from WorkGuru
 const CF_IDS = {
@@ -118,11 +118,6 @@ export class SyncService {
         console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects.`);
         await this.cleanDatabase();
         await this.syncProjects(remoteProjects, stats);
-      }
-
-      // Cleanup logic - ALWAYS on success
-      if (projectData) {
-        stats.archivedCount = await this.archiveMissingProjects(startTime);
       }
 
       // 1. Global Time Entry Sync (Fetch all recent/open time once)
@@ -252,7 +247,7 @@ export class SyncService {
     console.log(`[Sync] Inserted/Updated ${count} clients.`);
   }
 
-  private async syncProjects(remoteProjects: import('./workguru').WorkGuruProject[], stats?: { syncedCount: number, restoredCount: number }) {
+  private async syncProjects(remoteProjects: import('./workguru').WorkGuruProject[], stats?: { syncedCount: number, restoredCount: number, archivedCount: number }) {
     let count = 0;
     for (const remote of remoteProjects) {
         // Detailed mapping based on API response
@@ -261,9 +256,14 @@ export class SyncService {
         const projectNumber = remote.projectNo || remote.ProjectNumber || 'N/A';
         const name = remote.projectName || remote.ProjectName || remote.name;
         const remoteClientId = (remote.clientId || remote.ClientID)?.toString();
-        const status = remote.status || remote.Status || 'UNKNOWN';
+        const rawStatus = remote.status || remote.Status || 'UNKNOWN';
         const dueDate = this.parseDate(remote.dueDate || remote.DueDate);
         const total = Number(remote.total || remote.Total || 0);
+
+        // Explicit Archive Handling:
+        // Use case-insensitive check for 'Archived' status
+        const isArchived = rawStatus.toLowerCase() === 'archived';
+        const remoteUpdatedAt = new Date(remote.lastModificationTime || remote.lastModifierTime || remote.creationTime || Date.now());
         
         // DIAGNOSTIC LOG: Log the first project to see raw structure (including custom fields)
         if (count === 0) {
@@ -298,21 +298,22 @@ export class SyncService {
             continue;
         }
 
-        const remoteUpdatedAt = this.parseDate(remote.lastModificationTime || remote.LastModificationTime);
-
-        // Check for unarchive logic
+        // Explicit Archive Handling
         if (stats) {
           const existing = await db.query.projects.findFirst({
             where: eq(projects.workguruId, workguruId),
             columns: { isArchived: true }
           });
-          if (existing?.isArchived) {
+          
+          if (!isArchived && existing?.isArchived) {
             console.log(`[Sync] Project ${workguruId} (${projectNumber}) found in WorkGuru - Unarchiving.`);
             stats.restoredCount++;
-            // Clear archivedAt when restored
             await db.update(projects)
               .set({ isArchived: false, archivedAt: null, updatedAt: new Date() })
               .where(eq(projects.workguruId, workguruId));
+          } else if (isArchived && !existing?.isArchived) {
+            console.log(`[Sync] Project ${workguruId} (${projectNumber}) is ARCHIVED in WorkGuru.`);
+            stats.archivedCount++;
           }
           stats.syncedCount++;
         }
@@ -322,23 +323,16 @@ export class SyncService {
             projectNumber,
             name,
             clientId: localClient.id,
-            rawStatus: status,
+            rawStatus,
             description,
-            drawingApprovalDate: null, // Populated during Deep Sync
-            drawingSubmittedDate: null, // Populated during Deep Sync
-            bayLocation: null, // Populated during Deep Sync
-            sheetmetalOrderedDate: null, // Populated during Deep Sync
-            sheetmetalDeliveredDate: null, // Populated during Deep Sync
-            switchgearOrderedDate: null, // Populated during Deep Sync
-            switchgearDeliveredDate: null, // Populated during Deep Sync
             deliveryDate: dueDate,
             projectManager,
             total,
             remoteUpdatedAt,
             updatedAt: new Date(),
             lastSeenAt: new Date(),
-            isArchived: false,
-            archivedAt: null, // Ensure archivedAt is null for active projects
+            isArchived,
+            archivedAt: isArchived ? new Date() : null,
         };
 
         if (count === 0) {
@@ -422,12 +416,39 @@ export class SyncService {
   public async runDeepSyncQueue(limit = 15) {
     console.log(`[Sync] Starting Deep Sync Queue (Limit: ${limit}).`);
     
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    // FINISHED STATUSES for Cooldown Logic
+    const finishedStatuses = ['completed', 'invoiced', 'closed', 'cancelled'];
+    
     const projectsToDeepSync = await db.select().from(projects)
-      .where(eq(projects.isArchived, false))
+      .where(
+        and(
+          eq(projects.isArchived, false),
+          or(
+            notInArray(sql`lower(${projects.rawStatus})`, finishedStatuses), // Keep Active/In-Progress
+            gt(projects.remoteUpdatedAt, sixtyDaysAgo),                      // Keep recently updated completed ones
+            isNull(projects.remoteUpdatedAt),                                // Safety fallback
+            isNull(projects.lastDeepSyncAt)                                   // Guarantee at least one sync
+          )
+        )
+      )
       .orderBy(asc(projects.lastDeepSyncAt))
       .limit(limit);
 
-    console.log(`[Sync] Selected ${projectsToDeepSync.length} active projects for Deep Sync.`);
+    // Log visibility for skipped projects
+    const allActiveCountRes = await db.select({ count: sql<number>`count(*)` })
+        .from(projects)
+        .where(eq(projects.isArchived, false));
+    const allActiveCount = allActiveCountRes[0].count;
+    
+    console.log(`[Sync] Queue Statistics:`);
+    console.log(` - Deep Sync Target Batch: ${projectsToDeepSync.length}`);
+    console.log(` - Total Projects in Database: ${allActiveCount} (Active/Completed)`);
+    console.log(` - Exclusion Filter: Excluding Finished projects older than 60 days unless brand new.`);
+
+    console.log(`[Sync] Selected ${projectsToDeepSync.length} projects for Deep Sync.`);
     
     let processedCount = 0;
     let failedCount = 0;
