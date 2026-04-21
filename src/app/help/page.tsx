@@ -11,7 +11,7 @@ import {
   Zap,
   Clock
 } from "lucide-react";
-import { ACTIVE_STATUSES } from "@/lib/project-utils";
+import { ACTIVE_STATUSES, EXCLUDED_WIP_STATUSES } from "@/lib/project-utils";
 
 export default function HelpPage() {
   return (
@@ -68,7 +68,7 @@ export default function HelpPage() {
                 Excluded (Inactive/Finished)
               </h3>
               <ul className="grid grid-cols-1 gap-2">
-                {['Tested Passed', 'Ready for Invoicing', 'Invoiced', 'Delivered', 'Completed', 'Cancelled'].map(status => (
+              {EXCLUDED_WIP_STATUSES.map(status => (
                   <li key={status} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                     <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
                     {status}

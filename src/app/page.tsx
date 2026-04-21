@@ -101,7 +101,7 @@ export default async function DashboardPage({
       const d = new Date(p.deliveryDate);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length,
-    totalValue: productiveProjects.filter(p => isActiveWorkStatus(p.rawStatus)).reduce((acc, p) => acc + (p.total || 0), 0),
+    totalValue: productiveProjects.filter(p => isActiveWorkStatus(p.rawStatus)).reduce((acc, p) => acc + (Number(p.total) || 0), 0),
     internalHours: internalProjects.reduce((acc, p) => acc + p.remainingHours, 0),
   };
 

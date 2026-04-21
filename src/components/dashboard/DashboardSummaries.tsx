@@ -91,7 +91,7 @@ export function DashboardSummaries({
           value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)}
           icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
           description="Total active contract value"
-          tooltip="Combined 'total' field from all active productive projects."
+          tooltip="Includes all active production projects. Excludes projects with the following statuses: Tested Passed, Ready for Invoicing, Invoiced, Delivered, Completed, Cancelled. Also excludes internal projects with IDs starting with '99'."
         />
       </div>
     </div>

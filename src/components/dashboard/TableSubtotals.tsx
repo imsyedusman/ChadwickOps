@@ -54,7 +54,7 @@ export function TableSubtotals({
           value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)}
           icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
           description="Total for visible rows"
-          tooltip="Sum of project value for the filtered results."
+          tooltip="Total value of all projects currently visible in the table based on applied filters. No statuses or project types are excluded from this calculation."
         />
         <StatCard
           title="Budget Hours"
