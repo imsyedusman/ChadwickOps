@@ -98,40 +98,25 @@ export class SyncService {
         await this.syncClients(remoteClients);
       }
 
-      const projectFetchMethod = mode === 'FULL' ? () => this.client.getAllProjects() : () => this.client.getProjects();
-      const projectData = await this.withRetry(projectFetchMethod, `Fetch ${mode} Projects`);
+      const projectFetchMethod = () => this.client.getAllProjects();
+      const projectData = await this.withRetry(projectFetchMethod, `Fetch All Projects`);
       if (projectData) {
         const remoteProjects = this.extractItems<import('./workguru').WorkGuruProject>(projectData, 'Project');
-        console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects for ${mode} sync.`);
+        console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects.`);
         await this.cleanDatabase();
         await this.syncProjects(remoteProjects, stats);
       }
 
-      // Cleanup logic - ONLY on FULL sync success
-      if (mode === 'FULL' && projectData) {
+      // Cleanup logic - ALWAYS on success
+      if (projectData) {
         stats.archivedCount = await this.archiveMissingProjects(startTime);
       }
 
       // 1. Global Time Entry Sync (Fetch all recent/open time once)
       await this.syncGlobalTimeEntries();
 
-      // Progression Sync Logic
-      let syncResults: { 
-        syncedCount: number; 
-        restoredCount: number; 
-        archivedCount: number; 
-        totalToProcess: number; 
-        processedCount: number; 
-        failedCount: number; 
-        mismatchCount: number; 
-      };
-
-      if (mode === 'QUICK') {
-        const deepSyncStats = await this.runDeepSyncQueue(15);
-        syncResults = { ...stats, ...deepSyncStats, totalToProcess: 15 };
-      } else {
-        syncResults = await this.runFullDeepSyncCycle(stats);
-      }
+      // Progression Sync Logic - Enforce a full cycle for consistency
+      const syncResults = await this.runFullDeepSyncCycle(stats);
 
       const status = syncResults.failedCount > 0 ? 'PARTIAL' : 'SUCCESS';
       
@@ -353,10 +338,17 @@ export class SyncService {
             actualHours: 0,
             remainingHours: 0,
             progressPercent: 0,
+            hasUnapprovedHours: 0,
             hasActualMismatch: 0,
         }).onConflictDoUpdate({
             target: projects.workguruId,
-            set: projectData, // Preserving hours, only updating metadata
+            set: {
+                ...projectData,
+                total: sql`CASE 
+                    WHEN EXCLUDED.total = 0 THEN projects.total 
+                    ELSE EXCLUDED.total 
+                END`
+            },
         });
 
         count++;

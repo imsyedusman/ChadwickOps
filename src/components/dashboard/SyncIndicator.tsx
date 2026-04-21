@@ -41,15 +41,15 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
     setCurrentStep("Initializing...");
     
     try {
-      const { triggerQuickSync, triggerFullSync } = await import('@/app/actions/sync');
+      const { triggerFullSync } = await import('@/app/actions/sync');
       
-      setCurrentStep(mode === 'QUICK' ? "Syncing latest activity..." : "Performing full deep sync...");
+      setCurrentStep("Performing full data synchronization...");
       
-      const result = mode === 'QUICK' ? await triggerQuickSync() : await triggerFullSync();
+      const result = await triggerFullSync();
       
       if (result.success && result.stats) {
         const stats = result.stats;
-        const msg = `${mode} Sync: ${stats.processedCount} success, ${stats.failedCount} failed.`;
+        const msg = `Sync Complete: ${stats.processedCount} processed.`;
         
         setCurrentStep(msg);
         await fetchStatus();
@@ -178,33 +178,17 @@ export function SyncIndicator({ isSyncingGlobal }: { isSyncingGlobal?: boolean }
       )}
 
       <div className="flex items-center gap-2 ml-auto">
-        <button 
-          onClick={() => handleSync('QUICK')}
-          className={cn(
-              "px-3 py-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-brand/10 hover:text-brand border border-slate-200 dark:border-slate-700 rounded-lg transition-all active:scale-95 disabled:opacity-50 group whitespace-nowrap",
-              (isSyncing || isSyncingGlobal) && "opacity-50 pointer-events-none"
-          )}
-          disabled={isSyncing || isSyncingGlobal}
-          title="Metadata update + 15 recent projects"
-        >
-          <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Quick Sync</span>
-          <RefreshCw className={cn(
-            "h-3 w-3 text-slate-400 group-hover:text-brand transition-colors",
-            isSyncing && "animate-spin text-brand"
-          )} />
-        </button>
-
         {isAdmin && (
           <button 
             onClick={() => handleSync('FULL')}
             className={cn(
-                "px-3 py-1 flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 hover:text-indigo-600 border border-indigo-200 dark:border-indigo-800/40 rounded-lg transition-all active:scale-95 disabled:opacity-50 group whitespace-nowrap",
+                "px-4 py-1.5 flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 hover:text-indigo-600 border border-indigo-200 dark:border-indigo-800/40 rounded-lg transition-all active:scale-95 disabled:opacity-50 group whitespace-nowrap",
                 (isSyncing || isSyncingGlobal) && "opacity-50 pointer-events-none"
             )}
             disabled={isSyncing || isSyncingGlobal}
-            title="Full Deep Sync (Resumable)"
+            title="Complete sync with WorkGuru"
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Full (Admin)</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Sync Dashboard</span>
             <Activity className={cn(
               "h-3 w-3 text-indigo-400 group-hover:text-indigo-600 transition-colors",
               isSyncing && "animate-pulse text-indigo-500"

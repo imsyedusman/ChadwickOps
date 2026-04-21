@@ -15,9 +15,15 @@ export async function GET() {
     const { apiKey, apiSecret } = config.value as { apiKey: string, apiSecret: string };
     const syncService = new SyncService(decrypt(apiKey), decrypt(apiSecret));
     
-    // Fetch one specific project with workguruId to see its details
-    const projectsInDb = await db.select().from(projects).limit(1);
-    const workguruId = projectsInDb[0].workguruId;
+    // TRACE: Project 12394-02
+    const workguruId = '854271'; // Assuming this is the ID, let's try to find it first or use a search
+    
+    // Better: Find it by number in the DB if possible, but let's try to fetch it from API directly if we can't find it
+    const targetProject = await db.query.projects.findFirst({
+        where: eq(projects.projectNumber, '12394-02')
+    });
+    
+    const finalWorkguruId = targetProject?.workguruId || '854271'; 
     
     const tokenRes = await axios.post('https://api.workguru.io/api/ClientTokenAuth/Authenticate/api/client/v1/tokenauth', {
       apiKey: decrypt(apiKey),
@@ -25,21 +31,49 @@ export async function GET() {
     });
     const token = tokenRes.data.accessToken;
 
-    const pUrl = `https://api.workguru.io/api/services/app/Project/GetProjectById?id=${workguruId}`;
+    const pUrl = `https://api.workguru.io/api/services/app/Project/GetProjectById?id=${finalWorkguruId}`;
     const pRes = await axios.get(pUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
     const project = pRes.data.result;
+    const lineItems = project.productLineItems || project.ProductLineItems || [];
+    
+    let calculatedTotal = 0;
+    const itemsTrace = lineItems.map((li: any) => {
+        const price = Number(li.unitAmount || li.unitPrice || li.UnitPrice || 0);
+        const qty = Number(li.quantity || li.Quantity || 0);
+        const lineTotal = Number(li.lineTotal || li.total || li.Total || (price * qty));
+        calculatedTotal += lineTotal;
+        return {
+            name: li.name || li.Name,
+            price,
+            qty,
+            lineTotal
+        };
+    });
+
+    let syncLogicTotal = Number(project.total || project.Total || 0);
+    const initialApiTotal = syncLogicTotal;
+    let fallbackTriggered = false;
+    if (syncLogicTotal === 0) {
+        fallbackTriggered = true;
+        syncLogicTotal = calculatedTotal;
+    }
 
     return NextResponse.json({
       success: true,
-      workguruId,
-      projectName: projectsInDb[0].name,
-      keys: Object.keys(project),
-      customFields: project.customFields,
-      customFieldValues: project.customFieldValues,
-      fullProject: project // We need to see why BayLocation is null
+      workguruId: finalWorkguruId,
+      projectNumber: targetProject?.projectNumber,
+      projectName: targetProject?.name,
+      storedTotal: targetProject?.total,
+      apiTotal: initialApiTotal,
+      fallbackTriggered,
+      syncLogicTotal,
+      calculatedTotal,
+      lineItemsCount: lineItems.length,
+      itemsTrace,
+      fullProject: project 
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

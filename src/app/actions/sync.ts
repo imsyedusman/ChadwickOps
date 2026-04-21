@@ -9,15 +9,16 @@ import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { StageService } from '@/lib/stages';
 
-export async function triggerQuickSync() {
-  return handleSync('QUICK');
+export async function triggerSync() {
+  return handleSync();
 }
 
 export async function triggerFullSync() {
-  return handleSync('FULL');
+  return handleSync();
 }
 
-async function handleSync(mode: 'QUICK' | 'FULL') {
+async function handleSync() {
+  const mode = 'FULL';
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),
@@ -37,7 +38,7 @@ async function handleSync(mode: 'QUICK' | 'FULL') {
     revalidatePath('/');
     return { success: true, mode, stats: result.stats };
   } catch (error) {
-    console.error(`WorkGuru ${mode} Sync error:`, error);
+    console.error(`WorkGuru Sync error:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
