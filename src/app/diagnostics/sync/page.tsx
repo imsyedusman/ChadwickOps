@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { triggerQuickSync } from '@/app/actions/sync';
+import { triggerSync } from '@/app/actions/sync';
 
 export default function SyncDiagPage() {
   const [status, setStatus] = useState('Initializing...');
@@ -10,7 +10,7 @@ export default function SyncDiagPage() {
     async function run() {
       setStatus('Running sync...');
       try {
-        const res = await triggerQuickSync();
+        const res = await triggerSync();
         setStatus(`Sync Complete: ${JSON.stringify(res)}`);
       } catch (e: any) {
         setStatus(`Sync Failed: ${e.message}`);
