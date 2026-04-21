@@ -24,27 +24,47 @@ async function trace() {
     const decryptedSecret = decrypt(apiSecret);
 
     console.log('\n--- API Trace for Project 12394-02 ---');
-    const authUrl = 'https://api.workguru.io/api/ClientTokenAuth/Authenticate/api/client/v1/tokenauth';
     const authStart = Date.now();
-    const tokenRes = await axios.post(authUrl, {
+    const tokenRes = await axios.post('https://api.workguru.io/api/ClientTokenAuth/Authenticate/api/client/v1/tokenauth', {
         apiKey: decryptedKey,
         secret: decryptedSecret,
     });
     console.log(`Auth took: ${Date.now() - authStart}ms`);
     const token = tokenRes.data.accessToken;
 
+    // 1. Check BASE API (List)
+    const listUrl = 'https://api.workguru.io/api/services/app/Project/GetAllCurrentProjects?MaxResultCount=1000';
+    const listStart = Date.now();
+    const listResponse = await axios.get(listUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log(`Base List fetch took: ${Date.now() - listStart}ms`);
+    
+    const baseProject = (listResponse.data.result?.items || listResponse.data.result || []).find((p: any) => 
+        String(p.id || p.ProjectID) === '1286812' || (p.projectNo || p.ProjectNumber) === '12394-02'
+    );
+    
+    console.log('\n--- Base API (List) Summary ---');
+    if (baseProject) {
+        console.log(`Found in List: YES`);
+        console.log(`Base Total: ${baseProject.total || baseProject.Total || 0}`);
+        console.log(`Base Fields: ${Object.keys(baseProject).join(', ')}`);
+    } else {
+        console.log(`Found in List: NO (Might be non-current?)`);
+    }
+
+    // 2. Check DETAIL API (Single)
     const projectUrl = 'https://api.workguru.io/api/services/app/Project/GetProjectById?id=1286812';
     const projectStart = Date.now();
     try {
         const response = await axios.get(projectUrl, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        console.log(`Project fetch took: ${Date.now() - projectStart}ms`);
-        console.log(`Status: ${response.status}`);
-        
+        console.log(`\nDetail API fetch took: ${Date.now() - projectStart}ms`);
         const project = response.data.result;
-        console.log('\n--- Key Fields ---');
-        console.log(`Project Number: ${project.projectNumber || project.ProjectNumber}`);
+        
+        console.log('\n--- Detail API Key Fields ---');
+        console.log(`Project Number: ${project.projectNo || project.projectNumber || project.ProjectNumber}`);
         console.log(`Total: ${project.total || project.Total}`);
         
         const lineItems = project.productLineItems || project.ProductLineItems || [];
