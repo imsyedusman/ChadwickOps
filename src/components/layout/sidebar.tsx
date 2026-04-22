@@ -17,13 +17,16 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  BookOpen
+  BookOpen,
+  PieChart,
+  TrendingUp
 } from "lucide-react";
 
 const navigation = [
   { name: 'WIP Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Production Plan', href: '/production', icon: CalendarDays },
   { name: 'Capacity & Risk', href: '/risk', icon: BarChart3 },
+  { name: 'Reports', href: '/reports', icon: TrendingUp },
   { name: 'Sync Logs', href: '/logs', icon: History },
   { name: 'Help Guide', href: '/help', icon: BookOpen },
 ];

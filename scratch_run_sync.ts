@@ -1,5 +1,5 @@
 import { SyncService } from './src/lib/sync';
-import { db } from './src/db';
+import { db } from './src/db/index';
 import { systemConfig } from './src/db/schema';
 import { eq } from 'drizzle-orm';
 import { decrypt } from './src/lib/crypto';

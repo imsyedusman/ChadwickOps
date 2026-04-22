@@ -60,6 +60,8 @@ export const projects = pgTable('projects', {
   archivedAt: timestamp('archived_at'),
   total: doublePrecision('total').default(0).notNull(),
   lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  projectCreationDate: timestamp('project_creation_date'),
+  startDate: timestamp('start_date'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {

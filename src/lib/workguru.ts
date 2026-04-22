@@ -30,6 +30,8 @@ export interface WorkGuruProject {
   LastModifierTime?: string;
   creationTime?: string;
   CreationTime?: string;
+  startDate?: string;
+  StartDate?: string;
   productLineItems?: WorkGuruLineItem[];
   ProductLineItems?: WorkGuruLineItem[];
 }

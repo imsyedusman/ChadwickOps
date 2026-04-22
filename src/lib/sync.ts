@@ -326,6 +326,8 @@ export class SyncService {
             rawStatus,
             description,
             deliveryDate: dueDate,
+            projectCreationDate: this.parseDate(remote.creationTime || remote.CreationTime),
+            startDate: this.parseDate(remote.startDate || remote.StartDate),
             projectManager,
             total,
             remoteUpdatedAt,
@@ -541,17 +543,54 @@ export class SyncService {
     const str = String(dateStr).trim();
     if (!str) return null;
 
-    // Handle DD/MM/YYYY format
+    // 1. ISO Detection (WorkGuru CreationTime is usually ISO: 2026-04-06T23:34:01)
+    if (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const date = new Date(str);
+        if (!isNaN(date.getTime())) {
+            // Normalize to UTC midnight if it's just a date, or keep as is if it has time
+            return date;
+        }
+    }
+
+    // 2. Slashed Format Handling (DD/MM/YYYY or MM/DD/YYYY)
     const parts = str.split('/');
     if (parts.length === 3) {
-      const [day, month, year] = parts.map(Number);
-      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          const date = new Date(year, month - 1, day);
+      const [p1, p2, p3] = parts.map(Number);
+      if (!isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
+          let day: number, month: number, year: number;
+          let isAmbiguous = false;
+
+          // Year is usually p3
+          year = p3;
+          if (year < 100) year += 2000; // Handle 2-digit years if any
+
+          if (p1 > 12) {
+              // Format must be DD/MM/YYYY
+              day = p1;
+              month = p2;
+          } else if (p2 > 12) {
+              // Format must be MM/DD/YYYY
+              day = p2;
+              month = p1;
+          } else {
+              // Ambiguous (both <= 12)
+              isAmbiguous = true;
+              // Default to AU Standard: DD/MM/YYYY
+              day = p1;
+              month = p2;
+          }
+
+          if (isAmbiguous) {
+              console.warn(`[Sync] Ambiguous date format detected: "${str}". Defaulting to DD/MM/YYYY (AU Standard).`);
+          }
+
+          // Create date in UTC
+          const date = new Date(Date.UTC(year, month - 1, day));
           if (!isNaN(date.getTime())) return date;
       }
     }
 
-    // Fallback to standard JS parsing
+    // Fallback to standard JS parsing for anything else
     const date = new Date(str);
     if (!isNaN(date.getTime())) return date;
 
