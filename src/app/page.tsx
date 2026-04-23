@@ -179,7 +179,11 @@ export default async function DashboardPage({
 
       <div className="space-y-8">
         <div className="w-full">
-           <ProjectTable projects={displayedProjects} initialFilter={initialTableFilter} />
+           <ProjectTable 
+             projects={displayedProjects} 
+             initialFilter={initialTableFilter} 
+             lastUpdated={lastUpdatedText}
+           />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">

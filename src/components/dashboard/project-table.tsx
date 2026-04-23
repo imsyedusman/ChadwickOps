@@ -19,13 +19,21 @@ import {
   History,
   LayoutTemplate,
   RefreshCcw,
-  Check
+  Check,
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
+import { 
+  getProjectScheduleStatus, 
+  isProjectBacklog, 
+  formatSydneyDate, 
+  getSydneyNow 
+} from "@/lib/project-logic";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
+import { useSearchParams } from "next/navigation";
 import { Checkbox } from "../ui/Checkbox";
 import { TableSubtotals } from "./TableSubtotals";
 import { handleSyncProject } from "@/app/actions/sync-project";
@@ -52,12 +60,15 @@ interface Project {
   switchgearDeliveredDate: Date | string | null;
   projectManager: string | null;
   total: number;
+  startDate: Date | string | null;
+  projectCreationDate: Date | string | null;
   client?: { name: string };
 }
 
 type ProjectTableProps = {
   projects: Project[];
   initialFilter?: string;
+  lastUpdated?: string;
 };
 
 interface SortIconProps {
@@ -217,7 +228,7 @@ function FilterPopover({
   );
 }
 
-export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps) {
+export function ProjectTable({ projects, initialFilter = "", lastUpdated }: ProjectTableProps) {
   const [isPresetPickerOpen, setIsPresetPickerOpen] = useState(false);
   const presetPickerRef = useRef<HTMLDivElement>(null);
 
@@ -239,7 +250,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
     };
 
     const ALL_COLUMNS = [
-      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 
+      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'startDate',
       'bayLocation', 'deliveryDate', 'drawingApprovalDate', 'drawingSubmittedDate',
       'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate',
       'budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'total'
@@ -288,17 +299,22 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
   const [clientFilter, setClientFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
+
+  const searchParams = useSearchParams();
+  const isDebug = searchParams.get('debug') === '1';
 
   const handleClearFilters = () => {
     setPmFilter([]);
     setStatusFilter([]);
+    setScheduleFilter([]);
     setClientFilter("");
     setStartDate("");
     setEndDate("");
     setSearch("");
   };
 
-  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || clientFilter !== "" || startDate !== "" || endDate !== "" || search !== "";
+  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || clientFilter !== "" || startDate !== "" || endDate !== "" || search !== "";
 
   const [isScrolled, setIsScrolled] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -387,6 +403,7 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
       statuses: Array.from(statuses).sort(),
       clients: Array.from(clients).sort(),
       months: Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()),
+      scheduleTypes: ['UNSCHEDULED', 'FUTURE', 'STARTED']
     };
   }, [projects]);
 
@@ -406,7 +423,11 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
       const matchesDate = (!startDate || (pDate && format(pDate, 'yyyy-MM-dd') >= startDate)) && 
                           (!endDate || (pDate && format(pDate, 'yyyy-MM-dd') <= endDate));
 
-      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDate;
+      const now = getSydneyNow();
+      const sStatus = getProjectScheduleStatus(p, now);
+      const matchesSchedule = scheduleFilter.length === 0 || scheduleFilter.includes(sStatus);
+
+      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDate && matchesSchedule;
     });
 
     if (sortConfig) {
@@ -441,6 +462,10 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
           case 'switchgearDeliveredDate':
             aVal = a.switchgearDeliveredDate ? new Date(a.switchgearDeliveredDate).getTime() : 0;
             bVal = b.switchgearDeliveredDate ? new Date(b.switchgearDeliveredDate).getTime() : 0;
+            break;
+          case 'startDate':
+            aVal = a.startDate ? new Date(a.startDate).getTime() : 0;
+            bVal = b.startDate ? new Date(b.startDate).getTime() : 0;
             break;
           case 'projectNumber':
             const parseId = (num: string) => {
@@ -657,6 +682,14 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
               onChange={setStatusFilter}
             />
 
+            <FilterPopover 
+              label="Schedule"
+              icon={Zap}
+              options={filterOptions.scheduleTypes}
+              selected={scheduleFilter}
+              onChange={setScheduleFilter}
+            />
+
             <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700">
               <CalendarDays className={cn("h-3.5 w-3.5", (startDate || endDate) ? "text-brand" : "text-slate-400")} />
               <div className="flex items-center gap-1">
@@ -687,8 +720,11 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
               </button>
             )}
 
-            <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2">
-              {filteredAndSortedProjects.length} records
+            <div className="text-[11px] font-bold text-slate-400 tabular-nums px-2 border-l border-slate-200 dark:border-slate-800 ml-2 flex flex-col items-start gap-0.5">
+              <span>{filteredAndSortedProjects.length} records</span>
+              {lastUpdated && (
+                <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">Last synced: {lastUpdated}</span>
+              )}
             </div>
 
             <div className="relative" ref={presetPickerRef}>
@@ -767,7 +803,8 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                           actualHours: "Actual",
                           remainingHours: "Remaining",
                           progressPercent: "Progress %",
-                          total: "Value"
+                          total: "Value",
+                          startDate: "Start Date"
                         };
                         return (
                           <div key={key} className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors cursor-pointer group" onClick={() => {
@@ -880,6 +917,16 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     onClick={() => handleSort('deliveryDate')}
                   >
                     <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.startDate && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
+                    onClick={() => handleSort('startDate')}
+                  >
+                    <Tooltip content="Planned project start date (from WorkGuru)">
+                      <div className="flex items-center justify-center">Start Date <SortIcon column="startDate" sortConfig={sortConfig} /></div>
+                    </Tooltip>
                   </th>
                 )}
                 {columnVisibility.drawingApprovalDate && (
@@ -1077,6 +1124,24 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                         </span>
                       </td>
                     )}
+                    {columnVisibility.startDate && (
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className={cn(
+                            "text-[12px] font-bold tabular-nums",
+                            getProjectScheduleStatus(project, getSydneyNow()) === 'FUTURE' ? "text-brand px-1.5 py-0.5 bg-brand/5 rounded" : "text-slate-800 dark:text-slate-200",
+                            !project.startDate && "text-slate-300 dark:text-slate-700 font-medium"
+                          )}>
+                            {formatSydneyDate(project.startDate)}
+                          </span>
+                          {isDebug && (
+                            <span className="text-[8px] font-bold text-slate-400 dark:text-slate-600 mt-0.5">
+                              {getProjectScheduleStatus(project, getSydneyNow())}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    )}
                     {columnVisibility.drawingApprovalDate && (
                       <td className="px-4 py-3 text-center">
                         <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
@@ -1157,9 +1222,14 @@ export function ProjectTable({ projects, initialFilter = "" }: ProjectTableProps
                     )}
                     {columnVisibility.total && (
                       <td className="px-4 py-3 text-right">
-                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
-                          {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(project.total || 0)}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                            {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(project.total || 0)}
+                          </span>
+                          {isDebug && project.total === 0 && (
+                             <span className="text-[8px] font-bold text-orange-500 mt-0.5">VALUE PENDING SYNC</span>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

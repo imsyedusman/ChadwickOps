@@ -29,6 +29,7 @@ const defaultPreferences: UserPreferences = {
     switchgearDeliveredDate: false,
     projectManager: true,
     total: true,
+    startDate: true,
   },
   pageSize: 20,
   isAdmin: false,

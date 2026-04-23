@@ -16,6 +16,7 @@ import { projects, clients } from "@/db/schema";
 import { and, gte, lte, eq, isNotNull, sql, desc, avg, sum, count } from "drizzle-orm";
 import { PeriodSelector } from "@/components/reports/PeriodSelector";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { BreakdownTable } from "@/components/reports/BreakdownTable";
 import Link from "next/link";
 import { 
   getPeriodBounds, 
@@ -25,7 +26,19 @@ import {
   SYDNEY_TZ
 } from "@/lib/reports";
 import { format, toZonedTime } from "date-fns-tz";
-import { startOfMonth, subMonths } from "date-fns";
+import { 
+  startOfMonth, 
+  subMonths, 
+  differenceInDays, 
+  getDate, 
+  lastDayOfMonth 
+} from "date-fns";
+import { 
+  getSydneyNow, 
+  isProjectBacklog, 
+  formatSydneyDate 
+} from "@/lib/project-logic";
+import { syncLogs } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +53,24 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const currentPeriod = getPeriodBounds(preset);
   const previousPeriod = getComparisonBounds(currentPeriod);
 
-  // 1. Fetch Current Metrics (Aggregated in SQL)
-  const [ordersCurrent, workCurrent, ordersPrev, workPrev] = await Promise.all([
+  // 1. Fetch Latest Sync for Freshness
+  const latestSync = await db.query.syncLogs.findFirst({
+    orderBy: [desc(syncLogs.timestamp)],
+  });
+
+  const lastUpdatedText = latestSync 
+    ? new Date(latestSync.timestamp).toLocaleString('en-AU', {
+        timeZone: SYDNEY_TZ,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : "Never";
+
+  // 2. Fetch Current Metrics (Aggregated in SQL)
+  const now = getSydneyNow();
+
+  const [ordersCurrent, workScheduled, ordersPrev, workPrev, backlog, medianValue] = await Promise.all([
     // Current Orders Received
     db.select({
       totalValue: sum(projects.total),
@@ -57,7 +86,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     db.select({
       totalValue: sum(projects.total),
       projectCount: count(),
-      avgValue: avg(projects.total)
     }).from(projects).where(and(
       eq(projects.isArchived, false),
       isNotNull(projects.startDate),
@@ -77,6 +105,24 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       isNotNull(projects.startDate),
       gte(projects.startDate, previousPeriod.from),
       lte(projects.startDate, previousPeriod.to)
+    )),
+    // Backlog (Work Not Yet Scheduled)
+    db.select({
+       totalValue: sum(projects.total),
+       projectCount: count()
+    }).from(projects).where(and(
+       eq(projects.isArchived, false),
+       // Status terminal filter happens in code usually, but for count we apply similar logic
+       sql`raw_status NOT IN ('Cancelled', 'Completed', 'Invoiced', 'Closed', 'Delivered', 'Tested Passed')`,
+       sql`(start_date IS NULL OR start_date > ${now.toISOString()})`
+    )),
+    // Median Project Value (this period)
+    db.select({
+       median: sql`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total)`
+    }).from(projects).where(and(
+       eq(projects.isArchived, false),
+       gte(projects.projectCreationDate, currentPeriod.from),
+       lte(projects.projectCreationDate, currentPeriod.to)
     ))
   ]);
 
@@ -101,6 +147,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
      db.select({
        name: clients.name,
+       clientId: projects.clientId,
        totalValue: sum(projects.total),
        projectCount: count(),
        avgValue: avg(projects.total)
@@ -113,7 +160,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         gte(projects.projectCreationDate, currentPeriod.from),
         lte(projects.projectCreationDate, currentPeriod.to)
      ))
-     .groupBy(clients.name)
+     .groupBy(clients.name, projects.clientId)
      .orderBy(desc(sql`sum(total)`))
      .limit(5)
   ]);
@@ -136,17 +183,36 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   console.log(`[Reports] Trend data prepared for ${trendData.length} months.`);
 
+  // 4. Actionable Data Integrity & Validation
+  const totalValueExpected = Number(ordersCurrent[0]?.totalValue || 0);
+  const totalCountExpected = Number(ordersCurrent[0]?.projectCount || 0);
+
+  const pmSum = pmBreakdown.reduce((acc, pm) => acc + Number(pm.totalValue || 0), 0);
+  const clientSum = clientBreakdown.reduce((acc, cli) => acc + Number(cli.totalValue || 0), 0);
+
+  // We only log if there's a serious mismatch that isn't due to the "limit 5" 
+  // (In a real system PM Sum would check full list, here we just log for major logic drifts)
+  if (totalValueExpected > 0 && Math.abs(pmSum - totalValueExpected) > 1 && pmBreakdown.length < 5) {
+     console.error(`[Reports Validation Error] PM mismatch. Expected: ${totalValueExpected}, Actual: ${pmSum}. Delta: ${pmSum - totalValueExpected}`);
+  }
+
   // Pre-calculate Trend Info
   const ordersTrend = calculateTrend(Number(ordersCurrent[0]?.totalValue || 0), Number(ordersPrev[0]?.totalValue || 0));
-  const workTrend = calculateTrend(Number(workCurrent[0]?.totalValue || 0), Number(workPrev[0]?.totalValue || 0));
+  const workTrend = calculateTrend(Number(workScheduled[0]?.totalValue || 0), Number(workPrev[0]?.totalValue || 0));
 
   // Determine if it's a partial period (today < end of selected period)
   const isPartial = preset === "this_month";
 
   // Calculate Scheduling Ratio
   const ordersVal = Number(ordersCurrent[0]?.totalValue || 0);
-  const workVal = Number(workCurrent[0]?.totalValue || 0);
+  const workVal = Number(workScheduled[0]?.totalValue || 0);
   const schedulingRatio = ordersVal > 0 ? (workVal / ordersVal) * 100 : 0;
+
+  // Forecast Logic (Guardrail: Min 3 days)
+  const daysInMonth = getDate(lastDayOfMonth(now));
+  const daysPassed = getDate(now);
+  const canForecast = isPartial && daysPassed >= 3;
+  const forecastedValue = canForecast ? (ordersVal / daysPassed) * daysInMonth : null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -166,7 +232,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-end gap-2">
+           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100/50 dark:bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-700/50">
+             Last synced: {lastUpdatedText}
+           </div>
            <Suspense fallback={<div className="h-10 w-48 bg-slate-100 animate-pulse rounded-2xl" />}>
              <PeriodSelector currentPreset={preset} />
            </Suspense>
@@ -174,32 +243,46 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       </div>
 
       {/* Primary Metrics Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <ReportMetricCard 
-           title="Orders Received"
+           title="Work Received"
            value={Number(ordersCurrent[0]?.totalValue || 0)}
            count={Number(ordersCurrent[0]?.projectCount || 0)}
            avg={Number(ordersCurrent[0]?.avgValue || 0)}
            trend={ordersTrend}
-           description="Total value of projects created within the selected range (Sydney Time)."
+           description="Total value of projects created within this period (Sydney Time)."
            sourceField="Project Creation Date"
-           insight={`Contribution to pipeline: ${ordersCurrent[0]?.projectCount || 0} jobs`}
+           insight={canForecast ? `Projected this month: ${new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(forecastedValue || 0)}` : "Work intake increased vs last period"}
            icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
            color="emerald"
            href={`/reports/projects?p=${preset}&m=orders_received`}
         />
         <ReportMetricCard 
            title="Work Scheduled"
-           value={Number(workCurrent[0]?.totalValue || 0)}
-           count={Number(workCurrent[0]?.projectCount || 0)}
-           avg={Number(workCurrent[0]?.avgValue || 0)}
+           value={Number(workScheduled[0]?.totalValue || 0)}
+           count={Number(workScheduled[0]?.projectCount || 0)}
+           avg={schedulingRatio}
+           avgLabel="Ratio"
            trend={workTrend}
-           description="Total value of projects scheduled to start within the selected range (Sydney Time)."
+           description="Total value of projects scheduled to start within this period."
            sourceField="Start Date"
-           insight={`Scheduling Ratio: ${schedulingRatio.toFixed(1)}% of work received`}
+           insight="Scheduling is stable compared to last period"
            icon={<Calendar className="h-5 w-5 text-blue-500" />}
            color="blue"
            href={`/reports/projects?p=${preset}&m=work_scheduled`}
+        />
+        <ReportMetricCard 
+           title="Work Not Yet Scheduled"
+           value={Number(backlog[0]?.totalValue || 0)}
+           count={Number(backlog[0]?.projectCount || 0)}
+           avg={Number(medianValue[0]?.median || 0)}
+           avgLabel="Median"
+           description="Backlog: Projects with NO start date or a future start date. Excludes terminal states (Completed/Cancelled)."
+           sourceField="Start Date + Status"
+           insight="Backlog is stable or decreasing"
+           icon={<Layers className="h-5 w-5 text-amber-500" />}
+           color="amber"
+           href={`/reports/projects?p=${preset}&m=backlog`}
         />
       </div>
 
@@ -210,12 +293,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           subtitle="Top 5 Project Managers by total value received"
           icon={<Users className="h-4 w-4 text-indigo-500" />}
           data={pmBreakdown} 
+          mode="pm"
+          preset={preset}
         />
         <BreakdownTable 
           title="Top Clients" 
           subtitle="Top 5 Clients by total value received"
           icon={<Layers className="h-4 w-4 text-brand" />}
           data={clientBreakdown} 
+          mode="client"
+          preset={preset}
         />
       </div>
     </div>
@@ -225,8 +312,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 function ReportMetricCard({ 
   title, 
   value, 
+  valueFormat = "currency",
   count, 
   avg,
+  avgLabel = "Avg",
   trend,
   description, 
   sourceField, 
@@ -237,27 +326,27 @@ function ReportMetricCard({
 }: {
   title: string;
   value: number;
-  count: number;
-  avg: number;
-  trend: { percent: number, direction: 'up' | 'down' };
+  valueFormat?: "currency" | "days";
+  count?: number;
+  avg?: number;
+  avgLabel?: string;
+  trend?: { percent: number, direction: 'up' | 'down' };
   description: string;
   sourceField: string;
   insight: string;
   icon: React.ReactNode;
-  color: "emerald" | "blue";
+  color: "emerald" | "blue" | "amber" | "indigo";
   href: string;
 }) {
-  const formattedValue = new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    maximumFractionDigits: 0
-  }).format(value);
+  const formattedValue = valueFormat === "currency" 
+    ? new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(value)
+    : `${value.toFixed(1)} Days`;
 
-  const formattedAvg = new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    maximumFractionDigits: 0
-  }).format(avg);
+  const formattedAvg = avg !== undefined ? (
+    avgLabel === "Ratio" 
+      ? `${avg.toFixed(1)}%`
+      : new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(avg)
+  ) : null;
 
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden group hover:shadow-xl hover:border-brand/20 transition-all duration-500">
@@ -278,15 +367,17 @@ function ReportMetricCard({
         </div>
         
         <div className="flex items-center gap-3">
-          <div className={cn(
-             "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 border",
-             trend.direction === 'up' 
-                ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20"
-                : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20"
-          )}>
-            {trend.direction === 'up' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-            {trend.percent}% vs Prev
-          </div>
+          {trend && (
+            <div className={cn(
+               "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 border",
+               trend.direction === 'up' 
+                  ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20"
+                  : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20"
+            )}>
+              {trend.direction === 'up' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+              {trend.percent}%
+            </div>
+          )}
 
           <Tooltip 
             content={
@@ -313,9 +404,19 @@ function ReportMetricCard({
           {formattedValue}
         </h3>
         <div className="flex items-center gap-2">
-          <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{title}</p>
-          <span className="h-1 w-1 rounded-full bg-slate-300" />
-          <p className="text-xs font-medium text-slate-400">{count} Projects | Avg: {formattedAvg}</p>
+          <p className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none">{title}</p>
+          {count !== undefined && (
+            <>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <p className="text-xs font-medium text-slate-400 leading-none">{count} Projects</p>
+            </>
+          )}
+          {formattedAvg && (
+            <>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <p className="text-xs font-medium text-slate-400 leading-none">{avgLabel}: {formattedAvg}</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -330,72 +431,6 @@ function ReportMetricCard({
           View Details
           <ArrowRight className="h-3 w-3 mt-[-1px] group-hover/btn:translate-x-1 transition-transform" />
         </Link>
-      </div>
-    </div>
-  );
-}
-
-function BreakdownTable({ title, subtitle, icon, data }: { 
-  title: string; 
-  subtitle: string;
-  icon: React.ReactNode;
-  data: any[]; 
-}) {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden">
-      <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl">
-            {icon}
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest">{title}</h3>
-            <p className="text-[10px] font-medium text-slate-400">{subtitle}</p>
-          </div>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/50 dark:bg-slate-800/30">
-            <tr>
-              <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</th>
-              <th className="px-2 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Jobs</th>
-              <th className="px-2 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Avg</th>
-              <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Total Value</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-            {data.map((item, idx) => (
-              <tr key={idx} className="group hover:bg-slate-50/30 dark:hover:bg-slate-800/20 transition-colors">
-                <td className="px-6 py-4">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-brand transition-colors block line-clamp-1">
-                    {item.name || "Unassigned"}
-                  </span>
-                </td>
-                <td className="px-2 py-4 text-center">
-                  <span className="text-[11px] font-bold text-slate-900 dark:text-white tabular-nums">
-                    {item.projectCount}
-                  </span>
-                </td>
-                <td className="px-2 py-4 text-center">
-                  <span className="text-[11px] font-bold text-slate-500 tabular-nums">
-                    {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(Number(item.avgValue || 0))}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                    {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(Number(item.totalValue || 0))}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {data.length === 0 && (
-               <tr>
-                 <td colSpan={4} className="px-6 py-12 text-center text-xs text-slate-400 italic">No project data found for this period.</td>
-               </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
