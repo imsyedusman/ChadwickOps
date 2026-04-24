@@ -498,6 +498,9 @@ export class SyncService {
     
     if (lowerKey === 'baylocation' || lowerKey === 'bay location') 
         return this.getCustomFieldValueById(remote, CF_IDS.BAY_LOCATION);
+
+    if (lowerKey === 'projecttype' || lowerKey === 'project type') 
+        return this.getCustomFieldValueById(remote, CF_IDS.PROJECT_TYPE);
         
     if (lowerKey === 'clientdrawingapprovaldate' || lowerKey === 'drawing approval date')
         return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_APPROVAL_DATE);
@@ -788,6 +791,7 @@ export class SyncService {
         const remoteDetails = (detailResponse?.result || detailResponse) as import('./workguru').WorkGuruProject;
         
         const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
+        const projectType = this.getCustomFieldValue(remoteDetails, 'ProjectType');
         const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
         const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
         const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
@@ -832,7 +836,8 @@ export class SyncService {
             remainingHours,
             progressPercent,
             hasActualMismatch,
-            bayLocation, 
+            bayLocation,
+            projectType,
             drawingApprovalDate,
             drawingSubmittedDate,
             sheetmetalOrderedDate,

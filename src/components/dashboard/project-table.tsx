@@ -55,6 +55,7 @@ interface Project {
   drawingApprovalDate: Date | string | null;
   drawingSubmittedDate: Date | string | null;
   bayLocation: string | null;
+  projectType: string | null;
   sheetmetalOrderedDate: Date | string | null;
   sheetmetalDeliveredDate: Date | string | null;
   switchgearOrderedDate: Date | string | null;
@@ -242,17 +243,17 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     const newVisibility: Record<string, boolean> = {};
     
     const hides: Record<string, string[]> = {
-      Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate'],
+      Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'projectType'],
       Operations: [],
-      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
-      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate', 'projectType'],
+      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate', 'projectType'],
       'Project Managers': ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation'],
       Management: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation', 'drawingSubmittedDate', 'drawingApprovalDate']
     };
 
     const ALL_COLUMNS = [
       'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'startDate',
-      'bayLocation', 'deliveryDate', 'drawingApprovalDate', 'drawingSubmittedDate',
+      'bayLocation', 'projectType', 'deliveryDate', 'drawingApprovalDate', 'drawingSubmittedDate',
       'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate',
       'budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'total'
     ];
@@ -303,6 +304,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const [startFilterStart, setStartFilterStart] = useState("");
   const [startFilterEnd, setStartFilterEnd] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
+  const [projectTypeFilter, setProjectTypeFilter] = useState<string[]>([]);
 
   const searchParams = useSearchParams();
   const isDebug = searchParams.get('debug') === '1';
@@ -317,9 +319,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setStartFilterStart("");
     setStartFilterEnd("");
     setSearch("");
+    setProjectTypeFilter([]);
   };
 
-  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
+  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || projectTypeFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
 
   const [isScrolled, setIsScrolled] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -392,12 +395,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     const pms = new Set<string>();
     const statuses = new Set<string>();
     const clients = new Set<string>();
+    const projectTypes = new Set<string>();
     const months = new Set<string>();
 
     projects.forEach(p => {
       if (p.projectManager) pms.add(p.projectManager);
       if (p.rawStatus) statuses.add(p.rawStatus);
       if (p.client?.name) clients.add(p.client.name);
+      if (p.projectType) projectTypes.add(p.projectType);
       if (p.deliveryDate) {
         months.add(format(new Date(p.deliveryDate), 'MMM yyyy'));
       }
@@ -407,6 +412,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       pms: Array.from(pms).sort(),
       statuses: Array.from(statuses).sort(),
       clients: Array.from(clients).sort(),
+      projectTypes: Array.from(projectTypes).sort(),
       months: Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()),
       scheduleTypes: ['UNSCHEDULED', 'FUTURE', 'STARTED']
     };
@@ -435,8 +441,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const now = getSydneyNow();
       const sStatus = getProjectScheduleStatus(p, now);
       const matchesSchedule = scheduleFilter.length === 0 || scheduleFilter.includes(sStatus);
+      const matchesProjectType = projectTypeFilter.length === 0 || (p.projectType && projectTypeFilter.includes(p.projectType));
 
-      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDueDate && matchesStartDate && matchesSchedule;
+      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDueDate && matchesStartDate && matchesSchedule && matchesProjectType;
     });
 
     if (sortConfig) {
@@ -528,6 +535,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
             aVal = a.projectManager || "";
             bVal = b.projectManager || "";
             break;
+          case 'projectType':
+            aVal = a.projectType || "";
+            bVal = b.projectType || "";
+            break;
           case 'total':
             aVal = Number(a.total) || 0;
             bVal = Number(b.total) || 0;
@@ -551,7 +562,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     }
 
     return result;
-  }, [projects, search, pmFilter, statusFilter, clientFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, sortConfig]);
+  }, [projects, search, pmFilter, statusFilter, projectTypeFilter, clientFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, sortConfig]);
 
   const subtotals = useMemo(() => {
     const totals = filteredAndSortedProjects.reduce((acc, p) => {
@@ -691,6 +702,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               onChange={setStatusFilter}
             />
 
+            <FilterPopover 
+              label="Project Type"
+              icon={Briefcase}
+              options={filterOptions.projectTypes}
+              selected={projectTypeFilter}
+              onChange={setProjectTypeFilter}
+            />
+
 
 
             <DateRangePicker 
@@ -796,6 +815,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           projectManager: "Manager",
                           status: "Status",
                           bayLocation: "Bay Location",
+                          projectType: "Project Type",
                           deliveryDate: "Due Date",
                           drawingApprovalDate: "Drawing Approval",
                           drawingSubmittedDate: "Drawing Submitted",
@@ -913,6 +933,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     onClick={() => handleSort('bayLocation')}
                   >
                     <div className="flex items-center justify-center">Bay Location <SortIcon column="bayLocation" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.projectType && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[120px]"
+                    onClick={() => handleSort('projectType')}
+                  >
+                    <div className="flex items-center justify-center">Project Type <SortIcon column="projectType" sortConfig={sortConfig} /></div>
                   </th>
                 )}
                 {columnVisibility.startDate && (
@@ -1119,6 +1147,11 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     {columnVisibility.bayLocation && (
                       <td className="px-4 py-3 text-center text-[12px] font-bold text-slate-700 dark:text-slate-300">
                         {project.bayLocation || '—'}
+                      </td>
+                    )}
+                    {columnVisibility.projectType && (
+                      <td className="px-4 py-3 text-center text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                        {project.projectType || '—'}
                       </td>
                     )}
                     {columnVisibility.startDate && (
