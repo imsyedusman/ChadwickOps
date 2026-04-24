@@ -10,14 +10,17 @@ import {
   Clock,
   HelpCircle,
   ArrowUpRight,
-  TrendingUp
+  TrendingUp,
+  Activity
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 interface DashboardSummariesProps {
   totalCount: number;
+  allCount: number;
   dueThisWeekCount: number;
   overdueCount: number;
   thisMonthCount: number;
@@ -27,6 +30,7 @@ interface DashboardSummariesProps {
 
 export function DashboardSummaries({
   totalCount,
+  allCount,
   dueThisWeekCount,
   overdueCount,
   thisMonthCount,
@@ -49,15 +53,24 @@ export function DashboardSummaries({
         <div className="h-4 w-1 bg-indigo-500 rounded-full" />
         <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Overview (Global Business View)</h2>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatCard
+          title="All Jobs"
+          value={allCount.toString()}
+          icon={<Activity className="h-6 w-6 text-slate-500" />}
+          description="Full system dataset"
+          href="/?filter=all"
+          isActive={currentFilter === "" || currentFilter === "all"}
+          tooltip="Every project currently in the system, including internal work and non-productive codes."
+        />
         <StatCard
           title="Active Jobs"
           value={totalCount.toString()}
           icon={<Layers className="h-6 w-6 text-indigo-500" />}
-          description="All live production records"
-          href="/"
-          isActive={currentFilter === ""}
-          tooltip="Total volume of productive projects. Excludes Internal projects (Project No starting with 99)."
+          description="Live production only"
+          href="/?filter=active"
+          isActive={currentFilter === "active"}
+          tooltip="Productive projects currently in progress. Includes statuses from 'Not Drawn' through to 'Invoiced'. Excludes Delivered, Completed, and internal projects (starting with 99)."
         />
         <StatCard
           title="Due This Week"
@@ -90,13 +103,14 @@ export function DashboardSummaries({
           title="Total WIP Value"
           value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)}
           icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
-          description="Total active contract value"
-          tooltip="Includes all active production projects. Excludes projects with the following statuses: Tested Passed, Ready for Invoicing, Invoiced, Delivered, Completed, Cancelled. Also excludes internal projects with IDs starting with '99'."
+          description="Total active value"
+          tooltip="Sum of all active productive projects (including Invoiced). Excludes internal projects starting with '99' and projects with status Delivered, Completed, or Cancelled."
         />
       </div>
     </div>
   );
 }
+
 
 export function StatCard({
   title,

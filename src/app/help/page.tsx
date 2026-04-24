@@ -42,9 +42,10 @@ export default function HelpPage() {
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Active Work vs. Excluded</h2>
           </div>
           
-          <p className="text-slate-600 dark:text-slate-400">
-            The dashboard only tracks projects that are considered &quot;In Production&quot;. This filters out noise from sales quotes or completed deliveries.
+          <p className="text-slate-600 dark:text-slate-400 font-medium">
+            The dashboard classifies work into <strong>Active</strong> and <strong>Inactive</strong> states based on their WorkGuru status. The <strong>Active Jobs</strong> filter on the main dashboard uses these definitions to focus on live production.
           </p>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 rounded-2xl p-6">

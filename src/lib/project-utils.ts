@@ -37,17 +37,17 @@ export const ACTIVE_STATUSES = [
   'Ready for Testing',
   'Tested Defective',
   'On Hold',
-  'Waiting to Start'
+  'Waiting to Start',
+  'Tested Passed',
+  'Ready for Invoicing',
+  'Invoiced'
 ];
 
 /**
- * Explicit list of statuses to EXCLUDE from WIP Totals.
+ * Explicit list of statuses to EXCLUDE from WIP Totals and Active views.
  * These represent finished, cancelled, or delivered work.
  */
 export const EXCLUDED_WIP_STATUSES = [
-  'Tested Passed',
-  'Ready for Invoicing',
-  'Invoiced',
   'Delivered',
   'Completed',
   'Cancelled'
@@ -64,11 +64,10 @@ export function isActiveWorkStatus(status: string | null): boolean {
   // Strip numeric prefix (e.g., "1.1 - ", "2 - "), trim, and lowercase
   const cleaned = status.replace(/^[\d.]+ - /, '').trim().toLowerCase();
   
-  // Check against exclusion list
-  const isExcluded = EXCLUDED_WIP_STATUSES.some(s => s.toLowerCase() === cleaned);
-  
-  return !isExcluded;
+  // Check against active list (more precise than checking exclusions)
+  return ACTIVE_STATUSES.some(s => s.toLowerCase() === cleaned);
 }
+
 
 /**
  * Tooltip explaining what "Internal" means in the context of the dashboard.

@@ -123,7 +123,7 @@ export default async function DashboardPage({
   // Stage Bottleneck calculation - Productive Only
   const stageCounts: Record<string, { name: string, count: number, color: string }> = {};
   productiveProjects.forEach(p => {
-    if (p.displayStage) {
+    if (p.displayStage && isActiveWorkStatus(p.rawStatus)) {
       if (!stageCounts[p.displayStage.id]) {
         stageCounts[p.displayStage.id] = { name: p.displayStage.name, count: 0, color: p.displayStage.color };
       }
@@ -133,7 +133,9 @@ export default async function DashboardPage({
 
   const sortedStages = Object.values(stageCounts).sort((a, b) => b.count - a.count);
 
-  const displayedProjects = filter === "due_this_week" 
+  const displayedProjects = filter === "active"
+    ? projectsWithRisk.filter(p => isProductiveProject(p.projectNumber) && isActiveWorkStatus(p.rawStatus))
+    : filter === "due_this_week" 
     ? projectsWithRisk.filter(p => {
         if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
         const d = new Date(p.deliveryDate);
@@ -170,12 +172,14 @@ export default async function DashboardPage({
 
       <DashboardSummaries 
         totalCount={stats.activeJobs}
+        allCount={stats.total}
         dueThisWeekCount={stats.dueThisWeek}
         overdueCount={stats.overdue}
         thisMonthCount={stats.thisMonth}
         totalValue={stats.totalValue}
         currentFilter={filter}
       />
+
 
       <div className="space-y-8">
         <div className="w-full">
