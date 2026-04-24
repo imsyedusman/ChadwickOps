@@ -20,7 +20,25 @@ import {
   LayoutTemplate,
   RefreshCcw,
   Check,
-  Zap
+  Zap,
+  Clock,
+  FileText,
+  FileCheck,
+  ShoppingCart,
+  PlayCircle,
+  ShieldAlert,
+  XCircle,
+  PauseCircle,
+  Timer,
+  CheckCircle2,
+  Receipt,
+  DollarSign,
+  Truck,
+  Archive,
+  Ban,
+  AlertCircle,
+  HelpCircle,
+  Circle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -30,8 +48,16 @@ import {
   getProjectScheduleStatus, 
   isProjectBacklog, 
   formatSydneyDate, 
-  getSydneyNow 
+  getSydneyNow,
+  isTerminalStatus
 } from "@/lib/project-logic";
+import { 
+  differenceInDays, 
+  isBefore, 
+  addDays, 
+  startOfDay,
+  isValid 
+} from "date-fns";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
 import { useSearchParams } from "next/navigation";
 import { Checkbox } from "../ui/Checkbox";
@@ -81,6 +107,74 @@ interface SortIconProps {
 const SortIcon = ({ column, sortConfig }: SortIconProps) => {
   if (sortConfig?.key !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-20" />;
   return sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3 ml-1 text-brand" /> : <ArrowDown className="h-3 w-3 ml-1 text-brand" />;
+};
+
+const URGENCY_CONFIG = {
+  dueSoonThresholdDays: 3,
+};
+
+const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
+  'Not Drawn': { color: 'slate', icon: Clock },
+  'Drawings Submitted': { color: 'blue', icon: FileText },
+  'Drawings Approved': { color: 'indigo', icon: FileCheck },
+  'Ordered': { color: 'amber', icon: ShoppingCart },
+  'In Progress': { color: 'brand', icon: PlayCircle },
+  'Ready for Testing': { color: 'purple', icon: ShieldAlert },
+  'Tested Defective': { color: 'red', icon: XCircle },
+  'On Hold': { color: 'orange', icon: PauseCircle },
+  'Waiting to Start': { color: 'slate', icon: Timer },
+  'Tested Passed': { color: 'emerald', icon: CheckCircle2 },
+  'Ready for Invoicing': { color: 'cyan', icon: Receipt },
+  'Invoiced': { color: 'emerald', icon: DollarSign },
+  'Delivered': { color: 'slate', icon: Truck },
+  'Completed': { color: 'emerald', icon: Archive },
+  'Cancelled': { color: 'red', icon: Ban },
+  'default': { color: 'slate', icon: HelpCircle }
+};
+
+const getStatusStyles = (status: string | null) => {
+  if (!status) return STATUS_CONFIG.default;
+  const cleaned = status.replace(/^[\d.]+ - /, '').trim();
+  return STATUS_CONFIG[cleaned] || STATUS_CONFIG.default;
+};
+
+const getColorClasses = (color: string) => {
+  const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-sm uppercase tracking-wider transition-all duration-200";
+  const colors: Record<string, string> = {
+    brand: "bg-brand/5 text-brand border-brand/20 dark:bg-brand/10 dark:border-brand/30",
+    blue: "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-900/30",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-900/30",
+    red: "bg-red-50 text-red-600 border-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-900/30",
+    amber: "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-900/30",
+    orange: "bg-orange-50 text-orange-600 border-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-900/30",
+    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-900/30",
+    purple: "bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-900/30",
+    cyan: "bg-cyan-50 text-cyan-600 border-cyan-100 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-900/30",
+    slate: "bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-800",
+  };
+  return cn(base, colors[color] || colors.slate);
+};
+
+const getUrgencyIndicator = (project: Project, now: Date) => {
+  if (isTerminalStatus(project.rawStatus)) return null;
+  
+  // Exclude specific statuses from urgency logic
+  const status = project.rawStatus?.replace(/^[\d.]+ - /, '').trim();
+  if (status === 'Ready for Invoicing' || status === 'Invoiced') return null;
+
+  if (!project.deliveryDate) return null;
+  
+  const dueDate = new Date(project.deliveryDate);
+  if (!isValid(dueDate)) return null;
+
+  const today = startOfDay(now);
+  const dueDay = startOfDay(dueDate);
+
+  if (isBefore(dueDay, today)) {
+    return { color: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]', label: 'Overdue' };
+  }
+
+  return null;
 };
 
 function SyncRowButton({ workguruId, onSyncComplete }: { workguruId: string; onSyncComplete: () => void }) {
@@ -880,7 +974,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     className="sticky z-50 bg-slate-50 dark:bg-slate-800 px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest border-r border-slate-200/40 dark:border-slate-700/40 cursor-pointer hover:bg-slate-100/50 transition-colors"
                     onClick={() => handleSort('projectNumber')}
                   >
-                    <div className="flex items-center"># ID <SortIcon column="projectNumber" sortConfig={sortConfig} /></div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 flex-shrink-0" /> {/* Spacer to align with row dot */}
+                      <div className="flex items-center"># ID <SortIcon column="projectNumber" sortConfig={sortConfig} /></div>
+                    </div>
                   </th>
                 )}
                 {columnVisibility.projectName && (
@@ -1051,35 +1148,45 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {currentProjects.length > 0 ? (
-                currentProjects.map((project) => (
-                  <tr
-                    key={project.id}
-                    className={cn(
-                      "group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150 border-b border-slate-50 dark:border-slate-800",
-                      !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]"
-                    )}
-                  >
-                    {columnVisibility.projectNumber && (
-                      <td
-                        style={{
-                          left: getStickyOffset('projectNumber'),
-                          width: STICKY_WIDTHS.projectNumber,
-                          minWidth: STICKY_WIDTHS.projectNumber
-                        }}
-                        className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{project.projectNumber}</span>
-                          <SyncRowButton 
-                            workguruId={project.workguruId} 
-                            onSyncComplete={() => {
-                               // Optional: handle local state refresh if needed, 
-                               // handled by revalidatePath for now.
-                            }} 
-                          />
-                        </div>
-                      </td>
-                    )}
+                currentProjects.map((project) => {
+                  const urgency = getUrgencyIndicator(project, getSydneyNow());
+                  return (
+                    <tr
+                      key={project.id}
+                      className={cn(
+                        "group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150 border-b border-slate-50 dark:border-slate-800",
+                        !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]"
+                      )}
+                    >
+                      {columnVisibility.projectNumber && (
+                        <td
+                          style={{
+                            left: getStickyOffset('projectNumber'),
+                            width: STICKY_WIDTHS.projectNumber,
+                            minWidth: STICKY_WIDTHS.projectNumber
+                          }}
+                          className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            <div className="w-2 flex-shrink-0 flex items-center justify-center">
+                              {urgency && (
+                                <div 
+                                  className={cn("w-2 h-2 rounded-full", urgency.color)} 
+                                  title={urgency.label}
+                                />
+                              )}
+                            </div>
+                            <span>{project.projectNumber}</span>
+                            <SyncRowButton 
+                              workguruId={project.workguruId} 
+                              onSyncComplete={() => {
+                                 // Optional: handle local state refresh if needed, 
+                                 // handled by revalidatePath for now.
+                              }} 
+                            />
+                          </div>
+                        </td>
+                      )}
                     {columnVisibility.projectName && (
                       <td
                         style={{
@@ -1136,12 +1243,15 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     )}
                     {columnVisibility.status && (
                       <td className="px-4 py-3 text-center">
-                        <span className={cn(
-                          "inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold border shadow-sm uppercase tracking-wider",
-                          project.rawStatus === 'Active' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-600 border-slate-100"
-                        )}>
-                          {project.rawStatus}
-                        </span>
+                        {(() => {
+                          const { color, icon: Icon } = getStatusStyles(project.rawStatus);
+                          return (
+                            <span className={getColorClasses(color)}>
+                              <Icon className="h-3 w-3" />
+                              {project.rawStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                     )}
                     {columnVisibility.bayLocation && (
@@ -1282,8 +1392,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                         </div>
                       </td>
                     )}
-                  </tr>
-                ))
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={9} className="px-6 py-20 text-center">
