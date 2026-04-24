@@ -36,6 +36,7 @@ import { useUserPreferences } from "@/components/providers/user-preferences-prov
 import { useSearchParams } from "next/navigation";
 import { Checkbox } from "../ui/Checkbox";
 import { TableSubtotals } from "./TableSubtotals";
+import { DateRangePicker } from "../ui/DateRangePicker";
 import { handleSyncProject } from "@/app/actions/sync-project";
 
 interface Project {
@@ -235,7 +236,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const { preferences, setPreference } = useUserPreferences();
   const { columnVisibility } = preferences;
 
-  const CORE_COLUMNS = ['projectNumber', 'projectName', 'itemName'];
+  const CORE_COLUMNS = ['projectNumber', 'projectName', 'itemName', 'startDate', 'deliveryDate'];
 
   const handleApplyPreset = (presetName: string) => {
     const newVisibility: Record<string, boolean> = {};
@@ -297,8 +298,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const [pmFilter, setPmFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [clientFilter, setClientFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [dueFilterStart, setDueFilterStart] = useState("");
+  const [dueFilterEnd, setDueFilterEnd] = useState("");
+  const [startFilterStart, setStartFilterStart] = useState("");
+  const [startFilterEnd, setStartFilterEnd] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
 
   const searchParams = useSearchParams();
@@ -309,12 +312,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setStatusFilter([]);
     setScheduleFilter([]);
     setClientFilter("");
-    setStartDate("");
-    setEndDate("");
+    setDueFilterStart("");
+    setDueFilterEnd("");
+    setStartFilterStart("");
+    setStartFilterEnd("");
     setSearch("");
   };
 
-  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || clientFilter !== "" || startDate !== "" || endDate !== "" || search !== "";
+  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
 
   const [isScrolled, setIsScrolled] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -419,15 +424,19 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const matchesStatus = statusFilter.length === 0 || (p.rawStatus && statusFilter.includes(p.rawStatus));
       const matchesClient = !clientFilter || p.client?.name === clientFilter;
       
-      const pDate = p.deliveryDate ? new Date(p.deliveryDate) : null;
-      const matchesDate = (!startDate || (pDate && format(pDate, 'yyyy-MM-dd') >= startDate)) && 
-                          (!endDate || (pDate && format(pDate, 'yyyy-MM-dd') <= endDate));
+      const pDueDate = p.deliveryDate ? new Date(p.deliveryDate) : null;
+      const matchesDueDate = (!dueFilterStart || (pDueDate && format(pDueDate, 'yyyy-MM-dd') >= dueFilterStart)) && 
+                          (!dueFilterEnd || (pDueDate && format(pDueDate, 'yyyy-MM-dd') <= dueFilterEnd));
+
+      const pStartDate = p.startDate ? new Date(p.startDate) : null;
+      const matchesStartDate = (!startFilterStart || (pStartDate && format(pStartDate, 'yyyy-MM-dd') >= startFilterStart)) && 
+                            (!startFilterEnd || (pStartDate && format(pStartDate, 'yyyy-MM-dd') <= startFilterEnd));
 
       const now = getSydneyNow();
       const sStatus = getProjectScheduleStatus(p, now);
       const matchesSchedule = scheduleFilter.length === 0 || scheduleFilter.includes(sStatus);
 
-      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDate && matchesSchedule;
+      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDueDate && matchesStartDate && matchesSchedule;
     });
 
     if (sortConfig) {
@@ -542,7 +551,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     }
 
     return result;
-  }, [projects, search, pmFilter, statusFilter, clientFilter, startDate, endDate, sortConfig]);
+  }, [projects, search, pmFilter, statusFilter, clientFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, sortConfig]);
 
   const subtotals = useMemo(() => {
     const totals = filteredAndSortedProjects.reduce((acc, p) => {
@@ -649,7 +658,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
         totalRemaining={subtotals.totalRemaining}
         overallProgress={subtotals.overallProgress}
       />
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col h-full">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm flex flex-col h-full">
         {/* Table Toolbar */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="relative flex-1 max-w-sm">
@@ -682,32 +691,27 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               onChange={setStatusFilter}
             />
 
-            <FilterPopover 
-              label="Schedule"
-              icon={Zap}
-              options={filterOptions.scheduleTypes}
-              selected={scheduleFilter}
-              onChange={setScheduleFilter}
+
+
+            <DateRangePicker 
+              label="Filter by Start Date"
+              startDate={startFilterStart}
+              endDate={startFilterEnd}
+              onRangeChange={(start, end) => {
+                setStartFilterStart(start);
+                setStartFilterEnd(end);
+              }}
             />
 
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700">
-              <CalendarDays className={cn("h-3.5 w-3.5", (startDate || endDate) ? "text-brand" : "text-slate-400")} />
-              <div className="flex items-center gap-1">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-transparent text-[11px] font-bold outline-none border-none p-0 focus:ring-0 text-slate-600 dark:text-slate-300 h-4 w-[90px]"
-                />
-                <span className="text-[10px] font-bold text-slate-300 mx-0.5">-</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-transparent text-[11px] font-bold outline-none border-none p-0 focus:ring-0 text-slate-600 dark:text-slate-300 h-4 w-[90px]"
-                />
-              </div>
-            </div>
+            <DateRangePicker 
+              label="Filter by Due Date"
+              startDate={dueFilterStart}
+              endDate={dueFilterEnd}
+              onRangeChange={(start, end) => {
+                setDueFilterStart(start);
+                setDueFilterEnd(end);
+              }}
+            />
 
             {hasActiveFilters && (
               <button
@@ -911,14 +915,6 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     <div className="flex items-center justify-center">Bay Location <SortIcon column="bayLocation" sortConfig={sortConfig} /></div>
                   </th>
                 )}
-                {columnVisibility.deliveryDate && (
-                  <th
-                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
-                    onClick={() => handleSort('deliveryDate')}
-                  >
-                    <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" sortConfig={sortConfig} /></div>
-                  </th>
-                )}
                 {columnVisibility.startDate && (
                   <th
                     className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
@@ -927,6 +923,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     <Tooltip content="Planned project start date (from WorkGuru)">
                       <div className="flex items-center justify-center">Start Date <SortIcon column="startDate" sortConfig={sortConfig} /></div>
                     </Tooltip>
+                  </th>
+                )}
+                {columnVisibility.deliveryDate && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
+                    onClick={() => handleSort('deliveryDate')}
+                  >
+                    <div className="flex items-center justify-center">Due Date <SortIcon column="deliveryDate" sortConfig={sortConfig} /></div>
                   </th>
                 )}
                 {columnVisibility.drawingApprovalDate && (
@@ -1117,13 +1121,6 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                         {project.bayLocation || '—'}
                       </td>
                     )}
-                    {columnVisibility.deliveryDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
                     {columnVisibility.startDate && (
                       <td className="px-4 py-3 text-center">
                         <div className="flex flex-col items-center">
@@ -1140,6 +1137,13 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                             </span>
                           )}
                         </div>
+                      </td>
+                    )}
+                    {columnVisibility.deliveryDate && (
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                          {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
+                        </span>
                       </td>
                     )}
                     {columnVisibility.drawingApprovalDate && (
