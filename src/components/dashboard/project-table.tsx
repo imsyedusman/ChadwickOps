@@ -1124,13 +1124,22 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     {columnVisibility.startDate && (
                       <td className="px-4 py-3 text-center">
                         <div className="flex flex-col items-center">
-                          <span className={cn(
-                            "text-[12px] font-bold tabular-nums",
-                            getProjectScheduleStatus(project, getSydneyNow()) === 'FUTURE' ? "text-brand px-1.5 py-0.5 bg-brand/5 rounded" : "text-slate-800 dark:text-slate-200",
-                            !project.startDate && "text-slate-300 dark:text-slate-700 font-medium"
-                          )}>
-                            {formatSydneyDate(project.startDate)}
-                          </span>
+                          {(() => {
+                            const isError = project.startDate && project.deliveryDate && new Date(project.startDate) > new Date(project.deliveryDate);
+                            return (
+                              <span className={cn(
+                                "text-[12px] font-bold tabular-nums",
+                                isError 
+                                  ? "text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30"
+                                  : getProjectScheduleStatus(project, getSydneyNow()) === 'FUTURE' 
+                                    ? "text-brand px-1.5 py-0.5 bg-brand/5 rounded" 
+                                    : "text-slate-800 dark:text-slate-200",
+                                !project.startDate && "text-slate-300 dark:text-slate-700 font-medium"
+                              )}>
+                                {formatSydneyDate(project.startDate)}
+                              </span>
+                            );
+                          })()}
                           {isDebug && (
                             <span className="text-[8px] font-bold text-slate-400 dark:text-slate-600 mt-0.5">
                               {getProjectScheduleStatus(project, getSydneyNow())}
@@ -1183,13 +1192,17 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     )}
                     {columnVisibility.budgetHours && (
                       <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.budgetHours}h</span>
+                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                          {Number(Number(project.budgetHours || 0).toFixed(2)).toLocaleString()}h
+                        </span>
                       </td>
                     )}
                     {columnVisibility.actualHours && (
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{project.actualHours}h</span>
+                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                            {Number(Number(project.actualHours || 0).toFixed(2)).toLocaleString()}h
+                          </span>
                         </div>
                       </td>
                     )}
@@ -1199,7 +1212,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           "text-[12px] font-bold tabular-nums",
                           project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
                         )}>
-                          {project.remainingHours}h
+                          {Number(Number(project.remainingHours || 0).toFixed(2)).toLocaleString()}h
                         </span>
                       </td>
                     )}
