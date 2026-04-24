@@ -243,10 +243,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     const newVisibility: Record<string, boolean> = {};
     
     const hides: Record<string, string[]> = {
-      Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'projectType'],
+      Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate'],
       Operations: [],
-      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate', 'projectType'],
-      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate', 'projectType'],
+      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
       'Project Managers': ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation'],
       Management: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation', 'drawingSubmittedDate', 'drawingApprovalDate']
     };
