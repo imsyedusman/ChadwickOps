@@ -819,6 +819,23 @@ export class SyncService {
             total = Number(localProject.total);
         }
 
+        // Extract core info from details to ensure manual sync refreshes all visible data
+        const name = remoteDetails.projectName || remoteDetails.ProjectName || remoteDetails.name || localProject.name;
+        const rawStatus = remoteDetails.status || remoteDetails.Status || localProject.rawStatus;
+        const deliveryDate = this.parseDate(remoteDetails.dueDate || remoteDetails.DueDate) || localProject.deliveryDate;
+        const startDate = this.parseDate(remoteDetails.startDate || remoteDetails.StartDate) || localProject.startDate;
+        const projectCreationDate = this.parseDate(remoteDetails.creationTime || remoteDetails.CreationTime) || localProject.projectCreationDate;
+        const description = remoteDetails.description || remoteDetails.Description || localProject.description;
+        
+        let projectManager = localProject.projectManager;
+        if (remoteDetails.projectManager) {
+            if (typeof remoteDetails.projectManager === 'object' && remoteDetails.projectManager !== null) {
+                projectManager = (remoteDetails.projectManager as any).name || (remoteDetails.projectManager as any).Name || projectManager;
+            } else {
+                projectManager = String(remoteDetails.projectManager);
+            }
+        }
+
         const calculatedActual = hoursData.totalActual;
         const calculatedApproved = hoursData.totalApproved;
         const hasUnapprovedHours = hoursData.hasUnapproved ? 1 : 0;
@@ -829,6 +846,13 @@ export class SyncService {
         
         await db.update(projects)
           .set({
+            name,
+            rawStatus,
+            deliveryDate,
+            startDate,
+            projectCreationDate,
+            projectManager,
+            description,
             budgetHours: calculatedBudget,
             actualHours: calculatedActual,
             approvedHours: calculatedApproved,
