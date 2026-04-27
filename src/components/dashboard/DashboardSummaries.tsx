@@ -10,7 +10,6 @@ import {
   Clock,
   HelpCircle,
   ArrowUpRight,
-  TrendingUp,
   Activity
 } from "lucide-react";
 
@@ -53,7 +52,7 @@ export function DashboardSummaries({
         <div className="h-4 w-1 bg-indigo-500 rounded-full" />
         <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Overview (Global Business View)</h2>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           title="All Jobs"
           value={allCount.toString()}
@@ -98,13 +97,6 @@ export function DashboardSummaries({
           href="/?filter=this_month"
           isActive={currentFilter === "this_month"}
           tooltip="Projects with a delivery date in the current calendar month. Excludes Internal projects (Project No starting with 99)."
-        />
-        <StatCard
-          title="Total WIP Value"
-          value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)}
-          icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
-          description="Total active value"
-          tooltip="Sum of all active productive projects (including Invoiced). Excludes internal projects starting with '99' and projects with status Delivered, Completed, or Cancelled."
         />
       </div>
     </div>
