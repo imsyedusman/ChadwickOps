@@ -52,6 +52,7 @@ export const projects = pgTable('projects', {
   switchgearOrderedDate: timestamp('switchgear_ordered_date'),
   switchgearDeliveredDate: timestamp('switchgear_delivered_date'),
   procurementStatus: varchar('procurement_status', { length: 100 }),
+  procurementNotes: text('procurement_notes'),
   productionReadiness: text('production_readiness'),
   projectManager: text('project_manager'),
   lastDeepSyncAt: timestamp('last_deep_sync_at'),
@@ -105,6 +106,31 @@ export const timeEntries = pgTable('time_entries', {
   ];
 });
 
+export const masterSuppliers = pgTable('master_suppliers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const projectSuppliers = pgTable('project_suppliers', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  masterSupplierId: integer('master_supplier_id').references(() => masterSuppliers.id),
+  supplierName: text('supplier_name').notNull(), // Keep as denormalized for speed/fallback
+  materialType: varchar('material_type', { length: 50 }).notNull(), // SM, SG, Other
+  orderDate: timestamp('order_date'),
+  expectedDeliveryDate: timestamp('expected_delivery_date'),
+  deliveryStatus: varchar('delivery_status', { length: 50 }), // Ordered, Partially Delivered, Delivered, Delayed
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('supplier_project_idx').on(table.projectId),
+  ];
+});
+
 export const systemConfig = pgTable('system_config', {
   id: serial('id').primaryKey(),
   key: varchar('key', { length: 255 }).notNull().unique(),
@@ -135,6 +161,12 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   displayStage: one(displayStages, { fields: [projects.displayStageId], references: [displayStages.id] }),
   tasks: many(tasks),
   timeEntries: many(timeEntries),
+  suppliers: many(projectSuppliers),
+}));
+
+export const projectSuppliersRelations = relations(projectSuppliers, ({ one }) => ({
+  project: one(projects, { fields: [projectSuppliers.projectId], references: [projects.id] }),
+  masterSupplier: one(masterSuppliers, { fields: [projectSuppliers.masterSupplierId], references: [masterSuppliers.id] }),
 }));
 
 export const stageMappingsRelations = relations(stageMappings, ({ one }) => ({

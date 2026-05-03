@@ -6,6 +6,7 @@ type UserPreferences = {
   userId?: string;
   isAdmin?: boolean;
   columnVisibility: Record<string, boolean>;
+  procurementColumnVisibility: Record<string, boolean>;
   pageSize: number;
 };
 
@@ -30,6 +31,21 @@ const defaultPreferences: UserPreferences = {
     projectManager: true,
     total: true,
     startDate: true,
+  },
+  procurementColumnVisibility: {
+    projectNumber: true,
+    projectName: true,
+    itemName: true,
+    status: true,
+    procurementRisk: true,
+    bayLocation: true,
+    projectType: true,
+    startDate: true,
+    deliveryDate: true,
+    procurementStatus: true,
+    procurementNotes: true,
+    smDates: true,
+    sgDates: true,
   },
   pageSize: 20,
   isAdmin: false,
