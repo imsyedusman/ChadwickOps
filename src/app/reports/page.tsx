@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/db";
-import { projects, clients } from "@/db/schema";
+import { projects, clients, projectFinancialSnapshots } from "@/db/schema";
 import { and, gte, lte, eq, isNotNull, sql, desc, avg, sum, count } from "drizzle-orm";
 import { PeriodSelector } from "@/components/reports/PeriodSelector";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -162,8 +162,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
      ))
      .groupBy(clients.name, projects.clientId)
      .orderBy(desc(sql`sum(total)`))
-     .limit(5)
+     .limit(5),
+
+     // 3. Unrecovered Financial Aggregate (Current Month)
+     db.select({
+       total: sum(projectFinancialSnapshots.unrecoveredAmount)
+     }).from(projectFinancialSnapshots)
+     .where(eq(projectFinancialSnapshots.snapshotMonth, format(new Date(), 'yyyy-MM')))
   ]);
+
+  const unrecoveredTotal = Number((clientBreakdown as any)[2]?.[0]?.total || 0);
 
   // 3. Trend Preparation (Aggregated Monthly Totals for last 12 months)
   const twelveMonthsAgo = startOfMonth(subMonths(toZonedTime(new Date(), SYDNEY_TZ), 11));
@@ -284,6 +292,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
            color="amber"
            href={`/reports/projects?p=${preset}&m=backlog`}
         />
+        <ReportMetricCard 
+           title="Unrecovered Job Costs"
+           value={unrecoveredTotal} 
+           description="Tracking incurred costs (Labor + Materials) vs Invoiced amounts for all active projects."
+           sourceField="Timesheets + POs + Invoices"
+           insight="Monitor project profitability in real-time"
+           icon={<TrendingUp className="h-5 w-5 text-red-500" />}
+           color="indigo"
+           href={`/reports/job-cost`}
+        />
       </div>
 
       {/* Breakdown Layer */}
@@ -353,15 +371,18 @@ function ReportMetricCard({
       {/* Background Glow */}
       <div className={cn(
         "absolute -top-24 -right-24 w-64 h-64 blur-[80px] opacity-[0.03] dark:opacity-[0.08] transition-opacity duration-700 group-hover:opacity-[0.12]",
-        color === "emerald" ? "bg-emerald-500" : "bg-blue-500"
+        color === "emerald" ? "bg-emerald-500" : 
+        color === "blue" ? "bg-blue-500" :
+        color === "amber" ? "bg-amber-500" : "bg-indigo-500"
       )} />
 
       <div className="flex items-start justify-between mb-8 relative z-10">
         <div className={cn(
           "p-3 rounded-2xl border transition-all duration-500",
-          color === "emerald" 
-            ? "bg-emerald-50/50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 group-hover:scale-110" 
-            : "bg-blue-50/50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 group-hover:scale-110"
+          color === "emerald" && "bg-emerald-50/50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 group-hover:scale-110",
+          color === "blue" && "bg-blue-50/50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 group-hover:scale-110",
+          color === "amber" && "bg-amber-50/50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 group-hover:scale-110",
+          color === "indigo" && "bg-indigo-50/50 dark:bg-indigo-500/10 border-indigo-100 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 group-hover:scale-110"
         )}>
           {icon}
         </div>

@@ -1,0 +1,25 @@
+﻿ENCRYPTION_KEY length: 32
+API Key decrypted length: 32
+Authenticating with WorkGuru...
+Authentication successful. Token received.
+
+--- Project: BUSBAR BANSHE (1290990) ---
+GetWipBasedOnActualsNew: SUCCESS
+- Count: 0
+GetProjectProfitSummaryWithinPeriod: SUCCESS
+- Result: []
+Invoices: 0 total, 0 non-draft
+
+--- Project: CALALA BESS YARD (1282403) ---
+GetWipBasedOnActualsNew: SUCCESS
+- Count: 0
+GetProjectProfitSummaryWithinPeriod: SUCCESS
+- Result: []
+Invoices: 0 total, 0 non-draft
+
+--- Project: 10 Bellingham Street Narellan (1282450) ---
+GetWipBasedOnActualsNew: SUCCESS
+- Count: 0
+GetProjectProfitSummaryWithinPeriod: SUCCESS
+- Result: []
+Invoices: 0 total, 0 non-draft

@@ -34,6 +34,9 @@ export interface WorkGuruProject {
   StartDate?: string;
   productLineItems?: WorkGuruLineItem[];
   ProductLineItems?: WorkGuruLineItem[];
+  timeSheets?: WorkGuruTimeSheet[];
+  purchaseOrders?: WorkGuruPurchaseOrder[];
+  invoices?: WorkGuruInvoice[];
 }
 
 export interface WorkGuruLineItem {
@@ -53,6 +56,28 @@ export interface WorkGuruLineItem {
   lineTotal?: number;
   total?: number;
   Total?: number;
+}
+
+export interface WorkGuruPurchaseOrder {
+  id?: number;
+  id_Internal?: number;
+  number?: string;
+  status?: string;
+  issueDate?: string;
+  total?: number;
+  supplierName?: string;
+  projectId?: number;
+}
+
+export interface WorkGuruInvoice {
+  id?: number;
+  invoiceID?: number;
+  number?: string;
+  status?: string;
+  issueDate?: string;
+  total?: number;
+  totalNet?: number;
+  projectId?: number;
 }
 
 export interface WorkGuruClient {
@@ -92,6 +117,8 @@ export interface WorkGuruTimeSheet {
   user?: string;
   UserName?: string;
   StaffName?: string;
+  cost?: number;
+  internalCosting?: number;
 }
 
 export interface WorkGuruApiResponse<T> {
@@ -105,8 +132,8 @@ export class WorkGuruClient {
 
   constructor(private apiKey: string, private apiSecret: string) {}
 
-  private logRequest(url: string, method: string) {
-    console.log(`[WorkGuru API] Request: ${method} ${url}`);
+  private logRequest(url: string, method: string, params?: any) {
+    console.log(`[WorkGuru API] Request: ${method} ${url}${params ? ' ?' + JSON.stringify(params) : ''}`);
   }
 
   private logResponse(url: string, status: number, data: any) {
@@ -171,10 +198,11 @@ export class WorkGuruClient {
   async getProjects() {
     const url = `${BASE_URL}/api/services/app/Project/GetAllCurrentProjects`;
     const headers = await this.getAuthHeader();
-    this.logRequest(url, 'GET');
+    const params = { MaxResultCount: 1000 };
+    this.logRequest(url, 'GET', params);
     
     try {
-      const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
+      const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
     } catch (error: any) {
@@ -186,10 +214,11 @@ export class WorkGuruClient {
   async getAllProjects() {
     const url = `${BASE_URL}/api/services/app/Project/GetAllProjects`;
     const headers = await this.getAuthHeader();
-    this.logRequest(url, 'GET');
+    const params = { MaxResultCount: 5000 };
+    this.logRequest(url, 'GET', params);
     
     try {
-      const response = await axios.get(url, { headers, params: { MaxResultCount: 5000 } });
+      const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
     } catch (error: any) {
@@ -201,10 +230,11 @@ export class WorkGuruClient {
   async getClients() {
     const url = `${BASE_URL}/api/services/app/Client/GetClients`;
     const headers = await this.getAuthHeader();
-    this.logRequest(url, 'GET');
+    const params = { MaxResultCount: 1000 };
+    this.logRequest(url, 'GET', params);
     
     try {
-      const response = await axios.get(url, { headers, params: { MaxResultCount: 1000 } });
+      const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);
       return response.data;
     } catch (error: any) {
@@ -217,7 +247,7 @@ export class WorkGuruClient {
     const url = `${BASE_URL}/api/services/app/Project/GetAllTasksByProjectId`;
     const headers = await this.getAuthHeader();
     const params = { id: projectId };
-    this.logRequest(url, 'GET');
+    this.logRequest(url, 'GET', params);
     
     try {
       const response = await axios.get(url, { headers, params });
@@ -233,7 +263,7 @@ export class WorkGuruClient {
     const url = `${BASE_URL}/api/services/app/TimeSheet/GetTimeSheets`;
     const headers = await this.getAuthHeader();
     const params = { projectId, MaxResultCount: 1000 };
-    this.logRequest(url, 'GET');
+    this.logRequest(url, 'GET', params);
     
     try {
       const response = await axios.get(url, { headers, params });
@@ -249,7 +279,39 @@ export class WorkGuruClient {
     const url = `${BASE_URL}/api/services/app/Project/GetProjectById`;
     const headers = await this.getAuthHeader();
     const params = { id: projectId };
-    this.logRequest(url, 'GET');
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getProjectPurchaseOrders(projectId: string) {
+    const url = `${BASE_URL}/api/services/app/PurchaseOrder/GetPurchaseOrders`;
+    const headers = await this.getAuthHeader();
+    const params = { projectId, MaxResultCount: 1000 };
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getProjectInvoices(projectId: string) {
+    const url = `${BASE_URL}/api/services/app/Invoice/GetInvoices`;
+    const headers = await this.getAuthHeader();
+    const params = { projectId, MaxResultCount: 1000 };
+    this.logRequest(url, 'GET', params);
     
     try {
       const response = await axios.get(url, { headers, params });

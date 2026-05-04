@@ -1,7 +1,8 @@
 import { db } from '@/db';
-import { clients, projects, tasks, timeEntries, syncLogs, systemConfig } from '@/db/schema';
+import { clients, projects, tasks, timeEntries, syncLogs, systemConfig, purchaseOrders, invoices, projectFinancialSnapshots } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
 import { eq, sql, asc, inArray, and, notInArray, lt, or, gt, isNull } from 'drizzle-orm';
+import { ProjectFinancialService } from './financials';
 
 // Deterministic Custom Field IDs from WorkGuru
 const CF_IDS = {
@@ -544,58 +545,31 @@ export class SyncService {
   private parseDate(dateStr: unknown): Date | null {
     if (!dateStr) return null;
     const str = String(dateStr).trim();
-    if (!str) return null;
+    if (!str || str === 'null' || str === 'undefined') return null;
 
     // 1. ISO Detection (WorkGuru CreationTime is usually ISO: 2026-04-06T23:34:01)
     if (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str)) {
         const date = new Date(str);
-        if (!isNaN(date.getTime())) {
-            // Normalize to UTC midnight if it's just a date, or keep as is if it has time
-            return date;
-        }
+        if (!isNaN(date.getTime())) return date;
     }
 
-    // 2. Slashed Format Handling (DD/MM/YYYY or MM/DD/YYYY)
-    const parts = str.split('/');
+    // 2. Handle DD/MM/YYYY HH:mm or DD/MM/YYYY
+    // Remove time part if present for simple parsing
+    const datePart = str.split(' ')[0];
+    const parts = datePart.split('/');
     if (parts.length === 3) {
-      const [p1, p2, p3] = parts.map(Number);
-      if (!isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
-          let day: number, month: number, year: number;
-          let isAmbiguous = false;
-
-          // Year is usually p3
-          year = p3;
-          if (year < 100) year += 2000; // Handle 2-digit years if any
-
-          if (p1 > 12) {
-              // Format must be DD/MM/YYYY
-              day = p1;
-              month = p2;
-          } else if (p2 > 12) {
-              // Format must be MM/DD/YYYY
-              day = p2;
-              month = p1;
-          } else {
-              // Ambiguous (both <= 12)
-              isAmbiguous = true;
-              // Default to AU Standard: DD/MM/YYYY
-              day = p1;
-              month = p2;
-          }
-
-          if (isAmbiguous) {
-              console.warn(`[Sync] Ambiguous date format detected: "${str}". Defaulting to DD/MM/YYYY (AU Standard).`);
-          }
-
-          // Create date in UTC
-          const date = new Date(Date.UTC(year, month - 1, day));
+      const [d, m, y] = parts.map(Number);
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
+          // Months are 0-indexed in JS Date
+          const year = y < 100 ? 2000 + y : y;
+          const date = new Date(year, m - 1, d);
           if (!isNaN(date.getTime())) return date;
       }
     }
 
-    // Fallback to standard JS parsing for anything else
-    const date = new Date(str);
-    if (!isNaN(date.getTime())) return date;
+    // 3. Last Resort: Native Date constructor
+    const finalTry = new Date(str);
+    if (!isNaN(finalTry.getTime())) return finalTry;
 
     console.warn(`[Sync] Failed to parse date string: "${str}"`);
     return null;
@@ -686,6 +660,7 @@ export class SyncService {
             projectId: localProjectId,
             taskId: localTaskId,
             hours: hours,
+            cost: Number(remote.cost || remote.internalCosting || 0),
             status: status,
             date: this.parseDate(remote.date || remote.Date || remote.startTime) || new Date(),
             user: remote.user || remote.UserName || remote.StaffName || 'System',
@@ -874,7 +849,187 @@ export class SyncService {
           })
           .where(eq(projects.workguruId, localProject.workguruId));
           
+        // 4. Sync Project Financials (Timesheets, POs, Invoices)
+        await this.syncProjectFinancials(localProject.id, remoteDetails);
+        
+        // 5. Trigger Snapshot Calculation (DB Only)
+        await ProjectFinancialService.recalculateAll(localProject.id);
+          
         return { success: true, projectNumber: localProject.projectNumber, total };
     }, `Sync Project ${localProject.projectNumber}`);
+  }
+
+  private async syncProjectFinancials(localProjectId: number, remoteDetails: import('./workguru').WorkGuruProject) {
+    const workguruId = remoteDetails.id?.toString() || remoteDetails.ProjectID?.toString();
+    console.log(`[Sync] Syncing financials for project ${localProjectId} (WorkGuru ID: ${workguruId})...`);
+    
+    // Fallback variables
+    let remoteTimesheets = remoteDetails.timeSheets || [];
+    let remotePOs = remoteDetails.purchaseOrders || [];
+    let remoteInvoices = remoteDetails.invoices || [];
+
+    // TRIPLE-CHECK: If collections are empty, try falling back to dedicated endpoints
+    // This handles cases where GetProjectById succeeds but omits sub-collections, 
+    // OR where we want to double-check zero-data scenarios.
+    if (remoteTimesheets.length === 0 || remotePOs.length === 0 || remoteInvoices.length === 0) {
+        if (!workguruId) {
+            console.warn(`[Sync] Cannot perform fallback for project ${localProjectId}: Missing WorkGuru ID.`);
+        } else {
+            console.log(`[Sync] ⚠️ Data check: TS:${remoteTimesheets.length}, PO:${remotePOs.length}, INV:${remoteInvoices.length}. Attempting dedicated fallback fetch...`);
+            
+            try {
+                if (remoteTimesheets.length === 0) {
+                    const tsRes = await this.client.getProjectTimeEntries(workguruId);
+                    const allTs = tsRes.result?.items || tsRes.items || tsRes.result || [];
+                    // LOCAL FILTER: API sometimes ignores projectId param
+                    remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
+                    if (remoteTimesheets.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remoteTimesheets.length} timesheets (Filtered from ${allTs.length}).`);
+                }
+                
+                if (remotePOs.length === 0) {
+                    const poRes = await this.client.getProjectPurchaseOrders(workguruId);
+                    const allPOs = poRes.result?.items || poRes.items || poRes.result || [];
+                    // LOCAL FILTER: API sometimes ignores projectId param
+                    remotePOs = allPOs.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
+                    if (remotePOs.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remotePOs.length} purchase orders (Filtered from ${allPOs.length}).`);
+                }
+
+                if (remoteInvoices.length === 0) {
+                    const invRes = await this.client.getProjectInvoices(workguruId);
+                    const allInvs = invRes.result?.items || invRes.items || invRes.result || [];
+                    // LOCAL FILTER: API sometimes ignores projectId param
+                    remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
+                    if (remoteInvoices.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remoteInvoices.length} invoices (Filtered from ${allInvs.length}).`);
+                }
+            } catch (fallbackError: any) {
+                console.error(`[Sync] ❌ Fallback fetch FAILED for project ${workguruId}:`, fallbackError.message);
+            }
+        }
+    }
+
+    // 1. Sync Timesheets
+    const localTimesheets = await db.select().from(timeEntries).where(eq(timeEntries.projectId, localProjectId));
+    const allTasks = await db.select().from(tasks);
+    const taskMap = new Map(allTasks.map(t => [t.workguruId, t.id]));
+    const timesheetIdsToKeep = new Set<string>();
+
+    for (const remote of remoteTimesheets) {
+        const tsId = (remote.id || remote.TimeSheetID || remote.id_Internal)?.toString();
+        if (!tsId) continue;
+        timesheetIdsToKeep.add(tsId);
+
+        const hours = Number(remote.length || remote.Hours || remote.hours || 0);
+        // FIX: Some endpoints use 'internalCosting' instead of 'cost'
+        const cost = Number(remote.cost || remote.Cost || remote.internalCosting || remote.InternalCosting || 0);
+        const status = remote.status || remote.Status || 'Draft';
+        const remoteTaskId = (remote.taskId || remote.TaskID)?.toString();
+        const localTaskId = remoteTaskId ? (taskMap.get(remoteTaskId) || null) : null;
+
+        await db.insert(timeEntries)
+            .values({
+                workguruId: tsId,
+                projectId: localProjectId,
+                taskId: localTaskId,
+                hours,
+                cost,
+                status,
+                date: this.parseDate(remote.date || remote.Date || remote.startTime) || new Date(),
+                user: remote.user || remote.UserName || remote.StaffName || 'System',
+                updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+                target: timeEntries.workguruId,
+                set: {
+                    hours,
+                    cost,
+                    status,
+                    taskId: localTaskId,
+                    updatedAt: new Date(),
+                }
+            });
+    }
+
+    // Delete orphans
+    const orphans = localTimesheets.filter(t => !timesheetIdsToKeep.has(t.workguruId));
+    if (orphans.length > 0) {
+        console.log(`[Sync] Removing ${orphans.length} deleted timesheets for project ${localProjectId}`);
+        await db.delete(timeEntries).where(inArray(timeEntries.id, orphans.map(o => o.id)));
+    }
+
+    // 2. Sync Purchase Orders
+    const poIdsToKeep = new Set<string>();
+    for (const remote of remotePOs) {
+        const poId = (remote.id || remote.id_Internal || remote.PurchaseOrderID)?.toString();
+        if (!poId) continue;
+        poIdsToKeep.add(poId);
+
+        const total = Number(remote.total || remote.Total || remote.totalNet || 0);
+        const status = remote.status || remote.Status || 'Draft';
+        const issueDate = this.parseDate(remote.issueDate || remote.IssueDate) || new Date();
+
+        await db.insert(purchaseOrders)
+            .values({
+                workguruId: poId,
+                projectId: localProjectId,
+                total,
+                status,
+                issueDate,
+                supplierName: remote.supplierName || remote.SupplierName,
+                updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+                target: purchaseOrders.workguruId,
+                set: {
+                    total,
+                    status,
+                    issueDate,
+                    supplierName: remote.supplierName || remote.SupplierName,
+                    updatedAt: new Date(),
+                }
+            });
+    }
+
+    const localPOs = await db.select().from(purchaseOrders).where(eq(purchaseOrders.projectId, localProjectId));
+    const poOrphans = localPOs.filter(p => !poIdsToKeep.has(p.workguruId));
+    if (poOrphans.length > 0) {
+        await db.delete(purchaseOrders).where(inArray(purchaseOrders.id, poOrphans.map(o => o.id)));
+    }
+
+    // 3. Sync Invoices
+    const invIdsToKeep = new Set<string>();
+    for (const remote of remoteInvoices) {
+        const invId = (remote.id || remote.invoiceID || remote.InvoiceID)?.toString();
+        if (!invId) continue;
+        invIdsToKeep.add(invId);
+
+        const total = Number(remote.total || remote.Total || remote.totalNet || 0);
+        const status = remote.status || remote.Status || 'Draft';
+        const issueDate = this.parseDate(remote.issueDate || remote.IssueDate) || new Date();
+
+        await db.insert(invoices)
+            .values({
+                workguruId: invId,
+                projectId: localProjectId,
+                total,
+                status,
+                issueDate,
+                updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+                target: invoices.workguruId,
+                set: {
+                    total,
+                    status,
+                    issueDate,
+                    updatedAt: new Date(),
+                }
+            });
+    }
+
+    const localInvoices = await db.select().from(invoices).where(eq(invoices.projectId, localProjectId));
+    const invOrphans = localInvoices.filter(i => !invIdsToKeep.has(i.workguruId));
+    if (invOrphans.length > 0) {
+        await db.delete(invoices).where(inArray(invoices.id, invOrphans.map(o => o.id)));
+    }
   }
 }

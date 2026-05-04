@@ -1,0 +1,18 @@
+﻿ENCRYPTION_KEY length: 32
+API Key decrypted length: 32
+Authenticating with WorkGuru...
+Authentication successful. Token received.
+
+--- Project: 264-268 KIERA ST WOLLONGONG (MDB EV) (1284281) ---
+GetWipBasedOnActualsNew: SUCCESS
+- Count: 0
+GetProjectProfitSummaryWithinPeriod: SUCCESS
+- Result: []
+Invoices: 0 total, 0 non-draft
+
+--- Project: CHRISTIAN BROTHER'S HS (1282394) ---
+GetWipBasedOnActualsNew: SUCCESS
+- Count: 0
+GetProjectProfitSummaryWithinPeriod: SUCCESS
+- Result: []
+Invoices: 0 total, 0 non-draft

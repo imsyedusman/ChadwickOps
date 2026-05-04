@@ -1,4 +1,5 @@
 'use server';
+// Trigger re-compilation
 
 import { db } from '@/db';
 import { systemConfig, syncLogs } from '@/db/schema';

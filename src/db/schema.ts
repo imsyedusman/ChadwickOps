@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean, unique } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const clients = pgTable('clients', {
@@ -94,6 +94,7 @@ export const timeEntries = pgTable('time_entries', {
   projectId: integer('project_id').notNull().references(() => projects.id),
   taskId: integer('task_id').references(() => tasks.id),
   hours: doublePrecision('hours').notNull(),
+  cost: doublePrecision('cost').default(0).notNull(),
   status: varchar('status', { length: 50 }).default('Draft').notNull(),
   date: timestamp('date').notNull(),
   user: text('user').notNull(),
@@ -103,6 +104,56 @@ export const timeEntries = pgTable('time_entries', {
   return [
     index('time_entry_project_idx').on(table.projectId),
     index('time_entry_task_idx').on(table.taskId),
+  ];
+});
+
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: serial('id').primaryKey(),
+  workguruId: varchar('workguru_id', { length: 255 }).notNull().unique(),
+  projectId: integer('project_id').notNull().references(() => projects.id),
+  total: doublePrecision('total').default(0).notNull(),
+  status: varchar('status', { length: 50 }).notNull(),
+  issueDate: timestamp('issue_date').notNull(),
+  supplierName: text('supplier_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('po_project_idx').on(table.projectId),
+  ];
+});
+
+export const invoices = pgTable('invoices', {
+  id: serial('id').primaryKey(),
+  workguruId: varchar('workguru_id', { length: 255 }).notNull().unique(),
+  projectId: integer('project_id').notNull().references(() => projects.id),
+  total: doublePrecision('total').default(0).notNull(),
+  status: varchar('status', { length: 50 }).notNull(),
+  issueDate: timestamp('issue_date').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('invoice_project_idx').on(table.projectId),
+  ];
+});
+
+export const projectFinancialSnapshots = pgTable('project_financial_snapshots', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => projects.id),
+  snapshotMonth: varchar('snapshot_month', { length: 7 }).notNull(), // YYYY-MM
+  totalCostToDate: doublePrecision('total_cost_to_date').default(0).notNull(),
+  totalInvoicedToDate: doublePrecision('total_invoiced_to_date').default(0).notNull(),
+  unrecoveredAmount: doublePrecision('unrecovered_amount').default(0).notNull(),
+  labourCostThisMonth: doublePrecision('labour_cost_this_month').default(0).notNull(),
+  materialCostThisMonth: doublePrecision('material_cost_this_month').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('financial_snapshot_project_idx').on(table.projectId),
+    index('financial_snapshot_month_idx').on(table.snapshotMonth),
+    unique('project_month_unique_idx').on(table.projectId, table.snapshotMonth),
   ];
 });
 
