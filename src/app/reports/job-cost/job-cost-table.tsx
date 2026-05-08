@@ -6,13 +6,18 @@ import {
   ArrowUpDown, 
   RefreshCw,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Info,
+  Bug,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { MonthPicker } from "@/components/reports/MonthPicker";
 import { parse, format } from "date-fns";
 import { syncProjectFinancials } from "@/app/actions/financials";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface Financials {
     totalCostToDate: number;
@@ -30,6 +35,22 @@ interface Project {
     name: string;
     projectManager: string | null;
     clientName: string | null;
+    startDate: Date | string | null;
+    deliveryDate: Date | string | null;
+    openingBalance: number;
+    closingBalance: number;
+    invoicedThisMonth: number;
+    isReconciled: boolean;
+    discrepancy: number;
+    isTableVisible: boolean;
+    rawStatus: string;
+    debug?: {
+        timesheetCount: number;
+        poCount: number;
+        invoiceCount: number;
+        movementInvoiced: number;
+        monthEnd: string;
+    };
     financials: Financials | null;
 }
 
@@ -43,6 +64,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
     const [search, setSearch] = useState("");
     const [isSyncing, setIsSyncing] = useState<number | null>(null);
     const [hideNoActivity, setHideNoActivity] = useState(false);
+    const [expandedProject, setExpandedProject] = useState<number | null>(null);
 
     const monthDate = useMemo(() => parse(currentMonth, 'yyyy-MM', new Date()), [currentMonth]);
 
@@ -63,25 +85,32 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
 
     const filteredData = useMemo(() => {
         if (!initialData) return [];
-        return initialData.filter(p => {
-            const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-                p.projectNumber.toLowerCase().includes(search.toLowerCase()) ||
-                p.clientName?.toLowerCase().includes(search.toLowerCase());
-            
-            if (!matchesSearch) return false;
+        return initialData
+            .filter(p => p.isTableVisible)
+            .filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+                    p.projectNumber.toLowerCase().includes(search.toLowerCase()) ||
+                    p.clientName?.toLowerCase().includes(search.toLowerCase());
+                
+                if (!matchesSearch) return false;
 
-            if (hideNoActivity) {
-                const hasActivity = (p.financials?.totalCostToDate || 0) > 0 || (p.financials?.totalInvoicedToDate || 0) > 0;
-                return hasActivity;
-            }
+                if (hideNoActivity) {
+                    const hasActivity = (p.financials?.totalCostToDate || 0) > 0 || (p.financials?.totalInvoicedToDate || 0) > 0;
+                    return hasActivity;
+                }
 
-            return true;
-        });
+                return true;
+            });
     }, [initialData, search, hideNoActivity]);
 
     const formatCurrency = (val: number | undefined | null) => {
         const amount = val || 0;
         return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(amount);
+    };
+
+    const formatDate = (date: Date | string | null) => {
+        if (!date) return "-";
+        return format(new Date(date), 'dd/MM/yy');
     };
 
     return (
@@ -113,7 +142,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
 
                 <div className="flex items-center gap-4">
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
-                      {filteredData.length} projects shown
+                      {filteredData.length} active projects shown
                    </p>
                    <MonthPicker currentDate={monthDate} onChange={handleMonthChange} />
                 </div>
@@ -125,27 +154,27 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm">
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project / Client</th>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Labour</th>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Materials</th>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Total Cost</th>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Invoiced</th>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Unrecovered</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Status</th>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right">Recalc</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project / Dates</th>
+                                <TableHeader tooltip="Money spent on labour for this job during the selected month." className="text-right">Labour Costs</TableHeader>
+                                <TableHeader tooltip="Money spent on materials for this job during the selected month." className="text-right">Material Costs</TableHeader>
+                                <TableHeader tooltip="Total amount invoiced to the customer for this job this month." className="text-right">Money Billed</TableHeader>
+                                <TableHeader tooltip="Total amount we have spent on this job (all time) that hasn't been billed yet." className="text-right">Waiting to Recover</TableHeader>
+                                <TableHeader tooltip="A quick look at whether this job's costs are being recovered by billing." className="px-8 text-right">Status</TableHeader>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right pr-12">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                             {filteredData.map((project) => {
+                                const isExpanded = expandedProject === project.id;
                                 const f = project.financials;
                                 const cost = f?.totalCostToDate || 0;
                                 const invoiced = f?.totalInvoicedToDate || 0;
-                                const unrecovered = f?.unrecoveredAmount || 0;
+                                const unrecovered = project.closingBalance;
                                 
                                 // Health Logic
-                                let status = { label: "Fully Covered", color: "emerald" };
+                                let status = { label: "Fully Recovered", color: "emerald" };
                                 if (cost > 0 && invoiced === 0) {
-                                    status = { label: "Unbilled", color: "red" };
+                                    status = { label: "Not Yet Billed", color: "red" };
                                 } else if (cost > invoiced) {
                                     status = { label: "Partially Recovered", color: "amber" };
                                 } else if (cost === 0 && invoiced === 0) {
@@ -153,7 +182,8 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                 }
 
                                 return (
-                                    <tr key={project.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                    <React.Fragment key={project.id}>
+                                        <tr className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                                         <td className="px-8 py-6">
                                             <div className="flex flex-col">
                                                 <div className="flex items-center gap-2">
@@ -168,14 +198,14 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                         <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                                     </a>
                                                 </div>
-                                                <div className="flex items-center gap-2 mt-1">
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                                                     <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">{project.clientName}</span>
-                                                    {project.projectManager && (
-                                                        <>
-                                                            <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                                            <span className="text-[11px] text-slate-400 font-medium tracking-tight">PM: {project.projectManager}</span>
-                                                        </>
-                                                    )}
+                                                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                                                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                        <span>Start: {formatDate(project.startDate)}</span>
+                                                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                        <span>Finish: {formatDate(project.deliveryDate)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -190,22 +220,19 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                             </span>
                                         </td>
                                         <td className="px-4 py-6 text-right">
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                                                {formatCurrency(cost)}
+                                            <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                                {formatCurrency(project.invoicedThisMonth)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-6 text-right">
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                                                {formatCurrency(invoiced)}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-6 text-right">
-                                            <span className={cn(
-                                                "text-sm font-black tabular-nums",
-                                                unrecovered > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-                                            )}>
-                                                {formatCurrency(unrecovered)}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className={cn(
+                                                    "text-sm font-black tabular-nums",
+                                                    unrecovered > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                                                )}>
+                                                    {formatCurrency(unrecovered)}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="px-8 py-6 text-right">
                                             <div className={cn(
@@ -218,8 +245,19 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                 <span>{status.label}</span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <div className="flex flex-col items-end gap-1">
+                                        <td className="px-8 py-6 text-right pr-12">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button 
+                                                    onClick={() => setExpandedProject(isExpanded ? null : project.id)}
+                                                    className={cn(
+                                                        "p-2 rounded-xl border transition-all flex items-center gap-2",
+                                                        isExpanded 
+                                                            ? "bg-brand/10 border-brand/30 text-brand"
+                                                            : "bg-white dark:bg-slate-900 text-slate-400 hover:text-brand hover:border-brand/30 shadow-sm"
+                                                    )}
+                                                >
+                                                    <Bug className="h-3.5 w-3.5" />
+                                                </button>
                                                 <button 
                                                     onClick={() => handleSync(project.id)}
                                                     disabled={isSyncing === project.id}
@@ -230,32 +268,87 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                             : "bg-white dark:bg-slate-900 text-slate-400 hover:text-brand hover:border-brand/30 shadow-sm"
                                                     )}
                                                 >
-                                                    <span className="text-[9px] font-bold uppercase tracking-wider pl-1">{isSyncing === project.id ? "Syncing..." : "Recalc"}</span>
                                                     <RefreshCw className={cn("h-3.5 w-3.5", isSyncing === project.id && "animate-spin")} />
                                                 </button>
-                                                {f?.updatedAt && (
-                                                    <span className="text-[8px] text-slate-400 font-medium tabular-nums">
-                                                        Last: {new Date(f.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                )}
                                             </div>
                                         </td>
                                     </tr>
-                                );
-                            })}
+                                    {isExpanded && (
+                                        <tr className="bg-slate-50/80 dark:bg-slate-900/50 backdrop-blur-sm">
+                                            <td colSpan={7} className="px-12 py-8 border-b border-slate-200/60 dark:border-slate-800/60">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-brand" />
+                                                            Included Activity
+                                                        </h4>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Labour</p>
+                                                                <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{project.debug?.timesheetCount} <span className="text-[10px] font-medium text-slate-400">Entries</span></p>
+                                                            </div>
+                                                            <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Materials</p>
+                                                                <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{project.debug?.poCount} <span className="text-[10px] font-medium text-slate-400">Received POs</span></p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                            Billing Progress
+                                                        </h4>
+                                                        <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Total Invoices</p>
+                                                            <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{project.debug?.invoiceCount} <span className="text-[10px] font-medium text-slate-400">Approved</span></p>
+                                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">Billed this month: {formatCurrency(project.debug?.movementInvoiced)}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                                            Calculation Info
+                                                        </h4>
+                                                        <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Snapshot Date</span>
+                                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{project.debug?.monthEnd}</span>
+                                                            </div>
+                                                            <div className="h-px bg-slate-50 dark:bg-slate-800" />
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Status</span>
+                                                                <span className="text-[10px] font-black text-brand bg-brand/5 px-2 py-0.5 rounded uppercase">{project.rawStatus}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </React.Fragment>
+                            );
+                        })}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div className="flex items-center justify-between px-8 py-4 bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm rounded-3xl border border-slate-200/60 dark:border-slate-800/60">
-                <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-slate-400" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        Data from snapshots. {initialData?.length || 0} projects shown.
-                    </p>
-                </div>
-            </div>
+
         </div>
+    );
+}
+
+function TableHeader({ children, tooltip, className }: { children: React.ReactNode, tooltip: string, className?: string }) {
+    return (
+        <th className={cn("px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800", className)}>
+            <div className={cn("flex items-center gap-1.5", className?.includes("text-right") && "justify-end")}>
+                {children}
+                <Tooltip content={tooltip}>
+                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                </Tooltip>
+            </div>
+        </th>
     );
 }

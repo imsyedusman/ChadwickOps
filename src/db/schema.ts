@@ -114,6 +114,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   total: doublePrecision('total').default(0).notNull(),
   status: varchar('status', { length: 50 }).notNull(),
   issueDate: timestamp('issue_date').notNull(),
+  receivedDate: timestamp('received_date'),
   supplierName: text('supplier_name'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

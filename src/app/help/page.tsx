@@ -9,7 +9,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
-  Clock
+  Clock,
+  PieChart
 } from "lucide-react";
 import { ACTIVE_STATUSES, EXCLUDED_WIP_STATUSES } from "@/lib/project-utils";
 
@@ -162,7 +163,94 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* 4. Archives Section */}
+        {/* 5. Job Cost Report Section */}
+        <section id="job-cost" className="space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div className="p-2 bg-emerald-500 rounded-lg text-white">
+              <PieChart className="h-5 w-5" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Job Cost Report</h2>
+          </div>
+
+          <p className="text-slate-600 dark:text-slate-400 font-medium">
+            This report shows <strong>how much we’ve spent vs. how much we’ve invoiced</strong> for each project. It helps you see which projects are making money and which ones still have costs to recover.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-blue-500" />
+                Where does the data come from?
+              </h3>
+              <ul className="space-y-3">
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Labour:</strong> Pulled from timesheets logged by the team.
+                </li>
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Materials:</strong> Pulled from approved or received purchase orders.
+                </li>
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Invoices:</strong> Pulled from billing records sent to clients.
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                <Info className="h-4 w-4 text-emerald-500" />
+                What do the numbers mean?
+              </h3>
+              <ul className="space-y-3">
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Total Cost:</strong> Everything we&apos;ve spent on the job so far.
+                </li>
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Invoiced:</strong> The total amount we&apos;ve billed the client.
+                </li>
+                <li className="text-sm text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-900 dark:text-white">Unrecovered Amount:</strong> The gap between what we spent and what we billed.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200 dark:border-slate-800">
+            <h3 className="font-bold text-slate-900 dark:text-white mb-4">How it calculates each month</h3>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-center">
+              <div className="flex-1 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Opening</p>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">Last month&apos;s closing balance</p>
+              </div>
+              <div className="text-slate-400 font-bold">+</div>
+              <div className="flex-1 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Costs</p>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">Labour & materials spent this month</p>
+              </div>
+              <div className="text-slate-400 font-bold">-</div>
+              <div className="flex-1 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Invoices</p>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">Amount billed this month</p>
+              </div>
+              <div className="text-slate-400 font-bold">=</div>
+              <div className="flex-1 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shadow-sm">
+                <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Closing</p>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">The new total position</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-2xl p-6 flex gap-4">
+            <Info className="h-6 w-6 text-amber-500 shrink-0" />
+            <div>
+              <h4 className="font-bold text-amber-800 dark:text-amber-400 text-sm mb-1">Important Note</h4>
+              <p className="text-xs text-amber-700 dark:text-amber-500 leading-relaxed font-medium">
+                The numbers in this report depend on the latest data sync from WorkGuru. If you just added a timesheet or invoice and don’t see it here yet, it may still be waiting for the next scheduled sync.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Archives Section */}
         <section id="archives" className="space-y-6">
           <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div className="p-2 bg-slate-700 rounded-lg text-white">

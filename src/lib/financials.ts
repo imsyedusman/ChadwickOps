@@ -30,18 +30,15 @@ export class ProjectFinancialService {
             lte(timeEntries.date, monthEnd)
         ));
 
-        // Materials (POs)
+        // Materials (POs) - ONLY Received status where received_date is in range
         const materialCostsToDate = await db.select({
             total: sql<number>`COALESCE(SUM(${purchaseOrders.total}), 0)`
         })
         .from(purchaseOrders)
         .where(and(
             eq(purchaseOrders.projectId, projectId),
-            lte(purchaseOrders.issueDate, monthEnd),
-            or(
-                eq(purchaseOrders.status, 'Approved'),
-                eq(purchaseOrders.status, 'Received')
-            )
+            eq(purchaseOrders.status, 'Received'),
+            lte(purchaseOrders.receivedDate, monthEnd)
         ));
 
         const totalCostToDate = Number(laborCostsToDate[0].total) + Number(materialCostsToDate[0].total);
@@ -80,12 +77,9 @@ export class ProjectFinancialService {
         .from(purchaseOrders)
         .where(and(
             eq(purchaseOrders.projectId, projectId),
-            gte(purchaseOrders.issueDate, monthStart),
-            lte(purchaseOrders.issueDate, monthEnd),
-            or(
-                eq(purchaseOrders.status, 'Approved'),
-                eq(purchaseOrders.status, 'Received')
-            )
+            eq(purchaseOrders.status, 'Received'),
+            gte(purchaseOrders.receivedDate, monthStart),
+            lte(purchaseOrders.receivedDate, monthEnd)
         ));
 
         // 4. Calculate Unrecovered Amount

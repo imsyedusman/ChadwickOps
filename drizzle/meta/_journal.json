@@ -64,6 +64,13 @@
       "when": 1777829859747,
       "tag": "0008_gorgeous_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778209982748,
+      "tag": "0009_solid_jackpot",
+      "breakpoints": true
     }
   ]
 }

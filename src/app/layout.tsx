@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={albertSans.variable} suppressHydrationWarning>
-      <body className="antialiased font-sans flex items-stretch min-h-screen bg-background text-foreground transition-colors duration-300">
+      <body className="antialiased font-sans flex items-stretch min-h-screen bg-background text-foreground transition-colors duration-300" suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

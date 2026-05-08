@@ -61,21 +61,33 @@ export interface WorkGuruLineItem {
 export interface WorkGuruPurchaseOrder {
   id?: number;
   id_Internal?: number;
+  PurchaseOrderID?: number;
   number?: string;
   status?: string;
+  Status?: string;
   issueDate?: string;
+  IssueDate?: string;
+  receivedDate?: string;
+  ReceivedDate?: string;
   total?: number;
+  Total?: number;
+  totalNet?: number;
   supplierName?: string;
+  SupplierName?: string;
   projectId?: number;
 }
 
 export interface WorkGuruInvoice {
   id?: number;
   invoiceID?: number;
+  InvoiceID?: number;
   number?: string;
   status?: string;
+  Status?: string;
   issueDate?: string;
+  IssueDate?: string;
   total?: number;
+  Total?: number;
   totalNet?: number;
   projectId?: number;
 }
@@ -102,6 +114,7 @@ export interface WorkGuruTask {
 export interface WorkGuruTimeSheet {
   id?: number;
   TimeSheetID?: number;
+  id_Internal?: number;
   projectId?: number;
   ProjectID?: number;
   taskId?: number;
@@ -118,7 +131,9 @@ export interface WorkGuruTimeSheet {
   UserName?: string;
   StaffName?: string;
   cost?: number;
+  Cost?: number;
   internalCosting?: number;
+  InternalCosting?: number;
 }
 
 export interface WorkGuruApiResponse<T> {

@@ -6,49 +6,173 @@ import {
     clients,
     projectFinancialSnapshots
 } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or } from 'drizzle-orm';
 import { ProjectFinancialService } from '@/lib/financials';
 
+import { subMonths, format, parseISO, endOfMonth } from 'date-fns';
+import { inArray, sql, lte } from 'drizzle-orm';
+import { ACTIVE_PROJECT_STATUSES } from '@/lib/constants';
+import { invoices, timeEntries, purchaseOrders } from '@/db/schema';
+
 export async function getJobCostReport(monthStr: string) {
-    // 1. Fetch all active projects
-    const activeProjects = await db.select({
+    const currentMonthDate = parseISO(monthStr + '-01');
+    const prevMonthDate = subMonths(currentMonthDate, 1);
+    const prevMonthStr = format(prevMonthDate, 'yyyy-MM');
+
+    // 1. Identify all project IDs that are relevant for this month's reporting
+    // Relevant = (Active status) OR (Has balance in current month) OR (Has balance in prev month)
+    // AND must NOT start with '99'
+    
+    const snapshotProjectIds = await db.select({ projectId: projectFinancialSnapshots.projectId })
+        .from(projectFinancialSnapshots)
+        .where(or(
+            eq(projectFinancialSnapshots.snapshotMonth, monthStr),
+            eq(projectFinancialSnapshots.snapshotMonth, prevMonthStr)
+        ));
+    
+    const relevantProjectIds = new Set(snapshotProjectIds.map(s => s.projectId));
+
+    const allRelevantProjects = await db.select({
         id: projects.id,
         workguruId: projects.workguruId,
         projectNumber: projects.projectNumber,
         name: projects.name,
         projectManager: projects.projectManager,
         clientName: clients.name,
+        startDate: projects.startDate,
+        deliveryDate: projects.deliveryDate,
+        rawStatus: projects.rawStatus,
+        isArchived: projects.isArchived
     })
     .from(projects)
     .leftJoin(clients, eq(projects.clientId, clients.id))
-    .where(eq(projects.isArchived, false));
+    .where(and(
+        eq(projects.isArchived, false),
+        sql`NOT (${projects.projectNumber} LIKE '99%')`
+    ));
 
-    // 2. Fetch snapshots for current month
-    const snapshots = await db.select()
+    // Filter projects to only those that were either active OR have a snapshot
+    const activeProjects = allRelevantProjects.filter(p => 
+        ACTIVE_PROJECT_STATUSES.includes(p.rawStatus as any) || relevantProjectIds.has(p.id)
+    );
+
+    // 2. Fetch authoritative snapshots for current month (Closing)
+    const currentSnapshots = await db.select()
         .from(projectFinancialSnapshots)
         .where(eq(projectFinancialSnapshots.snapshotMonth, monthStr));
 
-    const snapshotMap = new Map(snapshots.map(s => [s.projectId, s]));
+    // 3. Fetch authoritative snapshots for previous month (Opening)
+    const prevSnapshots = await db.select()
+        .from(projectFinancialSnapshots)
+        .where(eq(projectFinancialSnapshots.snapshotMonth, prevMonthStr));
+
+    // 4. Fetch invoices for current month movement
+    const currentInvoices = await db.select({
+        projectId: invoices.projectId,
+        total: sql<number>`sum(${invoices.total})`
+    })
+    .from(invoices)
+    .where(and(
+        inArray(invoices.status, ['Approved', 'Sent', 'Paid']),
+        sql`TO_CHAR(${invoices.issueDate}, 'YYYY-MM') = ${monthStr}`
+    ))
+    .groupBy(invoices.projectId);
+
+    const monthEnd = endOfMonth(currentMonthDate);
+
+    // Fetch counts for debug visibility
+    const timesheetCounts = await db.select({
+        projectId: timeEntries.projectId,
+        count: sql<number>`count(*)`
+    })
+    .from(timeEntries)
+    .where(lte(timeEntries.date, monthEnd))
+    .groupBy(timeEntries.projectId);
+
+    const poCounts = await db.select({
+        projectId: purchaseOrders.projectId,
+        count: sql<number>`count(*)`
+    })
+    .from(purchaseOrders)
+    .where(and(
+        eq(purchaseOrders.status, 'Received'),
+        lte(purchaseOrders.receivedDate, monthEnd)
+    ))
+    .groupBy(purchaseOrders.projectId);
+
+    const invoiceCounts = await db.select({
+        projectId: invoices.projectId,
+        count: sql<number>`count(*)`
+    })
+    .from(invoices)
+    .where(and(
+        inArray(invoices.status, ['Approved', 'Sent', 'Paid']),
+        lte(invoices.issueDate, monthEnd)
+    ))
+    .groupBy(invoices.projectId);
+
+    const currentSnapshotMap = new Map(currentSnapshots.map(s => [s.projectId, s]));
+    const prevSnapshotMap = new Map(prevSnapshots.map(s => [s.projectId, s]));
+    const invoiceMap = new Map(currentInvoices.map(i => [i.projectId, Number(i.total || 0)]));
+    const tsCountMap = new Map(timesheetCounts.map(c => [c.projectId, Number(c.count)]));
+    const poCountMap = new Map(poCounts.map(c => [c.projectId, Number(c.count)]));
+    const invCountMap = new Map(invoiceCounts.map(c => [c.projectId, Number(c.count)]));
 
     const projectsWithFinancials = activeProjects.map(p => {
-        const snapshot = snapshotMap.get(p.id);
+        const currentSnapshot = currentSnapshotMap.get(p.id);
+        const prevSnapshot = prevSnapshotMap.get(p.id);
+        const invoicedThisMonth = invoiceMap.get(p.id) || 0;
         
+        const openingBalance = prevSnapshot?.unrecoveredAmount || 0;
+        const closingBalance = currentSnapshot?.unrecoveredAmount || 0;
+        const labourThisMonth = currentSnapshot?.labourCostThisMonth || 0;
+        const materialThisMonth = currentSnapshot?.materialCostThisMonth || 0;
+
+        // Validation Rule: Opening + Labour + Materials - Invoiced ≈ Closing
+        const movementSum = openingBalance + labourThisMonth + materialThisMonth - invoicedThisMonth;
+        const isReconciled = Math.abs(movementSum - closingBalance) < 1.0; // Allow $1 difference for rounding
+
+        // DEBUG VISIBILITY (Temporary)
+        if (p.projectNumber === '12320-03') { // Logging a specific sample project
+            console.log(`[FinancialDebug] Project: ${p.projectNumber}`);
+            console.log(` - Opening: ${openingBalance}`);
+            console.log(` - Labour (This Month): ${labourThisMonth}`);
+            console.log(` - Materials (This Month): ${materialThisMonth}`);
+            console.log(` - Invoiced (This Month): ${invoicedThisMonth}`);
+            console.log(` - Closing (Snapshot): ${closingBalance}`);
+            console.log(` - Calculated Movement Sum: ${movementSum}`);
+            console.log(` - Reconciled: ${isReconciled}`);
+        }
+
         return {
             ...p,
-            financials: snapshot || {
+            financials: currentSnapshot || {
                 totalCostToDate: 0,
                 totalInvoicedToDate: 0,
                 unrecoveredAmount: 0,
                 labourCostThisMonth: 0,
                 materialCostThisMonth: 0,
                 updatedAt: null
+            },
+            openingBalance,
+            closingBalance,
+            invoicedThisMonth,
+            isReconciled,
+            discrepancy: movementSum - closingBalance,
+            isTableVisible: ACTIVE_PROJECT_STATUSES.includes(p.rawStatus as any),
+            debug: {
+                timesheetCount: tsCountMap.get(p.id) || 0,
+                poCount: poCountMap.get(p.id) || 0,
+                invoiceCount: invCountMap.get(p.id) || 0,
+                movementInvoiced: invoicedThisMonth,
+                monthEnd: format(monthEnd, 'yyyy-MM-dd')
             }
         };
     });
 
     return projectsWithFinancials.sort((a, b) => {
-        const valA = a.financials?.unrecoveredAmount || 0;
-        const valB = b.financials?.unrecoveredAmount || 0;
+        const valA = a.closingBalance || 0;
+        const valB = b.closingBalance || 0;
         if (valB === valA) return a.name.localeCompare(b.name);
         return valB - valA;
     });

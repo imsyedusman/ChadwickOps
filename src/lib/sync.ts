@@ -199,9 +199,9 @@ export class SyncService {
 
       const stats = await this.runDeepSyncQueue(BATCH_SIZE);
       
-      totalProcessed += stats.processedCount;
-      totalFailed += stats.failedCount;
-      totalMismatched += stats.mismatchCount;
+      totalProcessed += (stats as any).processedCount;
+      totalFailed += (stats as any).failedCount;
+      totalMismatched += (stats as any).mismatchCount;
       
       const attempted = totalProcessed + totalFailed;
       console.log(`[Sync] Progress: ${attempted}/${totalCount} projects attempted.`);
@@ -914,14 +914,14 @@ export class SyncService {
     const timesheetIdsToKeep = new Set<string>();
 
     for (const remote of remoteTimesheets) {
-        const tsId = (remote.id || remote.TimeSheetID || remote.id_Internal)?.toString();
+        const tsId = ((remote as any).id || (remote as any).TimeSheetID || (remote as any).id_Internal)?.toString();
         if (!tsId) continue;
         timesheetIdsToKeep.add(tsId);
 
-        const hours = Number(remote.length || remote.Hours || remote.hours || 0);
+        const hours = Number((remote as any).length || (remote as any).Hours || (remote as any).hours || 0);
         // FIX: Some endpoints use 'internalCosting' instead of 'cost'
-        const cost = Number(remote.cost || remote.Cost || remote.internalCosting || remote.InternalCosting || 0);
-        const status = remote.status || remote.Status || 'Draft';
+        const cost = Number((remote as any).cost || (remote as any).Cost || (remote as any).internalCosting || (remote as any).InternalCosting || 0);
+        const status = (remote as any).status || (remote as any).Status || 'Draft';
         const remoteTaskId = (remote.taskId || remote.TaskID)?.toString();
         const localTaskId = remoteTaskId ? (taskMap.get(remoteTaskId) || null) : null;
 
@@ -959,13 +959,14 @@ export class SyncService {
     // 2. Sync Purchase Orders
     const poIdsToKeep = new Set<string>();
     for (const remote of remotePOs) {
-        const poId = (remote.id || remote.id_Internal || remote.PurchaseOrderID)?.toString();
+        const poId = ((remote as any).id || (remote as any).id_Internal || (remote as any).PurchaseOrderID)?.toString();
         if (!poId) continue;
         poIdsToKeep.add(poId);
 
-        const total = Number(remote.total || remote.Total || remote.totalNet || 0);
-        const status = remote.status || remote.Status || 'Draft';
-        const issueDate = this.parseDate(remote.issueDate || remote.IssueDate) || new Date();
+        const total = Number((remote as any).total || (remote as any).Total || (remote as any).totalNet || 0);
+        const status = (remote as any).status || (remote as any).Status || 'Draft';
+        const issueDate = this.parseDate((remote as any).issueDate || (remote as any).IssueDate) || new Date();
+        const receivedDate = this.parseDate((remote as any).receivedDate || (remote as any).ReceivedDate);
 
         await db.insert(purchaseOrders)
             .values({
@@ -974,6 +975,7 @@ export class SyncService {
                 total,
                 status,
                 issueDate,
+                receivedDate,
                 supplierName: remote.supplierName || remote.SupplierName,
                 updatedAt: new Date(),
             })
@@ -983,6 +985,7 @@ export class SyncService {
                     total,
                     status,
                     issueDate,
+                    receivedDate,
                     supplierName: remote.supplierName || remote.SupplierName,
                     updatedAt: new Date(),
                 }
@@ -998,13 +1001,13 @@ export class SyncService {
     // 3. Sync Invoices
     const invIdsToKeep = new Set<string>();
     for (const remote of remoteInvoices) {
-        const invId = (remote.id || remote.invoiceID || remote.InvoiceID)?.toString();
+        const invId = ((remote as any).id || (remote as any).invoiceID || (remote as any).InvoiceID)?.toString();
         if (!invId) continue;
         invIdsToKeep.add(invId);
 
-        const total = Number(remote.total || remote.Total || remote.totalNet || 0);
-        const status = remote.status || remote.Status || 'Draft';
-        const issueDate = this.parseDate(remote.issueDate || remote.IssueDate) || new Date();
+        const total = Number((remote as any).total || (remote as any).Total || (remote as any).totalNet || 0);
+        const status = (remote as any).status || (remote as any).Status || 'Draft';
+        const issueDate = this.parseDate((remote as any).issueDate || (remote as any).IssueDate) || new Date();
 
         await db.insert(invoices)
             .values({
