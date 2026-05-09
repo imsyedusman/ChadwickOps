@@ -874,7 +874,7 @@ export class SyncService {
         try {
             // ALWAYS fetch POs from dedicated endpoint to get true receivedDate
             const poRes = await this.client.getProjectPurchaseOrders(workguruId);
-            const allPOs = poRes.result?.items || poRes.items || poRes.result || [];
+            const allPOs = this.extractItems<any>(poRes, 'PurchaseOrder');
             // LOCAL FILTER: API sometimes ignores projectId param if it's passed globally
             remotePOs = allPOs.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
             console.log(`[Sync] ✅ Fetched ${remotePOs.length} authoritative purchase orders for project ${workguruId}.`);
@@ -883,13 +883,13 @@ export class SyncService {
             // Given the discovery with POs, always fetching is safer for financial integrity.
             if (remoteTimesheets.length === 0) {
                 const tsRes = await this.client.getProjectTimeEntries(workguruId);
-                const allTs = tsRes.result?.items || tsRes.items || tsRes.result || [];
+                const allTs = this.extractItems<any>(tsRes, 'TimeSheet');
                 remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
             }
             
             if (remoteInvoices.length === 0) {
                 const invRes = await this.client.getProjectInvoices(workguruId);
-                const allInvs = invRes.result?.items || invRes.items || invRes.result || [];
+                const allInvs = this.extractItems<any>(invRes, 'Invoice');
                 remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
             }
         } catch (fallbackError: any) {
