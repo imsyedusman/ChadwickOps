@@ -887,11 +887,11 @@ export class SyncService {
                 remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
             }
             
-            if (remoteInvoices.length === 0) {
-                const invRes = await this.client.getProjectInvoices(workguruId);
-                const allInvs = this.extractItems<any>(invRes, 'Invoice');
-                remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
-            }
+            // 2. AUTHORITATIVE Invoice Fetch (ALWAYS fetch from dedicated endpoint)
+            const invRes = await this.client.getProjectInvoices(workguruId);
+            const allInvs = this.extractItems<any>(invRes, 'Invoice');
+            remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
+            console.log(`[Sync] ✅ Fetched ${remoteInvoices.length} authoritative invoices for project ${workguruId}.`);
         } catch (fallbackError: any) {
             console.error(`[Sync] ❌ Dedicated fetch FAILED for project ${workguruId}:`, fallbackError.message);
         }
@@ -995,9 +995,9 @@ export class SyncService {
         if (!invId) continue;
         invIdsToKeep.add(invId);
 
-        const total = Number((remote as any).total || (remote as any).Total || (remote as any).totalNet || 0);
+        const total = Number((remote as any).total || (remote as any).Total || (remote as any).baseCurrencyTotal || (remote as any).totalNet || 0);
         const status = (remote as any).status || (remote as any).Status || 'Draft';
-        const issueDate = this.parseDate((remote as any).issueDate || (remote as any).IssueDate) || new Date();
+        const issueDate = this.parseDate((remote as any).issueDate || (remote as any).IssueDate || (remote as any).date || (remote as any).Date) || new Date();
 
         await db.insert(invoices)
             .values({

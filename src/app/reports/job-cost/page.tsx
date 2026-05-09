@@ -10,7 +10,13 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
-  PackageCheck
+  PackageCheck,
+  Plus,
+  Minus,
+  Equal,
+  AlertTriangle,
+  Receipt,
+  Forward
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -18,6 +24,7 @@ import { getJobCostReport } from "@/app/actions/financials";
 import { JobCostTable } from "@/app/reports/job-cost/job-cost-table";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { PENDING_LABOUR_THRESHOLD_RATIO, PENDING_LABOUR_THRESHOLD_ABSOLUTE } from "@/lib/constants/financials";
 
 
 export const dynamic = "force-dynamic";
@@ -35,7 +42,11 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
   const totalApprovedLabour = reportData.reduce((acc, p) => acc + (p.approvedLabourThisMonth || 0), 0);
   const totalPendingLabour = reportData.reduce((acc, p) => acc + (p.pendingLabourCostThisMonth || 0), 0);
   const totalMaterials = reportData.reduce((acc, p) => acc + (p.financials?.materialCostThisMonth || 0), 0);
+  const totalBilled = reportData.reduce((acc, p) => acc + (p.invoicedThisMonth || 0), 0);
   const totalClosing = reportData.reduce((acc, p) => acc + (p.closingBalance || 0), 0);
+
+  const isHighPendingRisk = totalPendingLabour > (totalApprovedLabour * PENDING_LABOUR_THRESHOLD_RATIO) || 
+                            totalPendingLabour > PENDING_LABOUR_THRESHOLD_ABSOLUTE;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -57,7 +68,7 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Monthly Job Cost Report</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium max-w-2xl leading-relaxed">
-            This report shows how much we spent on jobs, how much we billed customers, and how much money is still waiting to be recovered.
+            This report explains the movement from Opening WIP to Closing WIP, tracking every dollar spent and billed during the month.
           </p>
         </div>
 
@@ -68,52 +79,106 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
                    Report Period: {format(new Date(month + '-01'), 'MMMM yyyy')}
                 </span>
             </div>
+            {isHighPendingRisk && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/50 dark:border-amber-500/20 rounded-lg animate-pulse">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-tight">High volume of labour awaiting approval</span>
+              </div>
+            )}
         </div>
       </div>
 
       {/* Financial Flow Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <SummaryCard
-          title="Opening WIP"
-          value={totalOpening}
-          icon={<DollarSign className="h-4 w-4 text-slate-400" />}
-          description="Balance at month start"
-          tooltip="This is the value of work done but not yet billed or completed at the start of the month."
-          color="slate"
-        />
-        <SummaryCard
-          title="Approved Labour"
-          value={totalApprovedLabour}
-          icon={<CheckCircle2 className="h-4 w-4 text-blue-500" />}
-          description="Finalized timesheets"
-          tooltip="This includes only approved or invoiced labour costs for this month."
-          color="blue"
-        />
-        <SummaryCard
-          title="Pending Approval"
-          value={totalPendingLabour}
-          icon={<Clock className="h-4 w-4 text-amber-500" />}
-          description="Draft/unapproved labour"
-          tooltip="Labour costs that have been entered but are still in Draft or Pending status."
-          color="amber"
-        />
-        <SummaryCard
-          title="Materials Received"
-          value={totalMaterials}
-          icon={<PackageCheck className="h-4 w-4 text-indigo-500" />}
-          description="POs received this month"
-          tooltip="ONLY includes purchase orders with status 'Received' where the receipt date is within this month."
-          color="indigo"
-        />
+      <div className="grid grid-cols-1 gap-8 animate-in slide-in-from-bottom-4 duration-1000 delay-200">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-4 lg:gap-0">
+          
+          {/* Section: Carry Over */}
+          <div className="flex-none lg:w-64 space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Forward className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Balance Forward</span>
+            </div>
+            <SummaryCard
+              title="Opening WIP"
+              value={totalOpening}
+              icon={<DollarSign className="h-4 w-4" />}
+              description="Carried from previous month"
+              tooltip="Value of work done but not yet billed at the start of the month."
+              color="slate"
+            />
+          </div>
 
-        <SummaryCard
-          title="Closing WIP"
-          value={totalClosing}
-          icon={<DollarSign className="h-4 w-4 text-brand" />}
-          description="Balance at month end"
-          tooltip="This is the total value of all active projects waiting to be recovered at the end of the month."
-          color="brand"
-        />
+          <div className="pb-10">
+            <MathOperator type="plus" />
+          </div>
+
+          {/* Section: Monthly Movement */}
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Calendar className="h-3.5 w-3.5 text-brand/60" />
+              <span className="text-[10px] font-bold text-brand/60 uppercase tracking-widest">This Month's Movement</span>
+            </div>
+            <div className="flex flex-col lg:flex-row items-stretch gap-2">
+              <SummaryCard
+                title="Approved Labour"
+                value={totalApprovedLabour}
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                description="Finalized costs"
+                tooltip="Approved or invoiced labour costs for this month."
+                color="blue"
+              />
+              <div className="hidden lg:flex items-center"><Plus className="h-3 w-3 text-slate-300" /></div>
+              <SummaryCard
+                title="Pending Labour"
+                value={totalPendingLabour}
+                icon={<Clock className="h-4 w-4" />}
+                description="Awaiting approval"
+                tooltip="Labour entered but still in Draft or Pending status."
+                color="amber"
+                highlight={isHighPendingRisk}
+              />
+              <div className="hidden lg:flex items-center"><Plus className="h-3 w-3 text-slate-300" /></div>
+              <SummaryCard
+                title="Materials"
+                value={totalMaterials}
+                icon={<PackageCheck className="h-4 w-4" />}
+                description="Received POs"
+                tooltip="Purchase orders marked as 'Received' this month."
+                color="indigo"
+              />
+              <div className="hidden lg:flex items-center"><Minus className="h-3 w-3 text-slate-300" /></div>
+              <SummaryCard
+                title="Money Billed"
+                value={totalBilled}
+                icon={<Receipt className="h-4 w-4" />}
+                description="Invoiced to clients"
+                tooltip="Total amount invoiced to customers during this month."
+                color="emerald"
+              />
+            </div>
+          </div>
+
+          <div className="pb-10">
+            <MathOperator type="equal" />
+          </div>
+
+          {/* Section: Final Position */}
+          <div className="flex-none lg:w-72 space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Calculator className="h-3.5 w-3.5 text-brand" />
+              <span className="text-[10px] font-bold text-brand uppercase tracking-widest">Final Position</span>
+            </div>
+            <SummaryCard
+              title="Closing WIP"
+              value={totalClosing}
+              icon={<Calculator className="h-4 w-4" />}
+              description="Month-end balance"
+              subtext="Costs incurred but not yet billed."
+              tooltip="Total value of all active projects waiting to be recovered at month end."
+              color="brand"
+            />
+          </div>
+        </div>
       </div>
 
       <Suspense fallback={<div className="h-96 w-full bg-slate-100 animate-pulse rounded-3xl" />}>
@@ -123,33 +188,72 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
   );
 }
 
-function SummaryCard({ title, value, icon, description, color, tooltip }: { title: string, value: number, icon: any, description: string, color: string, tooltip: string }) {
+function MathOperator({ type }: { type: 'plus' | 'minus' | 'equal' }) {
+  return (
+    <div className="flex items-center justify-center py-2 lg:px-4">
+      <div className="flex items-center justify-center">
+        {type === 'plus' && <Plus className="h-5 w-5 text-slate-300" />}
+        {type === 'minus' && <Minus className="h-5 w-5 text-slate-300" />}
+        {type === 'equal' && <div className="text-2xl font-light text-slate-300 leading-none">=</div>}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ 
+  title, 
+  value, 
+  icon, 
+  description, 
+  color, 
+  tooltip, 
+  highlight,
+  subtext
+}: { 
+  title: string, 
+  value: number, 
+  icon: any, 
+  description: string, 
+  color: string, 
+  tooltip: string,
+  highlight?: boolean,
+  subtext?: string
+}) {
   const colorClasses: Record<string, string> = {
-    blue: "bg-blue-500/10 text-blue-500",
-    emerald: "bg-emerald-500/10 text-emerald-500",
-    amber: "bg-amber-500/10 text-amber-500",
-    slate: "bg-slate-500/10 text-slate-500",
-    brand: "bg-brand/10 text-brand",
+    blue: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    emerald: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+    amber: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    slate: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+    indigo: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
+    brand: "bg-brand/10 text-brand border-brand/20",
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm group hover:border-brand/20 transition-all duration-300">
-      <div className="flex items-start justify-between mb-6">
-        <div className={cn("p-3 rounded-2xl", colorClasses[color])}>
+    <div className={cn(
+      "flex-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden",
+      highlight ? "border-amber-500/50 shadow-lg shadow-amber-500/5 bg-amber-50/5" : "border-slate-200/60 dark:border-slate-800/60 shadow-sm",
+      "hover:border-brand/30"
+    )}>
+      <div className="flex items-start justify-between mb-4 relative z-10">
+        <div className={cn("p-2 rounded-xl border", colorClasses[color])}>
           {icon}
         </div>
-        <Tooltip content={tooltip}>
-          <div className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-help">
-            <Info className="h-4 w-4 text-slate-300" />
-          </div>
-        </Tooltip>
       </div>
-      <div className="space-y-1">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+      
+      <div className="space-y-1 relative z-10">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{title}</p>
+          <Tooltip content={tooltip}>
+            <Info className="h-3 w-3 text-slate-300 cursor-help" />
+          </Tooltip>
+        </div>
+        <h3 className="text-xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
           {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(value)}
         </h3>
-        <p className="text-[11px] font-medium text-slate-400 mt-2">{description}</p>
+        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{description}</p>
+        {subtext && (
+          <p className="text-[10px] text-slate-400 italic mt-2 leading-tight">{subtext}</p>
+        )}
       </div>
     </div>
   );

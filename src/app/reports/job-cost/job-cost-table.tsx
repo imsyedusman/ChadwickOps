@@ -160,14 +160,14 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm">
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project / Dates</th>
-                                <TableHeader tooltip="Money spent on labour. Primary number shows finalized (Approved) timesheets. Pending approval is shown in amber." className="text-right">Labour Costs</TableHeader>
-                                <TableHeader tooltip="Money spent on materials for this job during the selected month." className="text-right">Material Costs</TableHeader>
-                                <TableHeader tooltip="Total amount invoiced to the customer for this job this month." className="text-right">Money Billed</TableHeader>
-                                <TableHeader tooltip="Total amount we have spent on this job (all time) that hasn't been billed yet." className="text-right">Waiting to Recover</TableHeader>
-                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project Status</th>
-                                <TableHeader tooltip="A quick look at whether this job's costs are being recovered by billing." className="px-8 text-right">Recovery Status</TableHeader>
-                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right pr-12">Actions</th>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Project / Dates</th>
+                                <TableHeader tooltip="Money spent on labour. Primary number shows finalized (Approved) timesheets. Pending approval is shown in amber." className="text-right whitespace-nowrap">Labour Costs</TableHeader>
+                                <TableHeader tooltip="Money spent on materials for this job during the selected month." className="text-right whitespace-nowrap">Material Costs</TableHeader>
+                                <TableHeader tooltip="Total amount invoiced to the customer for this job this month." className="text-right whitespace-nowrap">Money Billed</TableHeader>
+                                <TableHeader tooltip="Total amount we have spent on this job (all time) that hasn't been billed yet." className="text-right whitespace-nowrap">Unbilled Cost</TableHeader>
+                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Project Status</th>
+                                <TableHeader tooltip="A quick look at whether this job's costs are being recovered by billing." className="px-8 text-right whitespace-nowrap">Recovery Status</TableHeader>
+                                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right pr-12 whitespace-nowrap">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
@@ -216,32 +216,32 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-6 text-right">
+                                        <td className="px-4 py-6 text-right whitespace-nowrap">
                                             <div className="flex flex-col items-end gap-1">
                                                 <span className="text-[13px] font-black text-slate-900 dark:text-white tabular-nums">
                                                     {formatCurrency(project.approvedLabourThisMonth)}
                                                 </span>
                                                 {project.pendingLabourCostThisMonth > 0 && (
-                                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">
+                                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tight whitespace-nowrap">
                                                         +{formatCurrency(project.pendingLabourCostThisMonth)} pending
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-6 text-right">
+                                        <td className="px-4 py-6 text-right whitespace-nowrap">
                                             <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400 tabular-nums">
                                                 {formatCurrency(f?.materialCostThisMonth)}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-6 text-right">
+                                        <td className="px-4 py-6 text-right whitespace-nowrap">
                                             <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                                                 {formatCurrency(project.invoicedThisMonth)}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-6 text-right">
+                                        <td className="px-4 py-6 text-right whitespace-nowrap">
                                             <div className="flex flex-col items-end gap-1">
                                                 <span className={cn(
-                                                    "text-sm font-black tabular-nums",
+                                                    "text-sm font-black tabular-nums whitespace-nowrap",
                                                     unrecovered > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                                                 )}>
                                                     {formatCurrency(unrecovered)}
@@ -255,9 +255,9 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                  </span>
                                              </div>
                                          </td>
-                                         <td className="px-8 py-6 text-right">
+                                         <td className="px-8 py-6 text-right whitespace-nowrap">
                                             <div className={cn(
-                                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider",
+                                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider whitespace-nowrap",
                                                 status.color === "red" && "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-900/20 text-red-600 dark:text-red-400",
                                                 status.color === "amber" && "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-900/20 text-amber-600 dark:text-amber-400",
                                                 status.color === "emerald" && "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-900/20 text-emerald-600 dark:text-emerald-400",

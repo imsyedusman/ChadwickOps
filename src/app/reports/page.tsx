@@ -293,9 +293,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
            href={`/reports/projects?p=${preset}&m=backlog`}
         />
         <ReportMetricCard 
-           title="Unrecovered Job Costs"
+           title="Closing WIP (Unbilled)"
            value={unrecoveredTotal} 
-           description="Tracking incurred costs (Labor + Materials) vs Invoiced amounts for all active projects."
+           description="Total unrecovered project costs (Labour + Materials) across all active projects."
            sourceField="Timesheets + POs + Invoices"
            insight="Monitor project profitability in real-time"
            icon={<TrendingUp className="h-5 w-5 text-red-500" />}
