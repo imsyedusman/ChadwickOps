@@ -6,7 +6,7 @@ import {
     invoices, 
     projectFinancialSnapshots 
 } from '@/db/schema';
-import { eq, and, lte, gte, sql, desc, or } from 'drizzle-orm';
+import { eq, and, lte, gte, sql, desc, or, inArray, notInArray } from 'drizzle-orm';
 import { format, startOfMonth, endOfMonth, parse } from 'date-fns';
 
 export class ProjectFinancialService {
@@ -19,8 +19,12 @@ export class ProjectFinancialService {
         const monthStart = startOfMonth(monthDate);
         const monthEnd = endOfMonth(monthDate);
 
+        // APPROVED STATUSES for Labour
+        // Based on user requirements: Approved, Invoiced, and similar are "finalized"
+        const APPROVED_LABOUR_STATUSES = ['Approved', 'Invoiced', 'Ready for Invoicing', 'Sent'];
+
         // 1. Calculate Total Costs to Date (Incurred)
-        // Labor
+        // Labor - We include ALL logged labor for the cost-to-date (WIP)
         const laborCostsToDate = await db.select({
             total: sql<number>`COALESCE(SUM(${timeEntries.cost}), 0)`
         })
@@ -30,7 +34,7 @@ export class ProjectFinancialService {
             lte(timeEntries.date, monthEnd)
         ));
 
-        // Materials (POs) - ONLY Received status where received_date is in range
+        // Materials (POs) - ONLY Received status where receivedDate is in range
         const materialCostsToDate = await db.select({
             total: sql<number>`COALESCE(SUM(${purchaseOrders.total}), 0)`
         })
@@ -61,6 +65,8 @@ export class ProjectFinancialService {
         const totalInvoicedToDate = Number(invoicedToDate[0].total);
 
         // 3. Calculate This Month's Incremental Costs
+        
+        // TOTAL Labour This Month
         const laborCostThisMonth = await db.select({
             total: sql<number>`COALESCE(SUM(${timeEntries.cost}), 0)`
         })
@@ -69,6 +75,30 @@ export class ProjectFinancialService {
             eq(timeEntries.projectId, projectId),
             gte(timeEntries.date, monthStart),
             lte(timeEntries.date, monthEnd)
+        ));
+
+        // APPROVED Labour This Month
+        const approvedLaborThisMonth = await db.select({
+            total: sql<number>`COALESCE(SUM(${timeEntries.cost}), 0)`
+        })
+        .from(timeEntries)
+        .where(and(
+            eq(timeEntries.projectId, projectId),
+            gte(timeEntries.date, monthStart),
+            lte(timeEntries.date, monthEnd),
+            inArray(timeEntries.status, APPROVED_LABOUR_STATUSES)
+        ));
+
+        // PENDING Labour This Month (Anything not in approved list)
+        const pendingLaborThisMonth = await db.select({
+            total: sql<number>`COALESCE(SUM(${timeEntries.cost}), 0)`
+        })
+        .from(timeEntries)
+        .where(and(
+            eq(timeEntries.projectId, projectId),
+            gte(timeEntries.date, monthStart),
+            lte(timeEntries.date, monthEnd),
+            notInArray(timeEntries.status, APPROVED_LABOUR_STATUSES)
         ));
 
         const materialCostThisMonth = await db.select({
@@ -82,8 +112,13 @@ export class ProjectFinancialService {
             lte(purchaseOrders.receivedDate, monthEnd)
         ));
 
-        // 4. Calculate Unrecovered Amount
+        // 4. Calculate Unrecovered Amount (WIP)
         const unrecoveredAmount = totalCostToDate - totalInvoicedToDate;
+
+        const labourTotal = Number(laborCostThisMonth[0].total);
+        const approvedLabourTotal = Number(approvedLaborThisMonth[0].total);
+        const pendingLabourTotal = Number(pendingLaborThisMonth[0].total);
+        const materialTotal = Number(materialCostThisMonth[0].total);
 
         // 5. Upsert Snapshot
         await db.insert(projectFinancialSnapshots)
@@ -93,18 +128,22 @@ export class ProjectFinancialService {
                 totalCostToDate,
                 totalInvoicedToDate,
                 unrecoveredAmount,
-                labourCostThisMonth: Number(laborCostThisMonth[0].total),
-                materialCostThisMonth: Number(materialCostThisMonth[0].total),
+                labourCostThisMonth: labourTotal,
+                approvedLabourCostThisMonth: approvedLabourTotal,
+                pendingLabourCostThisMonth: pendingLabourTotal,
+                materialCostThisMonth: materialTotal,
                 updatedAt: new Date(),
             })
             .onConflictDoUpdate({
-                target: [projectFinancialSnapshots.projectId, projectFinancialSnapshots.snapshotMonth], // Need to ensure unique index exists
+                target: [projectFinancialSnapshots.projectId, projectFinancialSnapshots.snapshotMonth],
                 set: {
                     totalCostToDate,
                     totalInvoicedToDate,
                     unrecoveredAmount,
-                    labourCostThisMonth: Number(laborCostThisMonth[0].total),
-                    materialCostThisMonth: Number(materialCostThisMonth[0].total),
+                    labourCostThisMonth: labourTotal,
+                    approvedLabourCostThisMonth: approvedLabourTotal,
+                    pendingLabourCostThisMonth: pendingLabourTotal,
+                    materialCostThisMonth: materialTotal,
                     updatedAt: new Date(),
                 }
             });
@@ -126,11 +165,11 @@ export class ProjectFinancialService {
         const firstDateRes = await db.select({
             date: sql<string>`MIN(d)`
         }).from(sql`(
-            SELECT MIN(date) as d FROM ${timeEntries} WHERE project_id = ${projectId}
+            SELECT MIN(date) as d FROM time_entries WHERE project_id = ${projectId}
             UNION
-            SELECT MIN(issue_date) as d FROM ${purchaseOrders} WHERE project_id = ${projectId}
+            SELECT MIN(issue_date) as d FROM purchase_orders WHERE project_id = ${projectId}
             UNION
-            SELECT MIN(issue_date) as d FROM ${invoices} WHERE project_id = ${projectId}
+            SELECT MIN(issue_date) as d FROM invoices WHERE project_id = ${projectId}
         ) as combined`);
 
         if (!firstDateRes[0]?.date) return;

@@ -126,23 +126,13 @@ export async function getJobCostReport(monthStr: string) {
         const openingBalance = prevSnapshot?.unrecoveredAmount || 0;
         const closingBalance = currentSnapshot?.unrecoveredAmount || 0;
         const labourThisMonth = currentSnapshot?.labourCostThisMonth || 0;
+        const approvedLabourThisMonth = currentSnapshot?.approvedLabourCostThisMonth || 0;
+        const pendingLabourCostThisMonth = currentSnapshot?.pendingLabourCostThisMonth || 0;
         const materialThisMonth = currentSnapshot?.materialCostThisMonth || 0;
 
         // Validation Rule: Opening + Labour + Materials - Invoiced ≈ Closing
         const movementSum = openingBalance + labourThisMonth + materialThisMonth - invoicedThisMonth;
         const isReconciled = Math.abs(movementSum - closingBalance) < 1.0; // Allow $1 difference for rounding
-
-        // DEBUG VISIBILITY (Temporary)
-        if (p.projectNumber === '12320-03') { // Logging a specific sample project
-            console.log(`[FinancialDebug] Project: ${p.projectNumber}`);
-            console.log(` - Opening: ${openingBalance}`);
-            console.log(` - Labour (This Month): ${labourThisMonth}`);
-            console.log(` - Materials (This Month): ${materialThisMonth}`);
-            console.log(` - Invoiced (This Month): ${invoicedThisMonth}`);
-            console.log(` - Closing (Snapshot): ${closingBalance}`);
-            console.log(` - Calculated Movement Sum: ${movementSum}`);
-            console.log(` - Reconciled: ${isReconciled}`);
-        }
 
         return {
             ...p,
@@ -151,12 +141,18 @@ export async function getJobCostReport(monthStr: string) {
                 totalInvoicedToDate: 0,
                 unrecoveredAmount: 0,
                 labourCostThisMonth: 0,
+                approvedLabourCostThisMonth: 0,
+                pendingLabourCostThisMonth: 0,
                 materialCostThisMonth: 0,
                 updatedAt: null
             },
             openingBalance,
             closingBalance,
             invoicedThisMonth,
+            labourThisMonth,
+            approvedLabourThisMonth,
+            pendingLabourCostThisMonth,
+            materialThisMonth,
             isReconciled,
             discrepancy: movementSum - closingBalance,
             isTableVisible: ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(p.rawStatus) as any),

@@ -6,7 +6,11 @@ import {
   Info,
   PieChart,
   Database,
-  Calculator
+  Calculator,
+  DollarSign,
+  CheckCircle2,
+  Clock,
+  PackageCheck
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -28,7 +32,8 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
   const reportData = await getJobCostReport(month);
   
   const totalOpening = reportData.reduce((acc, p) => acc + (p.openingBalance || 0), 0);
-  const totalLabour = reportData.reduce((acc, p) => acc + (p.financials?.labourCostThisMonth || 0), 0);
+  const totalApprovedLabour = reportData.reduce((acc, p) => acc + (p.approvedLabourThisMonth || 0), 0);
+  const totalPendingLabour = reportData.reduce((acc, p) => acc + (p.pendingLabourCostThisMonth || 0), 0);
   const totalMaterials = reportData.reduce((acc, p) => acc + (p.financials?.materialCostThisMonth || 0), 0);
   const totalClosing = reportData.reduce((acc, p) => acc + (p.closingBalance || 0), 0);
 
@@ -67,27 +72,35 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
       </div>
 
       {/* Financial Flow Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <SummaryCard
           title="Opening WIP"
           value={totalOpening}
-          icon={<Calendar className="h-4 w-4 text-slate-400" />}
-          description="Cumulative balance at month start"
+          icon={<DollarSign className="h-4 w-4 text-slate-400" />}
+          description="Balance at month start"
           tooltip="This is the value of work done but not yet billed or completed at the start of the month."
           color="slate"
         />
         <SummaryCard
-          title="Labour Added"
-          value={totalLabour}
-          icon={<PieChart className="h-4 w-4 text-blue-500" />}
-          description="Timesheets added this month"
-          tooltip="This includes all labour costs from timesheets in WorkGuru for this month."
+          title="Approved Labour"
+          value={totalApprovedLabour}
+          icon={<CheckCircle2 className="h-4 w-4 text-blue-500" />}
+          description="Finalized timesheets"
+          tooltip="This includes only approved or invoiced labour costs for this month."
           color="blue"
+        />
+        <SummaryCard
+          title="Pending Approval"
+          value={totalPendingLabour}
+          icon={<Clock className="h-4 w-4 text-amber-500" />}
+          description="Draft/unapproved labour"
+          tooltip="Labour costs that have been entered but are still in Draft or Pending status."
+          color="amber"
         />
         <SummaryCard
           title="Materials Received"
           value={totalMaterials}
-          icon={<PieChart className="h-4 w-4 text-indigo-500" />}
+          icon={<PackageCheck className="h-4 w-4 text-indigo-500" />}
           description="POs received this month"
           tooltip="ONLY includes purchase orders with status 'Received' where the receipt date is within this month."
           color="indigo"
@@ -96,8 +109,8 @@ export default async function JobCostReportPage({ searchParams }: JobCostReportP
         <SummaryCard
           title="Closing WIP"
           value={totalClosing}
-          icon={<Info className="h-4 w-4 text-brand" />}
-          description="Cumulative balance at month end"
+          icon={<DollarSign className="h-4 w-4 text-brand" />}
+          description="Balance at month end"
           tooltip="This is the total value of all active projects waiting to be recovered at the end of the month."
           color="brand"
         />

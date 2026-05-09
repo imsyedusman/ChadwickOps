@@ -8,7 +8,6 @@ import {
   ExternalLink,
   AlertCircle,
   Info,
-  Bug,
   ChevronDown,
   ChevronUp
 } from "lucide-react";
@@ -25,6 +24,8 @@ interface Financials {
     totalInvoicedToDate: number;
     unrecoveredAmount: number;
     labourCostThisMonth: number;
+    approvedLabourCostThisMonth: number;
+    pendingLabourCostThisMonth: number;
     materialCostThisMonth: number;
     updatedAt: Date | string | null;
 }
@@ -41,6 +42,10 @@ interface Project {
     openingBalance: number;
     closingBalance: number;
     invoicedThisMonth: number;
+    labourThisMonth: number;
+    approvedLabourThisMonth: number;
+    pendingLabourCostThisMonth: number;
+    materialThisMonth: number;
     isReconciled: boolean;
     discrepancy: number;
     isTableVisible: boolean;
@@ -156,7 +161,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                         <thead>
                             <tr className="bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm">
                                 <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project / Dates</th>
-                                <TableHeader tooltip="Money spent on labour for this job during the selected month." className="text-right">Labour Costs</TableHeader>
+                                <TableHeader tooltip="Money spent on labour. Primary number shows finalized (Approved) timesheets. Pending approval is shown in amber." className="text-right">Labour Costs</TableHeader>
                                 <TableHeader tooltip="Money spent on materials for this job during the selected month." className="text-right">Material Costs</TableHeader>
                                 <TableHeader tooltip="Total amount invoiced to the customer for this job this month." className="text-right">Money Billed</TableHeader>
                                 <TableHeader tooltip="Total amount we have spent on this job (all time) that hasn't been billed yet." className="text-right">Waiting to Recover</TableHeader>
@@ -212,9 +217,16 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                             </div>
                                         </td>
                                         <td className="px-4 py-6 text-right">
-                                            <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400 tabular-nums">
-                                                {formatCurrency(f?.labourCostThisMonth)}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className="text-[13px] font-black text-slate-900 dark:text-white tabular-nums">
+                                                    {formatCurrency(project.approvedLabourThisMonth)}
+                                                </span>
+                                                {project.pendingLabourCostThisMonth > 0 && (
+                                                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">
+                                                        +{formatCurrency(project.pendingLabourCostThisMonth)} pending
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-6 text-right">
                                             <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400 tabular-nums">
@@ -265,7 +277,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                             : "bg-white dark:bg-slate-900 text-slate-400 hover:text-brand hover:border-brand/30 shadow-sm"
                                                     )}
                                                 >
-                                                    <Bug className="h-3.5 w-3.5" />
+                                                    <Info className="h-3.5 w-3.5" />
                                                 </button>
                                                 <button 
                                                     onClick={() => handleSync(project.id)}
@@ -323,7 +335,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                         <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
                                                             <div className="flex justify-between items-center">
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase">Snapshot Date</span>
-                                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{project.debug?.monthEnd}</span>
+                                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{project.debug?.monthEnd ? format(new Date(project.debug.monthEnd), 'dd-MMM-yyyy') : '-'}</span>
                                                             </div>
                                                             <div className="h-px bg-slate-50 dark:bg-slate-800" />
                                                             <div className="flex justify-between items-center">
