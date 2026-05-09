@@ -309,13 +309,30 @@ export class WorkGuruClient {
   async getProjectPurchaseOrders(projectId: string) {
     const url = `${BASE_URL}/api/services/app/PurchaseOrder/GetPurchaseOrders`;
     const headers = await this.getAuthHeader();
-    const params = { projectId, MaxResultCount: 1000 };
-    this.logRequest(url, 'GET', params);
     
+    let allItems: any[] = [];
+    let skipCount = 0;
+    const maxResultCount = 1000;
+    let totalCount = 0;
+
     try {
-      const response = await axios.get(url, { headers, params });
-      this.logResponse(url, response.status, response.data);
-      return response.data;
+      do {
+        const params = { projectId, MaxResultCount: maxResultCount, SkipCount: skipCount };
+        this.logRequest(url, 'GET', params);
+        
+        const response = await axios.get(url, { headers, params });
+        this.logResponse(url, response.status, response.data);
+        
+        const result = response.data.result || response.data;
+        const items = result.items || [];
+        totalCount = result.totalCount || items.length;
+        
+        allItems = [...allItems, ...items];
+        skipCount += maxResultCount;
+        
+      } while (allItems.length < totalCount && skipCount < totalCount);
+
+      return { result: { items: allItems, totalCount: allItems.length } };
     } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;

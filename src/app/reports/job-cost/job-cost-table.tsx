@@ -18,6 +18,7 @@ import { MonthPicker } from "@/components/reports/MonthPicker";
 import { parse, format } from "date-fns";
 import { syncProjectFinancials } from "@/app/actions/financials";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { normalizeStatus } from "@/lib/constants";
 
 interface Financials {
     totalCostToDate: number;
@@ -159,7 +160,8 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                 <TableHeader tooltip="Money spent on materials for this job during the selected month." className="text-right">Material Costs</TableHeader>
                                 <TableHeader tooltip="Total amount invoiced to the customer for this job this month." className="text-right">Money Billed</TableHeader>
                                 <TableHeader tooltip="Total amount we have spent on this job (all time) that hasn't been billed yet." className="text-right">Waiting to Recover</TableHeader>
-                                <TableHeader tooltip="A quick look at whether this job's costs are being recovered by billing." className="px-8 text-right">Status</TableHeader>
+                                <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">Project Status</th>
+                                <TableHeader tooltip="A quick look at whether this job's costs are being recovered by billing." className="px-8 text-right">Recovery Status</TableHeader>
                                 <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 text-right pr-12">Actions</th>
                             </tr>
                         </thead>
@@ -234,7 +236,14 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6 text-right">
+                                         <td className="px-4 py-6">
+                                             <div className="flex flex-col items-start gap-1">
+                                                 <span className="text-[10px] font-black text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded uppercase whitespace-nowrap">
+                                                     {normalizeStatus(project.rawStatus)}
+                                                 </span>
+                                             </div>
+                                         </td>
+                                         <td className="px-8 py-6 text-right">
                                             <div className={cn(
                                                 "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider",
                                                 status.color === "red" && "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-900/20 text-red-600 dark:text-red-400",
@@ -275,7 +284,7 @@ export function JobCostTable({ initialData, currentMonth }: JobCostTableProps) {
                                     </tr>
                                     {isExpanded && (
                                         <tr className="bg-slate-50/80 dark:bg-slate-900/50 backdrop-blur-sm">
-                                            <td colSpan={7} className="px-12 py-8 border-b border-slate-200/60 dark:border-slate-800/60">
+                                            <td colSpan={8} className="px-12 py-8 border-b border-slate-200/60 dark:border-slate-800/60">
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                                     <div className="space-y-4">
                                                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">

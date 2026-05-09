@@ -11,7 +11,7 @@ import { ProjectFinancialService } from '@/lib/financials';
 
 import { subMonths, format, parseISO, endOfMonth } from 'date-fns';
 import { inArray, sql, lte } from 'drizzle-orm';
-import { ACTIVE_PROJECT_STATUSES } from '@/lib/constants';
+import { ACTIVE_PROJECT_STATUSES, normalizeStatus } from '@/lib/constants';
 import { invoices, timeEntries, purchaseOrders } from '@/db/schema';
 
 export async function getJobCostReport(monthStr: string) {
@@ -53,7 +53,7 @@ export async function getJobCostReport(monthStr: string) {
 
     // Filter projects to only those that were either active OR have a snapshot
     const activeProjects = allRelevantProjects.filter(p => 
-        ACTIVE_PROJECT_STATUSES.includes(p.rawStatus as any) || relevantProjectIds.has(p.id)
+        ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(p.rawStatus) as any) || relevantProjectIds.has(p.id)
     );
 
     // 2. Fetch authoritative snapshots for current month (Closing)
@@ -159,7 +159,7 @@ export async function getJobCostReport(monthStr: string) {
             invoicedThisMonth,
             isReconciled,
             discrepancy: movementSum - closingBalance,
-            isTableVisible: ACTIVE_PROJECT_STATUSES.includes(p.rawStatus as any),
+            isTableVisible: ACTIVE_PROJECT_STATUSES.includes(normalizeStatus(p.rawStatus) as any),
             debug: {
                 timesheetCount: tsCountMap.get(p.id) || 0,
                 poCount: poCountMap.get(p.id) || 0,

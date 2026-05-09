@@ -863,47 +863,37 @@ export class SyncService {
     const workguruId = remoteDetails.id?.toString() || remoteDetails.ProjectID?.toString();
     console.log(`[Sync] Syncing financials for project ${localProjectId} (WorkGuru ID: ${workguruId})...`);
     
-    // Fallback variables
+    // 1. Fetch AUTHORITATIVE Financial Data from Dedicated Endpoints
     let remoteTimesheets = remoteDetails.timeSheets || [];
-    let remotePOs = remoteDetails.purchaseOrders || [];
+    let remotePOs: any[] = []; // We will always overwrite this from dedicated endpoint
     let remoteInvoices = remoteDetails.invoices || [];
 
-    // TRIPLE-CHECK: If collections are empty, try falling back to dedicated endpoints
-    // This handles cases where GetProjectById succeeds but omits sub-collections, 
-    // OR where we want to double-check zero-data scenarios.
-    if (remoteTimesheets.length === 0 || remotePOs.length === 0 || remoteInvoices.length === 0) {
-        if (!workguruId) {
-            console.warn(`[Sync] Cannot perform fallback for project ${localProjectId}: Missing WorkGuru ID.`);
-        } else {
-            console.log(`[Sync] ⚠️ Data check: TS:${remoteTimesheets.length}, PO:${remotePOs.length}, INV:${remoteInvoices.length}. Attempting dedicated fallback fetch...`);
-            
-            try {
-                if (remoteTimesheets.length === 0) {
-                    const tsRes = await this.client.getProjectTimeEntries(workguruId);
-                    const allTs = tsRes.result?.items || tsRes.items || tsRes.result || [];
-                    // LOCAL FILTER: API sometimes ignores projectId param
-                    remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
-                    if (remoteTimesheets.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remoteTimesheets.length} timesheets (Filtered from ${allTs.length}).`);
-                }
-                
-                if (remotePOs.length === 0) {
-                    const poRes = await this.client.getProjectPurchaseOrders(workguruId);
-                    const allPOs = poRes.result?.items || poRes.items || poRes.result || [];
-                    // LOCAL FILTER: API sometimes ignores projectId param
-                    remotePOs = allPOs.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
-                    if (remotePOs.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remotePOs.length} purchase orders (Filtered from ${allPOs.length}).`);
-                }
+    if (!workguruId) {
+        console.warn(`[Sync] Cannot perform dedicated fetch for project ${localProjectId}: Missing WorkGuru ID.`);
+    } else {
+        try {
+            // ALWAYS fetch POs from dedicated endpoint to get true receivedDate
+            const poRes = await this.client.getProjectPurchaseOrders(workguruId);
+            const allPOs = poRes.result?.items || poRes.items || poRes.result || [];
+            // LOCAL FILTER: API sometimes ignores projectId param if it's passed globally
+            remotePOs = allPOs.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
+            console.log(`[Sync] ✅ Fetched ${remotePOs.length} authoritative purchase orders for project ${workguruId}.`);
 
-                if (remoteInvoices.length === 0) {
-                    const invRes = await this.client.getProjectInvoices(workguruId);
-                    const allInvs = invRes.result?.items || invRes.items || invRes.result || [];
-                    // LOCAL FILTER: API sometimes ignores projectId param
-                    remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
-                    if (remoteInvoices.length > 0) console.log(`[Sync] ✅ Fallback recovered ${remoteInvoices.length} invoices (Filtered from ${allInvs.length}).`);
-                }
-            } catch (fallbackError: any) {
-                console.error(`[Sync] ❌ Fallback fetch FAILED for project ${workguruId}:`, fallbackError.message);
+            // For Timesheets and Invoices, we fallback if nested list is empty OR we can always fetch them too for safety.
+            // Given the discovery with POs, always fetching is safer for financial integrity.
+            if (remoteTimesheets.length === 0) {
+                const tsRes = await this.client.getProjectTimeEntries(workguruId);
+                const allTs = tsRes.result?.items || tsRes.items || tsRes.result || [];
+                remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
             }
+            
+            if (remoteInvoices.length === 0) {
+                const invRes = await this.client.getProjectInvoices(workguruId);
+                const allInvs = invRes.result?.items || invRes.items || invRes.result || [];
+                remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
+            }
+        } catch (fallbackError: any) {
+            console.error(`[Sync] ❌ Dedicated fetch FAILED for project ${workguruId}:`, fallbackError.message);
         }
     }
 
