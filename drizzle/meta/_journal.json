@@ -71,6 +71,13 @@
       "when": 1778209982748,
       "tag": "0009_solid_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778310673470,
+      "tag": "0010_faithful_paper_doll",
+      "breakpoints": true
     }
   ]
 }

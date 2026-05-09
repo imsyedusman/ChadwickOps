@@ -1,0 +1,2 @@
+ALTER TABLE "project_financial_snapshots" ADD COLUMN "approved_labour_cost_this_month" double precision DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "project_financial_snapshots" ADD COLUMN "pending_labour_cost_this_month" double precision DEFAULT 0 NOT NULL;
