@@ -1179,7 +1179,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                             width: STICKY_WIDTHS.projectNumber,
                             minWidth: STICKY_WIDTHS.projectNumber
                           }}
-                          className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
+                          className={cn(
+                            "sticky z-10 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis",
+                            project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
+                          )}
                         >
                           <div className="flex items-center gap-3 w-full">
                             <div className="w-5 flex-shrink-0 flex items-center justify-center gap-1.5">
@@ -1226,7 +1229,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           width: STICKY_WIDTHS.projectName,
                           minWidth: STICKY_WIDTHS.projectName
                         }}
-                        className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 border-r border-slate-100/60 dark:border-slate-800/60"
+                        className={cn(
+                          "sticky z-10 px-4 py-3 border-r border-slate-100/60 dark:border-slate-800/60 transition-colors",
+                          project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
+                        )}
                       >
                         <div className="flex flex-col gap-0.5">
                           <div className="flex justify-between items-start">
@@ -1258,8 +1264,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           minWidth: STICKY_WIDTHS.itemName
                         }}
                         className={cn(
-                          "sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400 border-r border-slate-100/60 dark:border-slate-800/60 transition-all",
-                          isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]"
+                          "sticky z-10 px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400 border-r border-slate-100/60 dark:border-slate-800/60 transition-all",
+                          isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]",
+                          project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
                         )}
                       >
                         <div className="line-clamp-2 leading-relaxed">
