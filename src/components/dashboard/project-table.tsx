@@ -90,6 +90,7 @@ interface Project {
   total: number;
   startDate: Date | string | null;
   projectCreationDate: Date | string | null;
+  priority: string | null;
   client?: { name: string };
 }
 
@@ -174,6 +175,18 @@ const getUrgencyIndicator = (project: Project, now: Date) => {
     return { color: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]', label: 'Overdue' };
   }
 
+  return null;
+};
+const getPriorityIndicator = (priority: string | null) => {
+  if (!priority) return null;
+  const p = priority.toLowerCase();
+  if (p === 'critical') {
+    // No dot for critical anymore, handled by row styling
+    return null;
+  }
+  if (p === 'high') {
+    return { color: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]', label: 'High Priority' };
+  }
   return null;
 };
 
@@ -1155,7 +1168,8 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                       key={project.id}
                       className={cn(
                         "group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-150 border-b border-slate-50 dark:border-slate-800",
-                        !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]"
+                        !isProductiveProject(project.projectNumber) && "opacity-60 grayscale-[0.3]",
+                        project.priority?.toLowerCase() === 'critical' && "bg-red-50/60 dark:bg-red-900/10 border-l-[6px] border-l-red-500/80 shadow-[inset_4px_0_0_0_rgba(239,68,68,0.1)]"
                       )}
                     >
                       {columnVisibility.projectNumber && (
@@ -1168,15 +1182,33 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           className="sticky z-10 bg-white dark:bg-slate-900 px-4 py-3 font-bold text-[12px] text-slate-400 group-hover:text-brand tabular-nums border-r border-slate-100/60 dark:border-slate-800/60 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
                         >
                           <div className="flex items-center gap-3 w-full">
-                            <div className="w-2 flex-shrink-0 flex items-center justify-center">
+                            <div className="w-5 flex-shrink-0 flex items-center justify-center gap-1.5">
+                              {(() => {
+                                const priority = getPriorityIndicator(project.priority);
+                                if (!priority) return null;
+                                return (
+                                  <div 
+                                    className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", priority.color)} 
+                                    title={priority.label}
+                                  />
+                                );
+                              })()}
                               {urgency && (
                                 <div 
-                                  className={cn("w-2 h-2 rounded-full", urgency.color)} 
+                                  className={cn("w-2 h-2 rounded-full flex-shrink-0", urgency.color)} 
                                   title={urgency.label}
                                 />
                               )}
                             </div>
-                            <span>{project.projectNumber}</span>
+                            {project.priority?.toLowerCase() === 'critical' ? (
+                              <Tooltip content="Critical Priority">
+                                <span className="cursor-help font-extrabold text-red-600 dark:text-red-400 decoration-red-500/30 underline underline-offset-4 decoration-2">
+                                  {project.projectNumber}
+                                </span>
+                              </Tooltip>
+                            ) : (
+                              <span>{project.projectNumber}</span>
+                            )}
                             <SyncRowButton 
                               workguruId={project.workguruId} 
                               onSyncComplete={() => {

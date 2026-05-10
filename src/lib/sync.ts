@@ -14,6 +14,7 @@ const CF_IDS = {
     SHEETMETAL_DELIVERED_DATE: 9488,
     SWITCHGEAR_ORDERED_DATE: 9489,
     SWITCHGEAR_DELIVERED_DATE: 9490,
+    PRIORITY: 9683,
 } as const;
 
 export class SyncService {
@@ -520,6 +521,9 @@ export class SyncService {
         
     if (lowerKey === 'switchgeardelivereddate' || lowerKey === 'switchgear delivered date')
         return this.getCustomFieldValueById(remote, CF_IDS.SWITCHGEAR_DELIVERED_DATE);
+    
+    if (lowerKey === 'priority')
+        return this.getCustomFieldValueById(remote, CF_IDS.PRIORITY);
 
     // 1. Check flat properties (various casings) for other fields
     if ((remote as any)[key] !== undefined) return (remote as any)[key];
@@ -774,6 +778,15 @@ export class SyncService {
         const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
         const switchgearDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearDeliveredDate'));
         
+        const rawPriority = this.getCustomFieldValue(remoteDetails, 'Priority');
+        let priority = null;
+        if (rawPriority) {
+            const pLower = rawPriority.toLowerCase();
+            if (pLower.includes('critical')) priority = 'Critical';
+            else if (pLower.includes('high')) priority = 'High';
+            else if (pLower.includes('normal')) priority = 'Normal';
+        }
+        
         let total = Number(remoteDetails.total || remoteDetails.Total || 0);
         
         // Fallback to product line items if top-level total is $0
@@ -843,6 +856,7 @@ export class SyncService {
             sheetmetalDeliveredDate,
             switchgearOrderedDate,
             switchgearDeliveredDate,
+            priority,
             total,
             lastDeepSyncAt: new Date(),
             updatedAt: new Date(),

@@ -64,6 +64,7 @@ export const projects = pgTable('projects', {
   lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
   projectCreationDate: timestamp('project_creation_date'),
   startDate: timestamp('start_date'),
+  priority: text('priority'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {
