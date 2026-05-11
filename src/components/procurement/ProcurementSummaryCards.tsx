@@ -1,134 +1,99 @@
-import { Card } from "@/components/ui/card";
-import { AlertCircle, Clock, Info, Package, BarChart3, Activity, Ban, ShieldAlert } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+"use client";
 
-interface SummaryProps {
+import { Card } from "@/components/ui/card";
+import { AlertCircle, Clock, Info, BarChart3, ArrowUpRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface ProcurementSummaryCardsProps {
   summary: {
     totalProjects: number;
-    deliveryRiskCount: number;
-    delayedCount: number;
-    atRiskCount: number;
-    missingEtaCount: number;
-    syncHealth: {
-      lastSyncAt: Date | null;
-      lastStatus: string;
-      retryQueueCount: number;
-      permFailureCount: number;
-    };
+    backorderItemCount: number;
+    outstandingMaterialCost: number;
+    projectsWaitingOnMaterials: number;
+    lateSupplierDeliveries: number;
+    missingSupplierEtas: number;
   };
+  onMetricClick?: (tab: string, filter?: string) => void;
 }
 
-export function ProcurementSummaryCards({ summary }: SummaryProps) {
-  const { syncHealth } = summary;
-
-  const mainCards = [
+export function ProcurementSummaryCards({ summary, onMetricClick }: ProcurementSummaryCardsProps) {
+  const cards = [
     {
-      label: "Total Projects",
-      value: summary.totalProjects,
-      icon: <Package className="h-4 w-4" />,
-      color: "text-slate-600 dark:text-slate-400",
-      bg: "bg-slate-50 dark:bg-slate-800/50",
+      title: "BACKORDER ITEMS",
+      value: summary.backorderItemCount,
+      subtitle: `${summary.projectsWaitingOnMaterials} Projects waiting`,
+      icon: AlertCircle,
+      color: "text-red-500",
+      bg: "bg-red-50",
+      tab: "backorders",
+      filter: "PROBLEMS"
     },
     {
-      label: "Delivery Risk",
-      value: summary.deliveryRiskCount,
-      icon: <AlertCircle className="h-4 w-4" />,
-      color: "text-red-600 dark:text-red-400",
-      bg: "bg-red-50 dark:bg-red-950/20",
-      subtext: "ETA > Delivery Date",
+      title: "OUTSTANDING COST",
+      value: `$${(summary.outstandingMaterialCost / 1000).toFixed(1)}k`,
+      subtitle: "Total purchase value",
+      icon: BarChart3,
+      color: "text-brand",
+      bg: "bg-blue-50",
+      tab: "backorders",
+      filter: "ALL"
     },
     {
-        label: "Delayed",
-        value: summary.delayedCount,
-        icon: <Clock className="h-4 w-4" />,
-        color: "text-orange-600 dark:text-orange-400",
-        bg: "bg-orange-50 dark:bg-orange-950/20",
-        subtext: "Past ETA",
+        title: "LATE DELIVERIES",
+        value: summary.lateSupplierDeliveries,
+        subtitle: "Past expected date",
+        icon: Clock,
+        color: "text-orange-500",
+        bg: "bg-orange-50",
+        tab: "backorders",
+        filter: "ACTION_FOLLOW_UP"
     },
     {
-      label: "At Risk",
-      value: summary.atRiskCount,
-      icon: <BarChart3 className="h-4 w-4" />,
-      color: "text-amber-600 dark:text-amber-400",
-      bg: "bg-amber-50 dark:bg-amber-950/20",
-      subtext: "Nearing Due Date",
-    },
-    {
-      label: "Missing ETA",
-      value: summary.missingEtaCount,
-      icon: <Info className="h-4 w-4" />,
-      color: "text-blue-600 dark:text-blue-400",
-      bg: "bg-blue-50 dark:bg-blue-950/20",
-      subtext: "Follow-up required",
-    },
-  ];
-
-  const healthCards = [
-    {
-      label: "Sync Health",
-      value: syncHealth.lastStatus,
-      icon: <Activity className="h-4 w-4" />,
-      color: syncHealth.lastStatus === 'SUCCESS' ? "text-emerald-600" : "text-amber-600",
-      bg: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-      subtext: syncHealth.lastSyncAt ? `${formatDistanceToNow(new Date(syncHealth.lastSyncAt))} ago` : "Never synced",
-    },
-    {
-      label: "Retry Queue",
-      value: syncHealth.retryQueueCount,
-      icon: <Activity className="h-4 w-4" />,
-      color: syncHealth.retryQueueCount > 0 ? "text-amber-600" : "text-slate-400",
-      bg: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-      subtext: "Pending reconciliation",
-    },
-    {
-      label: "Failed POs",
-      value: syncHealth.permFailureCount,
-      icon: <Ban className="h-4 w-4" />,
-      color: syncHealth.permFailureCount > 0 ? "text-red-600" : "text-slate-400",
-      bg: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-      subtext: "Exhausted all retries",
+        title: "MISSING ETAS",
+        value: summary.missingSupplierEtas,
+        subtitle: "Awaiting supplier date",
+        icon: Info,
+        color: "text-purple-500",
+        bg: "bg-purple-50",
+        tab: "backorders",
+        filter: "ACTION_CONFIRM_ETA"
     }
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {mainCards.map((card) => (
-          <Card key={card.label} className={cn("p-4 border-none shadow-sm", card.bg)}>
-            <div className="flex items-center justify-between mb-2">
-              <div className={cn("p-2 rounded-lg bg-white dark:bg-slate-900 shadow-sm", card.color)}>
-                {card.icon}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {cards.map((card) => (
+        <Card 
+            key={card.title} 
+            className={cn(
+                "group relative transition-all hover:shadow-md border-slate-200 dark:border-slate-800",
+                onMetricClick ? "cursor-pointer" : ""
+            )}
+            onClick={() => onMetricClick?.(card.tab, card.filter)}
+        >
+          <div className="p-5 flex items-start justify-between">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">
+                {card.title}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                    {card.value}
+                </span>
+                {onMetricClick && (
+                    <ArrowUpRight className="h-3 w-3 text-slate-300 group-hover:text-brand transition-colors" />
+                )}
               </div>
-              <span className="text-2xl font-bold tracking-tight">{card.value}</span>
+              <span className="text-[10px] font-medium text-slate-500 uppercase tracking-tight">
+                {card.subtitle}
+              </span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{card.label}</span>
-              {card.subtext && <span className="text-[10px] text-slate-400 font-medium">{card.subtext}</span>}
+            <div className={cn("p-2.5 rounded-xl transition-transform group-hover:scale-105", card.bg, card.color)}>
+              <card.icon className="h-5 w-5" />
             </div>
-          </Card>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-4">
-         {healthCards.map((card) => (
-           <div key={card.label} className={cn(
-             "flex items-center gap-4 px-4 py-3 rounded-2xl border shadow-sm transition-all",
-             card.bg
-           )}>
-             <div className={cn("p-2 rounded-xl bg-slate-50 dark:bg-slate-800", card.color)}>
-               {card.icon}
-             </div>
-             <div className="flex flex-col min-w-[100px]">
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">{card.label}</span>
-                <div className="flex items-baseline gap-2">
-                  <span className={cn("text-sm font-bold tracking-tight", card.color)}>{card.value}</span>
-                  <span className="text-[10px] text-slate-500 font-medium">{card.subtext}</span>
-                </div>
-             </div>
-           </div>
-         ))}
-      </div>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }

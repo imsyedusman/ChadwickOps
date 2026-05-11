@@ -1,16 +1,36 @@
-import { addDays, isBefore, startOfDay } from "date-fns";
+import { addDays, isBefore, startOfDay, differenceInDays, format } from "date-fns";
 
-export type ProcurementRiskLevel = 
-  | 'DELIVERY_RISK'       // ETA > Project Delivery Date
-  | 'AT_RISK'             // ETA within 7 days of Project Delivery Date or general concern
-  | 'DELAYED_PROCUREMENT' // ETA < Today
-  | 'MISSING_ETA'         // Outstanding Qty but no ETA
-  | 'ON_TRACK';           // No concerns detected
+/**
+ * Standardized Date Formatter for Procurement
+ * Format: 11-May-2026
+ */
+export function formatProcurementDate(date: Date | null | undefined): string {
+  if (!date) return '--';
+  return format(new Date(date), 'dd-MMM-yyyy');
+}
 
-export interface ProcurementRiskResult {
-  level: ProcurementRiskLevel;
-  reason: string;
-  isActionable: boolean;
+/**
+ * Operational Action Types - Simplified for practical investigation.
+ */
+export type ProcurementActionType = 
+  | 'ACTION_ESCALATE'      // Delivery Risk
+  | 'ACTION_FOLLOW_UP'     // Supplier Delay
+  | 'ACTION_CONFIRM_ETA'   // Missing ETA
+  | 'ACTION_MONITOR'       // Delayed Materials (Partial)
+  | 'ACTION_AWAITING'      // Awaiting Materials (On Track)
+  | 'ACTION_NONE';         // Completed
+
+export type ProcurementSeverity = 1 | 2 | 3 | 4;
+
+export interface ProcurementActionMetadata {
+  type: ProcurementActionType;
+  severity: ProcurementSeverity;
+  label: string;
+  description: string;
+  actionRequired: string;
+  reason: string; // Explaining "Why"
+  color: string;
+  bgTint: string;
 }
 
 export interface POLineSummary {
@@ -20,7 +40,9 @@ export interface POLineSummary {
   name: string;
   quantity: number;
   receivedQuantity: number;
+  unitPrice: number;
   expectedDate: Date | null;
+  issueDate?: Date | null;
 }
 
 export interface ProjectProcurementContext {
@@ -29,87 +51,136 @@ export interface ProjectProcurementContext {
   poLines: POLineSummary[];
 }
 
+export const ACTION_METADATA: Record<ProcurementActionType, ProcurementActionMetadata> = {
+  ACTION_ESCALATE: {
+    type: 'ACTION_ESCALATE',
+    severity: 1,
+    label: 'Delivery Risk',
+    description: 'Material expected after project delivery date.',
+    actionRequired: 'Escalate delay',
+    reason: 'Supplier ETA exceeds project delivery date',
+    color: '#b91c1c', // Dark Red
+    bgTint: '#fef2f2'  // Soft Red Tint
+  },
+  ACTION_FOLLOW_UP: {
+    type: 'ACTION_FOLLOW_UP',
+    severity: 2,
+    label: 'Supplier Delay',
+    description: 'Expected delivery date has passed.',
+    actionRequired: 'Follow up supplier',
+    reason: 'Expected date has passed',
+    color: '#b45309', // Dark Amber
+    bgTint: '#fffbeb'  // Soft Amber Tint
+  },
+  ACTION_CONFIRM_ETA: {
+    type: 'ACTION_CONFIRM_ETA',
+    severity: 2,
+    label: 'Missing ETA',
+    description: 'No expected delivery date provided.',
+    actionRequired: 'Request ETA',
+    reason: 'Waiting on supplier confirmation',
+    color: '#7e22ce', // Dark Purple
+    bgTint: '#faf5ff'  // Soft Purple Tint
+  },
+  ACTION_MONITOR: {
+    type: 'ACTION_MONITOR',
+    severity: 3,
+    label: 'Delayed Materials',
+    description: 'Partially received but incomplete.',
+    actionRequired: 'Monitor delivery',
+    reason: 'Partially received from supplier',
+    color: '#1d4ed8', // Dark Blue
+    bgTint: '#eff6ff'  // Soft Blue Tint
+  },
+  ACTION_AWAITING: {
+    type: 'ACTION_AWAITING',
+    severity: 4,
+    label: 'Awaiting Materials',
+    description: 'On track for delivery.',
+    actionRequired: 'On track',
+    reason: 'Items ordered but not yet received',
+    color: '#334155', // Dark Slate
+    bgTint: '#f8fafc'  // Soft Slate Tint
+  },
+  ACTION_NONE: {
+    type: 'ACTION_NONE',
+    severity: 4,
+    label: 'Completed',
+    description: 'Fully received.',
+    actionRequired: 'Received',
+    reason: 'All materials successfully received',
+    color: '#047857', // Dark Green
+    bgTint: '#ecfdf5'  // Soft Green Tint
+  }
+};
+
 /**
- * Calculates procurement risk based on the refined Phase 2 model.
- * Focuses on operational timing conflicts without using "BLOCKED" terminology.
+ * Calculates aging days for a procurement line.
  */
-export function calculateProjectProcurementRisk(context: ProjectProcurementContext): ProcurementRiskResult {
-  const { deliveryDate, poLines } = context;
+export function calculateAgingDays(date: Date | null | undefined): number {
+  if (!date) return 0;
   const now = startOfDay(new Date());
-  const atRiskThresholdDays = 7;
-
-  // Filter for lines with outstanding quantities
-  const outstandingLines = poLines.filter(line => (line.quantity - line.receivedQuantity) > 0);
-
-  if (outstandingLines.length === 0) {
-    return { level: 'ON_TRACK', reason: 'All materials fully received', isActionable: false };
+  const target = startOfDay(new Date(date));
+  
+  if (isBefore(target, now)) {
+    return differenceInDays(now, target);
   }
-
-  // 1. Check for DELAYED_PROCUREMENT (ETA in the past)
-  const delayedLines = outstandingLines.filter(line => line.expectedDate && isBefore(startOfDay(line.expectedDate), now));
-  if (delayedLines.length > 0) {
-    return { 
-      level: 'DELAYED_PROCUREMENT', 
-      reason: `${delayedLines.length} line item(s) are past their expected delivery date.`,
-      isActionable: true 
-    };
-  }
-
-  // 2. Check for DELIVERY_RISK (ETA > Project Delivery Date)
-  if (deliveryDate) {
-    const projectDelivery = startOfDay(deliveryDate);
-    const timingConflictLines = outstandingLines.filter(line => line.expectedDate && isBefore(projectDelivery, startOfDay(line.expectedDate)));
-    
-    if (timingConflictLines.length > 0) {
-      return {
-        level: 'DELIVERY_RISK',
-        reason: 'Material ETA is currently later than the project delivery target.',
-        isActionable: true
-      };
-    }
-
-    // 3. Check for AT_RISK (ETA within threshold of Project Delivery)
-    const thresholdDate = addDays(projectDelivery, -atRiskThresholdDays);
-    const nearingDeadlineLines = outstandingLines.filter(line => line.expectedDate && !isBefore(startOfDay(line.expectedDate), thresholdDate));
-    
-    if (nearingDeadlineLines.length > 0) {
-      return {
-        level: 'AT_RISK',
-        reason: `Materials due within ${atRiskThresholdDays} days of project delivery.`,
-        isActionable: true
-      };
-    }
-  }
-
-  // 4. Check for MISSING_ETA
-  const missingEtaLines = outstandingLines.filter(line => !line.expectedDate);
-  if (missingEtaLines.length > 0) {
-    return {
-      level: 'MISSING_ETA',
-      reason: `${missingEtaLines.length} line item(s) are missing supplier ETAs.`,
-      isActionable: true
-    };
-  }
-
-  return { level: 'ON_TRACK', reason: 'All procurement on schedule', isActionable: false };
+  return 0;
 }
 
 /**
- * Returns a human-readable definition for each risk level for UI help tooltips.
+ * Calculates the monetary cost for outstanding materials.
  */
-export function getRiskLevelDefinition(level: ProcurementRiskLevel): string {
-  switch (level) {
-    case 'DELIVERY_RISK':
-      return "Delivery Risk means outstanding materials currently have ETAs later than the project delivery target.";
-    case 'AT_RISK':
-      return "At Risk means materials are due very close to the project delivery date or there is general timing concern.";
-    case 'DELAYED_PROCUREMENT':
-      return "Delayed Procurement means the supplier's expected delivery date has already passed.";
-    case 'MISSING_ETA':
-      return "Missing ETA means the purchase order is active but no expected delivery date has been provided by the supplier.";
-    case 'ON_TRACK':
-      return "All tracked materials are currently scheduled to arrive before the project delivery date.";
-    default:
-      return "";
+export function calculateOutstandingValue(quantity: number, receivedQuantity: number, unitPrice: number): number {
+  const outstandingQty = Math.max(0, quantity - receivedQuantity);
+  return outstandingQty * unitPrice;
+}
+
+/**
+ * Determines the Operational Action for a single material line.
+ */
+export function determineLineAction(line: POLineSummary, projectDeliveryDate: Date | null): ProcurementActionMetadata {
+  const outstandingQty = line.quantity - line.receivedQuantity;
+  const now = startOfDay(new Date());
+
+  if (outstandingQty <= 0) return ACTION_METADATA.ACTION_NONE;
+
+  // 1. Delivery Risk (Priority 1)
+  if (projectDeliveryDate && line.expectedDate && isBefore(startOfDay(projectDeliveryDate), startOfDay(line.expectedDate))) {
+    return ACTION_METADATA.ACTION_ESCALATE;
   }
+
+  // 2. Delayed (Priority 2)
+  if (line.expectedDate && isBefore(startOfDay(line.expectedDate), now)) {
+    return ACTION_METADATA.ACTION_FOLLOW_UP;
+  }
+
+  // 3. Missing ETA (Priority 2)
+  if (!line.expectedDate) {
+    return ACTION_METADATA.ACTION_CONFIRM_ETA;
+  }
+
+  // 4. Partial Receipt (Priority 3)
+  if (line.receivedQuantity > 0) {
+    return ACTION_METADATA.ACTION_MONITOR;
+  }
+
+  // 5. Default: Awaiting Delivery
+  return ACTION_METADATA.ACTION_AWAITING;
+}
+
+/**
+ * Aggregates risk for a project context.
+ */
+export function calculateProjectProcurementRisk(context: ProjectProcurementContext) {
+  const { deliveryDate, poLines } = context;
+  const actions = poLines.map(line => determineLineAction(line, deliveryDate));
+  
+  // Find highest severity action
+  const topAction = actions.reduce((prev, curr) => {
+    if (curr.severity < prev.severity) return curr;
+    return prev;
+  }, ACTION_METADATA.ACTION_NONE);
+
+  return topAction;
 }

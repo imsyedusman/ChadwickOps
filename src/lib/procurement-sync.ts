@@ -84,7 +84,8 @@ export class ProcurementSyncService {
             const poIdStr = (remotePo.id || remotePo.id_Internal || remotePo.PurchaseOrderID)?.toString();
             if (!poIdStr) continue;
 
-            const success = await this.syncPurchaseOrder(poIdStr, remotePo.number, projectMap);
+            const listSupplierName = remotePo.supplierName || remotePo.SupplierName;
+            const success = await this.syncPurchaseOrder(poIdStr, remotePo.number, projectMap, listSupplierName);
             if (success) {
                 processedCount++;
             } else {
@@ -132,12 +133,19 @@ export class ProcurementSyncService {
     }
   }
 
-  private async syncPurchaseOrder(poIdStr: string, poNumber: string | undefined, projectMap: Map<string, number>): Promise<boolean> {
+  private async syncPurchaseOrder(poIdStr: string, poNumber: string | undefined, projectMap: Map<string, number>, listSupplierName?: string): Promise<boolean> {
     try {
         const detailData = await this.withRetry(() => this.client.getPurchaseOrderById(poIdStr), `Fetch PO Detail ${poNumber || poIdStr}`);
         if (!detailData) return false;
 
         const detail = detailData.result || detailData;
+        
+        const sName = detail.supplierName || detail.SupplierName || detail.supplier?.name || detail.Supplier?.Name || listSupplierName || 'Unknown';
+        
+        if (sName === 'Unknown') {
+            console.log(`[ProcurementSync] WARNING: Could not find supplier name for PO ${poIdStr}. Raw keys:`, Object.keys(detail));
+        }
+
         const projectIdStr = detail.projectId?.toString();
         const localProjectId = projectIdStr ? projectMap.get(projectIdStr) : null;
 
@@ -150,7 +158,7 @@ export class ProcurementSyncService {
                 issueDate: this.parseDate(detail.issueDate || detail.IssueDate) || new Date(),
                 receivedDate: this.parseDate(detail.receivedDate || detail.ReceivedDate),
                 expectedDate: this.parseDate(detail.expectedDate || detail.ExpectedDate),
-                supplierName: detail.supplierName || detail.SupplierName,
+                supplierName: sName,
                 updatedAt: new Date(),
             }).onConflictDoUpdate({
                 target: purchaseOrders.workguruId,
@@ -160,7 +168,7 @@ export class ProcurementSyncService {
                     issueDate: this.parseDate(detail.issueDate || detail.IssueDate) || new Date(),
                     receivedDate: this.parseDate(detail.receivedDate || detail.ReceivedDate),
                     expectedDate: this.parseDate(detail.expectedDate || detail.ExpectedDate),
-                    supplierName: detail.supplierName || detail.SupplierName,
+                    supplierName: sName,
                     updatedAt: new Date(),
                 }
             }).returning({ id: purchaseOrders.id });
@@ -178,15 +186,15 @@ export class ProcurementSyncService {
                     purchaseOrderId: dbPo.id,
                     projectId: localProjectId,
                     poNumber: poNumber || 'Unknown',
-                    supplierName: detail.supplierName || detail.SupplierName || 'Unknown',
+                    supplierName: sName,
                     productId: remoteLine.productId || remoteLine.productID || null,
                     name: remoteLine.name || remoteLine.Name || 'Unknown',
                     description: remoteLine.description || remoteLine.Description || '',
                     quantity: Number(remoteLine.quantity || remoteLine.Quantity || 0),
                     receivedQuantity: Number(remoteLine.receivedQuantity || remoteLine.ReceivedQuantity || 0),
                     invoicedQuantity: Number(remoteLine.invoicedQuantity || remoteLine.InvoicedQuantity || 0),
-                    unitPrice: Number(remoteLine.unitPrice || remoteLine.UnitPrice || 0),
-                    total: Number(remoteLine.total || remoteLine.Total || 0),
+                    unitPrice: Number(remoteLine.unitPrice || remoteLine.UnitPrice || remoteLine.unitAmount || remoteLine.UnitAmount || remoteLine.Price || 0),
+                    total: Number(remoteLine.total || remoteLine.Total || remoteLine.LineAmount || remoteLine.lineAmount || 0),
                     updatedAt: new Date(),
                 }).onConflictDoUpdate({
                     target: purchaseOrderLines.workguruId,
@@ -194,8 +202,8 @@ export class ProcurementSyncService {
                         quantity: Number(remoteLine.quantity || remoteLine.Quantity || 0),
                         receivedQuantity: Number(remoteLine.receivedQuantity || remoteLine.ReceivedQuantity || 0),
                         invoicedQuantity: Number(remoteLine.invoicedQuantity || remoteLine.InvoicedQuantity || 0),
-                        unitPrice: Number(remoteLine.unitPrice || remoteLine.UnitPrice || 0),
-                        total: Number(remoteLine.total || remoteLine.Total || 0),
+                        unitPrice: Number(remoteLine.unitPrice || remoteLine.UnitPrice || remoteLine.unitAmount || remoteLine.UnitAmount || remoteLine.Price || 0),
+                        total: Number(remoteLine.total || remoteLine.Total || remoteLine.LineAmount || remoteLine.lineAmount || 0),
                         updatedAt: new Date(),
                     }
                 });
