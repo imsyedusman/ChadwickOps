@@ -116,12 +116,37 @@ export const purchaseOrders = pgTable('purchase_orders', {
   status: varchar('status', { length: 50 }).notNull(),
   issueDate: timestamp('issue_date').notNull(),
   receivedDate: timestamp('received_date'),
+  expectedDate: timestamp('expected_date'),
   supplierName: text('supplier_name'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {
   return [
     index('po_project_idx').on(table.projectId),
+  ];
+});
+
+export const purchaseOrderLines = pgTable('purchase_order_lines', {
+  id: serial('id').primaryKey(),
+  workguruId: varchar('workguru_id', { length: 255 }).notNull().unique(),
+  purchaseOrderId: integer('purchase_order_id').notNull().references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+  projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  poNumber: varchar('po_number', { length: 100 }).notNull(),
+  supplierName: text('supplier_name'),
+  productId: integer('product_id'),
+  name: text('name'),
+  description: text('description'),
+  quantity: doublePrecision('quantity').default(0).notNull(),
+  receivedQuantity: doublePrecision('received_quantity').default(0).notNull(),
+  invoicedQuantity: doublePrecision('invoiced_quantity').default(0).notNull(),
+  unitPrice: doublePrecision('unit_price').default(0).notNull(),
+  total: doublePrecision('total').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('po_line_po_idx').on(table.purchaseOrderId),
+    index('po_line_project_idx').on(table.projectId),
   ];
 });
 
@@ -198,6 +223,13 @@ export const syncLogs = pgTable('sync_logs', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
   status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE, MISMATCH
+  details: text('details'),
+});
+
+export const procurementSyncLogs = pgTable('procurement_sync_logs', {
+  id: serial('id').primaryKey(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE, WARNING
   details: text('details'),
 });
 

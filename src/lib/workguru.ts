@@ -75,6 +75,25 @@ export interface WorkGuruPurchaseOrder {
   supplierName?: string;
   SupplierName?: string;
   projectId?: number;
+  expectedDate?: string;
+  ExpectedDate?: string;
+  purchaseOrderLineItems?: WorkGuruPurchaseLine[];
+  products?: WorkGuruPurchaseLine[];
+}
+
+export interface WorkGuruPurchaseLine {
+  id?: number;
+  workguruId?: string;
+  purchaseOrderId?: number;
+  projectId?: number;
+  productId?: number;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  receivedQuantity?: number;
+  invoicedQuantity?: number;
+  unitPrice?: number;
+  total?: number;
 }
 
 export interface WorkGuruInvoice {
@@ -333,6 +352,38 @@ export class WorkGuruClient {
       } while (allItems.length < totalCount && skipCount < totalCount);
 
       return { result: { items: allItems, totalCount: allItems.length } };
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getPurchaseOrders(params: { projectId?: string; MaxResultCount?: number; SkipCount?: number; Sorting?: string } = {}) {
+    const url = `${BASE_URL}/api/services/app/PurchaseOrder/GetPurchaseOrders`;
+    const headers = await this.getAuthHeader();
+    const finalParams = { MaxResultCount: 1000, ...params };
+    this.logRequest(url, 'GET', finalParams);
+    
+    try {
+      const response = await axios.get(url, { headers, params: finalParams });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getPurchaseOrderById(id: string) {
+    const url = `${BASE_URL}/api/services/app/PurchaseOrder/GetPurchaseOrderById`;
+    const headers = await this.getAuthHeader();
+    const params = { id };
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
     } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;
