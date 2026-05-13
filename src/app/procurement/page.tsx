@@ -3,6 +3,8 @@ import { ProcurementHubClient } from "@/components/procurement/ProcurementHubCli
 import { ProcurementSyncStatus } from "@/components/dashboard/ProcurementSyncStatus";
 import { HelpCircle } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProcurementPage() {
   const [dashboardResult, backordersResult, supplierResult] = await Promise.all([
     getProcurementDashboardData(),

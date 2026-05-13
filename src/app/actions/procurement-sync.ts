@@ -24,7 +24,7 @@ export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' = 'INC
     const syncService = new ProcurementSyncService(decryptedKey, decryptedSecret);
     const result = await syncService.runSync(mode);
     
-    revalidatePath('/');
+    revalidatePath('/procurement');
     return { success: true, mode, stats: result };
   } catch (error) {
     console.error(`Procurement Sync error:`, error);

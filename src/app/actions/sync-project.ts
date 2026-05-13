@@ -31,7 +31,7 @@ export async function handleSyncProject(workguruId: string) {
     }
 
     // 4. Revalidate path to refresh dashboard data
-    revalidatePath('/dashboard');
+    revalidatePath('/');
 
     return { 
       success: true, 

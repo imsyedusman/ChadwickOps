@@ -174,6 +174,13 @@ export interface SupplierRiskItem {
  */
 export async function getProcurementDashboardData() {
   try {
+    // DIAGNOSTIC: Check project archiving status
+    const projectCounts = await db.select({ 
+        archived: sql<number>`count(*) filter (where ${projects.isArchived} = true)`,
+        active: sql<number>`count(*) filter (where ${projects.isArchived} = false)`
+    }).from(projects);
+    console.log(`[Procurement-Diag] Project Status Counts:`, projectCounts[0]);
+
     console.time('fetch_projects');
     const allProjects = await db.select().from(projects)
       .where(eq(projects.isArchived, false))
