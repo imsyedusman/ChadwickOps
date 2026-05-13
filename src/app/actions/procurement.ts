@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs } from '@/db/schema';
+import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs, masterSuppliers, projectSuppliers } from '@/db/schema';
 import { eq, and, desc, sql, lt, ne, inArray } from 'drizzle-orm';
 import { 
     calculateProjectProcurementRisk, 
@@ -11,6 +11,114 @@ import {
     ProcurementActionMetadata,
     ProjectProcurementContext 
 } from '@/lib/procurement-logic';
+import { revalidatePath } from 'next/cache';
+
+// ... (existing interfaces and functions)
+
+/**
+ * Adds a manual supplier record to a project.
+ */
+export async function addSupplier(projectId: number, data: any) {
+    try {
+        const [result] = await db.insert(projectSuppliers).values({
+            projectId,
+            masterSupplierId: data.masterSupplierId,
+            supplierName: data.supplierName,
+            materialType: data.materialType,
+            orderDate: data.orderDate ? new Date(data.orderDate) : new Date(),
+            expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : null,
+            deliveryStatus: data.deliveryStatus || 'Ordered',
+            notes: data.notes || ''
+        }).returning({ id: projectSuppliers.id });
+
+        revalidatePath('/procurement');
+        return { success: true, id: result.id };
+    } catch (error) {
+        console.error('Failed to add supplier:', error);
+        return { success: false, error: 'Failed to add supplier' };
+    }
+}
+
+/**
+ * Updates a manual supplier record.
+ */
+export async function updateSupplier(supplierId: number, data: any) {
+    try {
+        await db.update(projectSuppliers)
+            .set({
+                masterSupplierId: data.masterSupplierId,
+                supplierName: data.supplierName,
+                materialType: data.materialType,
+                orderDate: data.orderDate ? new Date(data.orderDate) : undefined,
+                expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : null,
+                deliveryStatus: data.deliveryStatus,
+                notes: data.notes,
+                updatedAt: new Date()
+            })
+            .where(eq(projectSuppliers.id, supplierId));
+
+        revalidatePath('/procurement');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to update supplier:', error);
+        return { success: false, error: 'Failed to update supplier' };
+    }
+}
+
+/**
+ * Deletes a manual supplier record.
+ */
+export async function deleteSupplier(supplierId: number) {
+    try {
+        await db.delete(projectSuppliers).where(eq(projectSuppliers.id, supplierId));
+        revalidatePath('/procurement');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to delete supplier:', error);
+        return { success: false, error: 'Failed to delete supplier' };
+    }
+}
+
+/**
+ * Adds a new master supplier.
+ */
+export async function addMasterSupplier(name: string) {
+    try {
+        const [result] = await db.insert(masterSuppliers).values({
+            name,
+            updatedAt: new Date()
+        }).onConflictDoUpdate({
+            target: masterSuppliers.name,
+            set: { updatedAt: new Date() }
+        }).returning({ id: masterSuppliers.id });
+
+        return { success: true, id: result.id };
+    } catch (error) {
+        console.error('Failed to add master supplier:', error);
+        return { success: false, error: 'Failed to add master supplier' };
+    }
+}
+
+/**
+ * Updates project-level procurement fields.
+ */
+export async function updateProjectProcurement(projectId: number, data: { procurementStatus?: string, procurementNotes?: string }) {
+    try {
+        await db.update(projects)
+            .set({
+                procurementStatus: data.procurementStatus,
+                procurementNotes: data.procurementNotes,
+                updatedAt: new Date()
+            })
+            .where(eq(projects.id, projectId));
+
+        revalidatePath('/procurement');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to update project procurement:', error);
+        return { success: false, error: 'Failed to update project procurement' };
+    }
+}
 
 export interface ProcurementDashboardItem {
   id: number;
@@ -217,7 +325,7 @@ export async function getBackordersData(options: { onlyProblems?: boolean } = {}
                 projectName: item.project.name || 'Unnamed Project',
                 projectUrl: `https://app.workguru.io/App/Projects/Detail2/${item.project.workguruId}`,
                 projectDeliveryDate: item.project.deliveryDate,
-                supplierName: item.line.supplierName !== 'Unknown' ? item.line.supplierName : (item.po.supplierName || 'Unknown'),
+                supplierName: (item.line.supplierName && item.line.supplierName !== 'Unknown') ? item.line.supplierName : (item.po.supplierName || 'Unknown'),
                 poNumber: item.line.poNumber,
                 materialName: item.line.name || 'Unknown',
                 quantity: item.line.quantity,
@@ -327,7 +435,7 @@ export async function getProjectProcurementDetail(projectId: number) {
                 poLines: poLines.map(l => ({
                     workguruId: l.workguruId,
                     poNumber: l.poNumber,
-                    supplierName: l.supplierName !== 'Unknown' ? l.supplierName : (po.supplierName || 'Unknown'),
+                    supplierName: (l.supplierName && l.supplierName !== 'Unknown') ? l.supplierName : (po.supplierName || 'Unknown'),
                     name: l.name || 'Unknown',
                     quantity: l.quantity,
                     receivedQuantity: l.receivedQuantity,

@@ -184,3 +184,31 @@ export function calculateProjectProcurementRisk(context: ProjectProcurementConte
 
   return topAction;
 }
+
+export const PROCUREMENT_STATUSES = [
+  'Awaiting Info',
+  'On Track',
+  'Issue Identified',
+  'Escalated',
+  'Delayed',
+  'Completed'
+] as const;
+
+export const SUPPLIER_DELIVERY_STATUSES = [
+  'Ordered',
+  'Partially Delivered',
+  'Delivered',
+  'Delayed'
+] as const;
+
+export type ProcurementRisk = 'DELAYED' | 'AT_RISK' | 'ON_TRACK';
+
+/**
+ * Returns a human-readable summary of project suppliers.
+ */
+export function getSupplierSummary(suppliers: any[]): string {
+    if (!suppliers || suppliers.length === 0) return "No Records";
+    const delivered = suppliers.filter(s => s.deliveryStatus === 'Delivered').length;
+    if (delivered === suppliers.length) return `All ${suppliers.length} Delivered`;
+    return `${suppliers.length} Records (${delivered} Del)`;
+}
