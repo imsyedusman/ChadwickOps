@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Package2, ArrowRight, ExternalLink, Filter, Search, ArrowUpDown, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface BackorderTableProps {
   items: BackorderItem[];
@@ -217,7 +218,7 @@ export function BackorderTable({
                                             PO: {item.poNumber}
                                         </span>
                                         {item.hydrationStatus !== 'HYDRATED' && (
-                                            <AlertCircle className="h-3 w-3 text-red-500 animate-pulse" title="Sync Incomplete" />
+                                            <Tooltip content="Sync Pending - Detailed lines are still being downloaded."><AlertCircle className="h-3 w-3 text-amber-500 animate-pulse" /></Tooltip>
                                         )}
                                     </div>
                                 </div>
