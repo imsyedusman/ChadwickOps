@@ -40,9 +40,13 @@ async function runAudit() {
     console.log(`POs with failed hydration: ${failedHydration[0].count}`);
 
     // 4. Detailed Analysis
-    const remotePoIds = new Set(remotePOs.map((p: any) => (p.id || p.id_Internal || p.PurchaseOrderID)?.toString()));
+    const remotePoIds = new Set<string>(
+        remotePOs
+            .map((p: any) => (p.id || p.id_Internal || p.PurchaseOrderID)?.toString())
+            .filter((id: any): id is string => !!id)
+    );
     const localPOs = await db.select({ workguruId: purchaseOrders.workguruId, poNumber: purchaseOrders.poNumber }).from(purchaseOrders);
-    const localPoIds = new Set(localPOs.map(p => p.workguruId));
+    const localPoIds = new Set<string>(localPOs.map(p => p.workguruId).filter((id): id is string => !!id));
 
     const missingLocally = Array.from(remotePoIds).filter(id => !localPoIds.has(id));
     

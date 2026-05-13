@@ -186,7 +186,7 @@ export class ProcurementSyncService {
         });
         await db.delete(systemConfig).where(eq(systemConfig.key, 'PROCUREMENT_SYNC_PROGRESS'));
 
-        return { success: status === 'SUCCESS', ...metrics, duration };
+        return { success: status === 'SUCCESS', ...metrics, processedCount, duration };
 
     } catch (error) {
         console.error('[ProcurementSync] Sync Failed:', error);
