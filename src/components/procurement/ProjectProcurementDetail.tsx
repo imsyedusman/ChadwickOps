@@ -122,12 +122,26 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
                         <Truck className="h-5 w-5" />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.workguruId}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.poNumber || po.workguruId}</span>
+                            {po.hydrationStatus !== 'HYDRATED' && (
+                                <span className="text-[9px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1.5 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                                    <AlertCircle className="h-2.5 w-2.5" />
+                                    Sync Incomplete
+                                </span>
+                            )}
+                        </div>
                         <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{po.supplierName}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-16">
+                    {po.hydrationStatus !== 'HYDRATED' && (
+                        <div className="flex flex-col items-end mr-4">
+                            <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Data Error</span>
+                            <span className="text-[11px] font-medium text-slate-500">Line items failed to sync</span>
+                        </div>
+                    )}
                     <div className="hidden lg:flex flex-col items-center gap-1">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Receipt Progress</span>
                         <div className="flex items-baseline gap-1.5">

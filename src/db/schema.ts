@@ -118,6 +118,10 @@ export const purchaseOrders = pgTable('purchase_orders', {
   receivedDate: timestamp('received_date'),
   expectedDate: timestamp('expected_date'),
   supplierName: text('supplier_name'),
+  poNumber: varchar('po_number', { length: 100 }), // Operational Identifier
+  hydrationStatus: varchar('hydration_status', { length: 50 }).default('SUMMARY_ONLY').notNull(),
+  retryCount: integer('retry_count').default(0).notNull(),
+  lastError: text('last_error'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {
@@ -229,8 +233,26 @@ export const syncLogs = pgTable('sync_logs', {
 export const procurementSyncLogs = pgTable('procurement_sync_logs', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
-  status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE, WARNING
+  status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE, WARNING, PARTIAL
+  totalFetched: integer('total_fetched').default(0),
+  totalHydrated: integer('total_hydrated').default(0),
+  totalFailed: integer('total_failed').default(0),
+  totalSkipped: integer('total_skipped').default(0),
+  retryCount: integer('retry_count').default(0),
   details: text('details'),
+});
+
+export const procurementFailures = pgTable('procurement_failures', {
+  id: serial('id').primaryKey(),
+  poId: varchar('po_id', { length: 50 }).notNull(),
+  poNumber: varchar('po_number', { length: 100 }),
+  endpoint: text('endpoint').notNull(),
+  httpStatus: integer('http_status'),
+  retryCount: integer('retry_count').default(0).notNull(),
+  errorMessage: text('error_message'),
+  responseSnippet: text('response_snippet'),
+  category: varchar('category', { length: 50 }), // RATE_LIMIT, AUTH, TIMEOUT, MALFORMED, EMPTY_LINES, DB_ERROR, etc.
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
 // Relations

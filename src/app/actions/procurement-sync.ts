@@ -1,13 +1,13 @@
 'use server';
 
 import { db } from '@/db';
-import { systemConfig, procurementSyncLogs } from '@/db/schema';
+import { systemConfig, procurementSyncLogs, purchaseOrders } from '@/db/schema';
 import { ProcurementSyncService } from '@/lib/procurement-sync';
 import { decrypt } from '@/lib/crypto';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray, count } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
-export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' = 'INCREMENTAL') {
+export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' | 'RETRY_FAILED' = 'INCREMENTAL') {
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),
@@ -37,7 +37,23 @@ export async function getLatestProcurementSyncStatus() {
     const latestLog = await db.query.procurementSyncLogs.findFirst({
       orderBy: [desc(procurementSyncLogs.timestamp)],
     });
-    return { success: true, data: latestLog };
+    
+    const integrityStats = await db.select({
+        status: purchaseOrders.hydrationStatus,
+        count: count()
+    }).from(purchaseOrders).where(inArray(purchaseOrders.hydrationStatus, ['FAILED', 'SUMMARY_ONLY'])).groupBy(purchaseOrders.hydrationStatus);
+
+    const summaryOnlyCount = Number(integrityStats.find(s => s.status === 'SUMMARY_ONLY')?.count || 0);
+    const failedCount = Number(integrityStats.find(s => s.status === 'FAILED')?.count || 0);
+
+    return { 
+        success: true, 
+        data: latestLog,
+        stats: {
+            summaryOnlyCount,
+            failedCount
+        }
+    };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }

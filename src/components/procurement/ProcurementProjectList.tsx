@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { RiskBadge } from "./RiskBadge";
 import { formatProcurementDate } from "@/lib/procurement-logic";
-import { Package2, ArrowRight, ArrowUpDown } from "lucide-react";
+import { Package2, ArrowRight, ArrowUpDown, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -109,14 +109,25 @@ export function ProcurementProjectList({
                 <RiskBadge action={item.action} />
               </TableCell>
               <TableCell>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-slate-900 group-hover:text-brand transition-colors">
-                    {item.projectNumber}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900 group-hover:text-brand transition-colors">
+                        {item.projectNumber}
+                    </span>
+                    {item.stats.hydrationStatus !== 'HYDRATED' && (
+                        <div className={cn(
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded border animate-pulse",
+                            item.stats.hydrationStatus === 'FAILED' ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                        )}>
+                            <AlertCircle className="h-2.5 w-2.5" />
+                            <span className="text-[9px] font-bold uppercase tracking-tight">
+                                {item.stats.hydrationStatus === 'FAILED' ? "Data Error" : "Sync Pending"}
+                            </span>
+                        </div>
+                    )}
+                  </div>
                   <span className="text-[10px] text-slate-500 font-medium truncate max-w-[250px]">
                     {item.projectName}
                   </span>
-                </div>
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-2 pr-6">

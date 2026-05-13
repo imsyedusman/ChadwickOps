@@ -1,6 +1,7 @@
 import { getProcurementDashboardData, getBackordersData, getSupplierRiskData } from "@/app/actions/procurement";
 import { ProcurementHubClient } from "@/components/procurement/ProcurementHubClient";
 import { ProcurementSyncStatus } from "@/components/dashboard/ProcurementSyncStatus";
+import { ProcurementIntegrityBanner } from "@/components/procurement/ProcurementIntegrityBanner";
 import { HelpCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,13 @@ export default async function ProcurementPage() {
           <ProcurementSyncStatus />
         </div>
       </div>
+      
+      {summary.integrity && (
+        <ProcurementIntegrityBanner 
+          integrity={summary.integrity} 
+          syncHealth={summary.syncHealth} 
+        />
+      )}
 
       <ProcurementHubClient 
         initialProjectData={projectData}

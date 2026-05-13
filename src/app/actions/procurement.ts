@@ -2,7 +2,7 @@
 
 import { db } from '@/db';
 import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs, masterSuppliers, projectSuppliers } from '@/db/schema';
-import { eq, and, desc, sql, lt, ne, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, lt, ne, inArray, count } from 'drizzle-orm';
 import { 
     calculateProjectProcurementRisk, 
     calculateAgingDays, 
@@ -135,6 +135,7 @@ export interface ProcurementDashboardItem {
     totalOrdered: number;
     totalReceived: number;
     outstandingValue: number;
+    hasIncompleteHydration: boolean;
   };
 }
 
@@ -155,6 +156,7 @@ export interface BackorderItem {
     expectedDate: Date | null;
     daysOutstanding: number;
     action: ProcurementActionMetadata;
+    hydrationStatus?: string;
 }
 
 export interface SupplierRiskItem {
@@ -246,7 +248,9 @@ export async function getProcurementDashboardData() {
         missingEtaLines: context.poLines.filter(l => determineLineAction(l, project.deliveryDate).type === 'ACTION_CONFIRM_ETA').length,
         totalOrdered: context.poLines.reduce((acc, l) => acc + l.quantity, 0),
         totalReceived: context.poLines.reduce((acc, l) => acc + l.receivedQuantity, 0),
-        outstandingValue
+        outstandingValue,
+        hydrationStatus: items.some(it => it.po.hydrationStatus === 'FAILED') ? 'FAILED' : 
+                         items.some(it => it.po.hydrationStatus === 'SUMMARY_ONLY') ? 'PENDING' : 'HYDRATED'
       };
 
       // Aggregated summary stats (null project context as per original logic)
@@ -283,6 +287,16 @@ export async function getProcurementDashboardData() {
     const retryQueue = (Array.isArray(retryQueueConfig?.value) ? retryQueueConfig.value : []) as any[];
     const permFailures = (Array.isArray(permFailuresConfig?.value) ? permFailuresConfig.value : []) as any[];
 
+    // Data Integrity Metrics
+    const integrityStats = await db.select({
+        status: purchaseOrders.hydrationStatus,
+        count: count()
+    }).from(purchaseOrders).groupBy(purchaseOrders.hydrationStatus);
+
+    const hydratedCount = Number(integrityStats.find(s => s.status === 'HYDRATED')?.count || 0);
+    const summaryOnlyCount = Number(integrityStats.find(s => s.status === 'SUMMARY_ONLY')?.count || 0);
+    const failedCount = Number(integrityStats.find(s => s.status === 'FAILED')?.count || 0);
+
     return { 
         success: true, 
         data: dashboardData,
@@ -293,6 +307,12 @@ export async function getProcurementDashboardData() {
             projectsWaitingOnMaterials,
             lateSupplierDeliveries,
             missingSupplierEtas,
+            integrity: {
+                hydratedCount,
+                summaryOnlyCount,
+                failedCount,
+                totalCount: hydratedCount + summaryOnlyCount + failedCount
+            },
             syncHealth: {
                 lastSyncAt: lastSyncLog?.timestamp || null,
                 lastStatus: lastSyncLog?.status || 'UNKNOWN',
@@ -359,7 +379,8 @@ export async function getBackordersData(options: { onlyProblems?: boolean } = {}
                 outstandingValue,
                 expectedDate: item.po.expectedDate,
                 daysOutstanding,
-                action
+                action,
+                hydrationStatus: item.po.hydrationStatus
             };
         });
 
@@ -458,7 +479,7 @@ export async function getProjectProcurementDetail(projectId: number) {
                 deliveryDate: project.deliveryDate,
                 poLines: poLines.map(l => ({
                     workguruId: l.workguruId,
-                    poNumber: l.poNumber,
+                    poNumber: po.poNumber || l.poNumber,
                     supplierName: (l.supplierName && l.supplierName !== 'Unknown') ? l.supplierName : (po.supplierName || 'Unknown'),
                     name: l.name || 'Unknown',
                     quantity: l.quantity,

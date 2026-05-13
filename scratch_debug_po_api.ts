@@ -1,18 +1,45 @@
+import { db } from './src/db';
+import { eq } from 'drizzle-orm';
+import { systemConfig } from './src/db/schema';
+import { decrypt } from './src/lib/crypto';
 import { WorkGuruClient } from './src/lib/workguru';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+async function debugPO() {
+    const poId = '1196897';
+    console.log(`--- Debugging PO ${poId} ---`);
 
-async function debugPoApi() {
-    const client = new WorkGuruClient(process.env.WORKGURU_API_KEY!, process.env.WORKGURU_API_SECRET!);
-    const poId = '1220671';
+    const config = await db.query.systemConfig.findFirst({
+        where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),
+    });
+
+    if (!config) throw new Error('API Credentials not found');
+    const { apiKey, apiSecret } = config.value as { apiKey: string; apiSecret: string };
     
-    console.log(`--- Fetching PO ${poId} raw data ---`);
-    const data = await client.getPurchaseOrderById(poId);
+    const client = new WorkGuruClient(decrypt(apiKey), decrypt(apiSecret));
+
+    console.log('Fetching PO Detail from WorkGuru API...');
+    const detail = await client.getPurchaseOrderById(poId);
     
-    // We want to see if supplierName is at the root or inside something else
-    console.log(JSON.stringify(data, null, 2));
+    const result = detail.result || detail;
+    console.log('Available keys in result:', Object.keys(result));
+
+    const lines = result.products || result.purchaseOrderLineItems || [];
+    console.log(`\nFound ${lines.length} lines in API response.`);
+    
+    if (lines.length > 0) {
+        console.log('First line keys:', Object.keys(lines[0]));
+        console.log('First line sample:', JSON.stringify(lines[0], null, 2));
+    } else {
+        console.log('WARNING: No lines found in API response for this PO.');
+    }
+    
+    if (result.purchaseOrderLineItems) {
+        console.log(`purchaseOrderLineItems count: ${result.purchaseOrderLineItems.length}`);
+    }
+    if (result.products) {
+        console.log(`products count: ${result.products.length}`);
+    }
+
 }
 
-debugPoApi().catch(console.error);
+debugPO().catch(console.error);

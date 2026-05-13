@@ -11,7 +11,7 @@ import {
     TableHeader, 
     TableRow 
 } from "@/components/ui/table";
-import { Package2, ArrowRight, ExternalLink, Filter, Search, ArrowUpDown } from "lucide-react";
+import { Package2, ArrowRight, ExternalLink, Filter, Search, ArrowUpDown, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BackorderTableProps {
@@ -212,9 +212,14 @@ export function BackorderTable({
                                         </span>
                                         <ArrowRight className="h-3 w-3 text-slate-300 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                                     </div>
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                        PO: {item.poNumber}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400 font-medium">
+                                            PO: {item.poNumber}
+                                        </span>
+                                        {item.hydrationStatus !== 'HYDRATED' && (
+                                            <AlertCircle className="h-3 w-3 text-red-500 animate-pulse" title="Sync Incomplete" />
+                                        )}
+                                    </div>
                                 </div>
                             </TableCell>
                             <TableCell className="text-right">
