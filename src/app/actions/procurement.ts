@@ -249,8 +249,8 @@ export async function getProcurementDashboardData() {
         totalOrdered: context.poLines.reduce((acc, l) => acc + l.quantity, 0),
         totalReceived: context.poLines.reduce((acc, l) => acc + l.receivedQuantity, 0),
         outstandingValue,
-        hydrationStatus: items.some(it => it.po.hydrationStatus === 'FAILED') ? 'FAILED' : 
-                         items.some(it => it.po.hydrationStatus === 'SUMMARY_ONLY') ? 'PENDING' : 'HYDRATED'
+        hydrationStatus: (items.some(it => it.po.hydrationStatus === 'FAILED') ? 'FAILED' : 
+                         items.some(it => it.po.hydrationStatus === 'SUMMARY_ONLY') ? 'PENDING' : 'HYDRATED') as 'HYDRATED' | 'PENDING' | 'FAILED'
       };
 
       // Aggregated summary stats (null project context as per original logic)
