@@ -174,16 +174,22 @@ export interface SupplierRiskItem {
  */
 export async function getProcurementDashboardData() {
   try {
+    console.time('fetch_projects');
     const allProjects = await db.select().from(projects)
       .where(eq(projects.isArchived, false))
       .orderBy(desc(projects.updatedAt));
+    console.timeEnd('fetch_projects');
 
+    console.time('fetch_po_data');
     const allPoData = await db.select({
       line: purchaseOrderLines,
       po: purchaseOrders
     })
     .from(purchaseOrderLines)
-    .innerJoin(purchaseOrders, eq(purchaseOrderLines.purchaseOrderId, purchaseOrders.id));
+    .innerJoin(purchaseOrders, eq(purchaseOrderLines.purchaseOrderId, purchaseOrders.id))
+    .innerJoin(projects, eq(purchaseOrderLines.projectId, projects.id))
+    .where(eq(projects.isArchived, false));
+    console.timeEnd('fetch_po_data');
 
     const dataByProject = new Map<number, { line: any; po: any }[]>();
     for (const item of allPoData) {
@@ -194,6 +200,13 @@ export async function getProcurementDashboardData() {
     }
 
     const dashboardData: ProcurementDashboardItem[] = [];
+    
+    // Summary counters
+    let backorderItemCount = 0;
+    let outstandingMaterialCost = 0;
+    let lateSupplierDeliveries = 0;
+    let missingSupplierEtas = 0;
+    let projectsWaitingOnMaterials = 0;
 
     for (const project of allProjects) {
       const items = dataByProject.get(project.id) || [];
@@ -214,7 +227,10 @@ export async function getProcurementDashboardData() {
       };
 
       const action = calculateProjectProcurementRisk(context);
+      if (action.type === 'ACTION_ESCALATE') projectsWaitingOnMaterials++;
+
       const outstandingValue = context.poLines.reduce((acc, l) => acc + calculateOutstandingValue(l.quantity, l.receivedQuantity, l.unitPrice), 0);
+      outstandingMaterialCost += outstandingValue;
       
       const stats = {
         totalLines: context.poLines.length,
@@ -225,6 +241,14 @@ export async function getProcurementDashboardData() {
         totalReceived: context.poLines.reduce((acc, l) => acc + l.receivedQuantity, 0),
         outstandingValue
       };
+
+      // Aggregated summary stats (null project context as per original logic)
+      context.poLines.forEach(l => {
+          const lineAction = determineLineAction(l, null);
+          if (lineAction.severity < 4) backorderItemCount++;
+          if (lineAction.type === 'ACTION_FOLLOW_UP') lateSupplierDeliveries++;
+          if (lineAction.type === 'ACTION_CONFIRM_ETA') missingSupplierEtas++;
+      });
 
       dashboardData.push({
         id: project.id,
@@ -243,36 +267,25 @@ export async function getProcurementDashboardData() {
         return a.projectNumber.localeCompare(b.projectNumber);
     });
 
+    console.time('fetch_config');
     const retryQueueConfig = await db.query.systemConfig.findFirst({ where: eq(systemConfig.key, 'PROCUREMENT_RETRY_QUEUE') });
     const permFailuresConfig = await db.query.systemConfig.findFirst({ where: eq(systemConfig.key, 'PROCUREMENT_PERMANENT_FAILURES') });
     const lastSyncLog = await db.query.procurementSyncLogs.findFirst({ orderBy: [desc(procurementSyncLogs.timestamp)] });
+    console.timeEnd('fetch_config');
 
-    const retryQueue = (retryQueueConfig?.value as any[]) || [];
-    const permFailures = (permFailuresConfig?.value as any[]) || [];
-
-    // Calculate aggregated summary with explicit operational labels
-    const allOutstandingLines = Array.from(dataByProject.values()).flat();
-    const materialActions = allOutstandingLines.map(it => determineLineAction({
-        workguruId: it.line.workguruId,
-        poNumber: it.line.poNumber,
-        supplierName: it.line.supplierName || 'Unknown',
-        name: it.line.name || 'Unknown',
-        quantity: it.line.quantity,
-        receivedQuantity: it.line.receivedQuantity,
-        unitPrice: it.line.unitPrice,
-        expectedDate: it.po.expectedDate
-    }, null)); // Note: project context needed for full Escalate check, but this gives a good global count
+    const retryQueue = (Array.isArray(retryQueueConfig?.value) ? retryQueueConfig.value : []) as any[];
+    const permFailures = (Array.isArray(permFailuresConfig?.value) ? permFailuresConfig.value : []) as any[];
 
     return { 
         success: true, 
         data: dashboardData,
         summary: {
             totalProjects: dashboardData.length,
-            backorderItemCount: materialActions.filter(a => a.severity < 4).length,
-            outstandingMaterialCost: dashboardData.reduce((acc, d) => acc + d.stats.outstandingValue, 0),
-            projectsWaitingOnMaterials: dashboardData.filter(d => d.action.type === 'ACTION_ESCALATE').length,
-            lateSupplierDeliveries: materialActions.filter(a => a.type === 'ACTION_FOLLOW_UP').length,
-            missingSupplierEtas: materialActions.filter(a => a.type === 'ACTION_CONFIRM_ETA').length,
+            backorderItemCount,
+            outstandingMaterialCost,
+            projectsWaitingOnMaterials,
+            lateSupplierDeliveries,
+            missingSupplierEtas,
             syncHealth: {
                 lastSyncAt: lastSyncLog?.timestamp || null,
                 lastStatus: lastSyncLog?.status || 'UNKNOWN',
@@ -281,9 +294,13 @@ export async function getProcurementDashboardData() {
             }
         }
     };
-  } catch (error) {
-    console.error('Failed to fetch procurement dashboard data:', error);
-    return { success: false, error: 'Failed to fetch dashboard data' };
+  } catch (error: any) {
+    console.error('CRITICAL: Failed to fetch procurement dashboard data:', error);
+    console.error('Stack trace:', error.stack);
+    return { 
+        success: false, 
+        error: `Failed to fetch dashboard data: ${error.message || 'Unknown error'}` 
+    };
   }
 }
 
