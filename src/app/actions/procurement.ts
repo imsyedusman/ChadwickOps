@@ -135,7 +135,7 @@ export interface ProcurementDashboardItem {
     totalOrdered: number;
     totalReceived: number;
     outstandingValue: number;
-    hasIncompleteHydration: boolean;
+    hydrationStatus: 'HYDRATED' | 'PENDING' | 'FAILED';
   };
 }
 
