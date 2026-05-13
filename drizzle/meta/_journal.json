@@ -85,6 +85,13 @@
       "when": 1778408277781,
       "tag": "0011_long_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778630956228,
+      "tag": "0012_tiny_barracuda",
+      "breakpoints": true
     }
   ]
 }
