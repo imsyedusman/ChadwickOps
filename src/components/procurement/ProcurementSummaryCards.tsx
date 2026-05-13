@@ -29,16 +29,6 @@ export function ProcurementSummaryCards({ summary, onMetricClick }: ProcurementS
       filter: "PROBLEMS"
     },
     {
-      title: "OUTSTANDING COST",
-      value: `$${(summary.outstandingMaterialCost / 1000).toFixed(1)}k`,
-      subtitle: "Total purchase value",
-      icon: BarChart3,
-      color: "text-brand",
-      bg: "bg-blue-50",
-      tab: "backorders",
-      filter: "ALL"
-    },
-    {
         title: "LATE DELIVERIES",
         value: summary.lateSupplierDeliveries,
         subtitle: "Past expected date",
@@ -61,7 +51,7 @@ export function ProcurementSummaryCards({ summary, onMetricClick }: ProcurementS
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {cards.map((card) => (
         <Card 
             key={card.title} 

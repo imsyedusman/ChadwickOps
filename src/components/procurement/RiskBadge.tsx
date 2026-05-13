@@ -17,17 +17,17 @@ export function RiskBadge({ action, showAction = true, showReason = true, classN
                MoreHorizontal;
 
   return (
-    <div className={cn("flex flex-col gap-1 min-w-[200px]", className)}>
+    <div className={cn("flex flex-col gap-1 w-fit", className)}>
         <div 
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border w-fit transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-semibold uppercase tracking-widest"
             style={{ 
                 backgroundColor: action.bgTint, 
-                borderColor: `${action.color}20`, // 20% opacity for border
+                borderColor: `${action.color}15`, 
                 color: action.color
             }}
         >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-[11px] font-bold uppercase tracking-tight whitespace-nowrap">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: action.color }} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap">
                 {action.label}
             </span>
         </div>

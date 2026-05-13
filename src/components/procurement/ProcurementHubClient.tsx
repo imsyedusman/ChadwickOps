@@ -59,7 +59,6 @@ export function ProcurementHubClient({
         if (sortConfig.key === 'action') return (a.action.severity - b.action.severity) * order;
         if (sortConfig.key === 'projectNumber') return a.projectNumber.localeCompare(b.projectNumber) * order;
         if (sortConfig.key === 'progress') return ((a.stats.totalReceived / a.stats.totalOrdered) - (b.stats.totalReceived / b.stats.totalOrdered)) * order;
-        if (sortConfig.key === 'outstandingValue') return (a.stats.outstandingValue - b.stats.outstandingValue) * order;
         if (sortConfig.key === 'deliveryDate') {
             if (!a.deliveryDate) return 1;
             if (!b.deliveryDate) return -1;
@@ -95,7 +94,6 @@ export function ProcurementHubClient({
         if (sortConfig.key === 'projectName') return a.projectName.localeCompare(b.projectName) * order;
         if (sortConfig.key === 'supplierName') return a.supplierName.localeCompare(b.supplierName) * order;
         if (sortConfig.key === 'quantity') return ((a.receivedQuantity / a.quantity) - (b.receivedQuantity / b.quantity)) * order;
-        if (sortConfig.key === 'outstandingValue') return (a.outstandingValue - b.outstandingValue) * order;
         if (sortConfig.key === 'expectedDate') {
             if (!a.expectedDate) return 1;
             if (!b.expectedDate) return -1;
@@ -114,7 +112,6 @@ export function ProcurementHubClient({
         const order = sortConfig.order === 'asc' ? 1 : -1;
         if (sortConfig.key === 'supplierName') return a.supplierName.localeCompare(b.supplierName) * order;
         if (sortConfig.key === 'affectedProjectCount') return (a.affectedProjectCount - b.affectedProjectCount) * order;
-        if (sortConfig.key === 'totalOutstandingValue') return (a.totalOutstandingValue - b.totalOutstandingValue) * order;
         return 0;
     });
   }, [initialSupplierData, searchQuery, sortConfig]);

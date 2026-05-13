@@ -56,8 +56,7 @@ export function SupplierRiskTable({
                     <SortIcon k="supplierName" />
                 </div>
             </TableHead>
-            <TableHead 
-                className="w-[200px] text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
+            <TableHead className="w-[200px] text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
                 onClick={() => onSort?.('affectedProjectCount')}
             >
                 <div className="flex items-center">
@@ -66,15 +65,6 @@ export function SupplierRiskTable({
                 </div>
             </TableHead>
             <TableHead className="w-[300px] text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">Material Issues</TableHead>
-            <TableHead 
-                className="w-[180px] text-right text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
-                onClick={() => onSort?.('totalOutstandingValue')}
-            >
-                <div className="flex items-center justify-end">
-                    Outstanding Cost
-                    <SortIcon k="totalOutstandingValue" />
-                </div>
-            </TableHead>
             <TableHead className="w-[100px] pr-8"></TableHead>
           </TableRow>
         </TableHeader>
@@ -126,11 +116,6 @@ export function SupplierRiskTable({
                                 <span className="text-[11px] font-bold uppercase tracking-tight">{item.missingEtaCount} No ETA</span>
                             </div>
                         </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <span className="text-sm font-semibold text-slate-900 whitespace-nowrap tabular-nums">
-                            ${item.totalOutstandingValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </span>
                     </TableCell>
                     <TableCell className="text-right pr-8">
                         <button 

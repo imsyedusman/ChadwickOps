@@ -204,6 +204,83 @@ export const SUPPLIER_DELIVERY_STATUSES = [
 export type ProcurementRisk = 'DELAYED' | 'AT_RISK' | 'ON_TRACK';
 
 /**
+ * Operational PO Statuses - Derived from delivery state, not ERP status.
+ */
+export type OperationalPOStatus = 
+  | 'FULLY_RECEIVED'     // ✅ Fully Received
+  | 'PARTIALLY_RECEIVED' // 🟠 Partially Received
+  | 'AWAITING_MATERIALS' // 🔵 Awaiting Materials
+  | 'DELIVERY_DELAYED';  // 🔴 Delivery Delayed
+
+export interface OperationalPOStatusMetadata {
+  status: OperationalPOStatus;
+  label: string;
+  color: string;
+  bgTint: string;
+}
+
+export const OPERATIONAL_PO_METADATA: Record<OperationalPOStatus, OperationalPOStatusMetadata> = {
+  FULLY_RECEIVED: {
+    status: 'FULLY_RECEIVED',
+    label: 'Fully Received',
+    color: '#059669', // Emerald 600
+    bgTint: '#ecfdf5'
+  },
+  PARTIALLY_RECEIVED: {
+    status: 'PARTIALLY_RECEIVED',
+    label: 'Partially Received',
+    color: '#d97706', // Amber 600
+    bgTint: '#fffbeb'
+  },
+  AWAITING_MATERIALS: {
+    status: 'AWAITING_MATERIALS',
+    label: 'Awaiting Materials',
+    color: '#2563eb', // Blue 600
+    bgTint: '#eff6ff'
+  },
+  DELIVERY_DELAYED: {
+    status: 'DELIVERY_DELAYED',
+    label: 'Supplier Delay',
+    color: '#dc2626', // Red 600
+    bgTint: '#fef2f2'
+  }
+};
+
+/**
+ * Determines the Operational truth for a PO based on line item state.
+ */
+export function determineOperationalPOStatus(lines: POLineSummary[]): OperationalPOStatusMetadata {
+  if (lines.length === 0) return OPERATIONAL_PO_METADATA.AWAITING_MATERIALS;
+
+  const totalOrdered = lines.reduce((acc, l) => acc + l.quantity, 0);
+  const totalReceived = lines.reduce((acc, l) => acc + l.receivedQuantity, 0);
+  const now = startOfDay(new Date());
+
+  // 1. Fully Received (Truth: Everything is in hand)
+  if (totalReceived >= totalOrdered && totalOrdered > 0) {
+    return OPERATIONAL_PO_METADATA.FULLY_RECEIVED;
+  }
+
+  // 2. Delivery Delayed (Truth: Outstanding items exist and ETA has passed)
+  const isOverdue = lines.some(l => 
+    (l.quantity > l.receivedQuantity) && 
+    l.expectedDate && 
+    isBefore(startOfDay(new Date(l.expectedDate)), now)
+  );
+  if (isOverdue) {
+    return OPERATIONAL_PO_METADATA.DELIVERY_DELAYED;
+  }
+
+  // 3. Partially Received (Truth: Something has arrived, but still waiting)
+  if (totalReceived > 0) {
+    return OPERATIONAL_PO_METADATA.PARTIALLY_RECEIVED;
+  }
+
+  // 4. Default: Awaiting Materials (Truth: Nothing has arrived yet)
+  return OPERATIONAL_PO_METADATA.AWAITING_MATERIALS;
+}
+
+/**
  * Returns a human-readable summary of project suppliers.
  */
 export function getSupplierSummary(suppliers: any[]): string {

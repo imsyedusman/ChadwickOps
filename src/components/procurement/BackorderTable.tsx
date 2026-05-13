@@ -100,11 +100,11 @@ export function BackorderTable({
                 <TableHeader className="bg-slate-50/50">
                     <TableRow className="hover:bg-transparent border-slate-200">
                         <TableHead 
-                            className="w-[280px] text-[10px] font-bold uppercase tracking-widest text-slate-500 py-5 pl-6 cursor-pointer group whitespace-nowrap"
+                            className="w-[180px] text-[10px] font-bold uppercase tracking-widest text-slate-500 py-5 pl-6 cursor-pointer group whitespace-nowrap"
                             onClick={() => onSort?.('action')}
                         >
                             <div className="flex items-center">
-                                Operational Status & Action
+                                Status
                                 <SortIcon k="action" />
                             </div>
                         </TableHead>
@@ -142,15 +142,6 @@ export function BackorderTable({
                             <div className="flex items-center justify-end">
                                 Received vs Ordered
                                 <SortIcon k="quantity" />
-                            </div>
-                        </TableHead>
-                        <TableHead 
-                            className="w-[140px] text-right text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
-                            onClick={() => onSort?.('outstandingValue')}
-                        >
-                            <div className="flex items-center justify-end">
-                                Outstanding Cost
-                                <SortIcon k="outstandingValue" />
                             </div>
                         </TableHead>
                         <TableHead 
@@ -214,9 +205,14 @@ export function BackorderTable({
                                         <ArrowRight className="h-3 w-3 text-slate-300 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px] text-slate-400 font-medium">
-                                            PO: {item.poNumber}
-                                        </span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-slate-400 font-medium">
+                                                PO: {item.poNumber}
+                                            </span>
+                                            <span className="text-[9px] text-slate-300 font-medium uppercase tracking-tight">
+                                                WG: {item.workguruStatus}
+                                            </span>
+                                        </div>
                                         {item.hydrationStatus !== 'HYDRATED' && (
                                             <Tooltip content="Sync Pending - Detailed lines are still being downloaded."><AlertCircle className="h-3 w-3 text-amber-500 animate-pulse" /></Tooltip>
                                         )}
@@ -242,13 +238,6 @@ export function BackorderTable({
                                             style={{ width: `${(item.receivedQuantity / item.quantity) * 100}%` }}
                                         />
                                     </div>
-                                </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <div className="flex flex-col items-end">
-                                    <span className="text-sm font-semibold text-slate-900 tabular-nums">
-                                        ${item.outstandingValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                    </span>
                                 </div>
                             </TableCell>
                             <TableCell className="text-right pr-6">

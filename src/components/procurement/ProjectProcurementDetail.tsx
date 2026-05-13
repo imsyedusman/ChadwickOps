@@ -101,68 +101,74 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
             const isExpanded = expandedPos.has(po.id);
             const totalItems = po.lines.length;
             const receivedItems = po.lines.filter((l: any) => l.receivedQuantity >= l.quantity).length;
-            const isFullyReceived = receivedItems === totalItems && totalItems > 0;
+            const opStatus = po.operationalStatus;
 
             return (
               <div key={po.id} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm hover:border-slate-300 transition-colors">
                 {/* PO Header */}
                 <div 
                     className={cn(
-                        "flex items-center justify-between p-5 cursor-pointer transition-colors",
+                        "flex items-center p-5 cursor-pointer transition-colors",
                         isExpanded ? "bg-slate-50 border-b border-slate-200" : "bg-white hover:bg-slate-50"
                     )}
                     onClick={() => togglePo(po.id)}
                 >
-                  <div className="flex items-center gap-6">
-                    <div className={cn(
-                        "p-3 rounded-xl",
-                        isFullyReceived ? "bg-emerald-50 text-emerald-600" : 
-                        po.action.severity === 1 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
-                    )}>
-                        <Truck className="h-5 w-5" />
-                    </div>
+                  {/* LEFT: Identity */}
+                  <div className="flex-1 min-w-0">
                     <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.poNumber || po.workguruId}</span>
+                            <span className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">{po.supplierName}</span>
                             {po.hydrationStatus !== 'HYDRATED' && (
-                                <span className="text-[9px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1.5 py-0.5 rounded border border-red-100 flex items-center gap-1">
-                                    <AlertCircle className="h-2.5 w-2.5" />
+                                <span className="text-[8px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1 py-0.5 rounded border border-red-100 animate-pulse">
                                     Sync Incomplete
                                 </span>
                             )}
                         </div>
-                        <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{po.supplierName}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.poNumber || po.workguruId}</span>
+                            <span className="text-[9px] font-medium text-slate-300 uppercase tracking-tight">WG: {po.workguruStatus}</span>
+                        </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-16">
-                    {po.hydrationStatus !== 'HYDRATED' && (
-                        <div className="flex flex-col items-end mr-4">
-                            <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Data Error</span>
-                            <span className="text-[11px] font-medium text-slate-500">Line items failed to sync</span>
-                        </div>
-                    )}
-                    <div className="hidden lg:flex flex-col items-center gap-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Receipt Progress</span>
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-base font-semibold tabular-nums text-slate-800">{receivedItems}</span>
-                            <span className="text-[11px] font-medium text-slate-400">/ {totalItems} items</span>
+                  {/* CENTER: Operational Status (Compact) */}
+                  <div className="flex-1 flex justify-center">
+                    <div 
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-semibold uppercase tracking-widest"
+                        style={{ 
+                            backgroundColor: opStatus.bgTint, 
+                            color: opStatus.color, 
+                            borderColor: `${opStatus.color}20` 
+                        }}
+                    >
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: opStatus.color }} />
+                        {opStatus.label}
+                    </div>
+                  </div>
+
+                  {/* RIGHT: Progress & ETA */}
+                  <div className="flex-1 flex items-center justify-end gap-12">
+                    <div className="hidden lg:flex flex-col items-end gap-0.5">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">Progress</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-bold tabular-nums text-slate-700">{receivedItems}</span>
+                            <span className="text-[10px] font-medium text-slate-400">/ {totalItems} items</span>
                         </div>
                     </div>
 
-                    <div className="hidden lg:flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Expected ETA</span>
+                    <div className="hidden lg:flex flex-col items-end gap-0.5">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">Expected</span>
                         <span className={cn(
-                            "text-base font-semibold",
-                            !po.expectedDate ? "text-purple-600" : "text-slate-700"
+                            "text-sm font-bold",
+                            !po.expectedDate ? "text-purple-600" : "text-slate-600"
                         )}>
                             {formatProcurementDate(po.expectedDate)}
                         </span>
                     </div>
 
-                    <RiskBadge action={po.action} showAction={false} showReason={false} />
-
-                    {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-300" /> : <ChevronDown className="h-5 w-5 text-slate-300" />}
+                    <div className="ml-4">
+                        {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-300" /> : <ChevronDown className="h-5 w-5 text-slate-300" />}
+                    </div>
                   </div>
                 </div>
 
@@ -174,8 +180,7 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
                             <tr className="bg-slate-50/30 dark:bg-slate-900/10 border-b border-slate-100">
                                 <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">Material Name & Description</th>
                                 <th className="w-[180px] px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-center whitespace-nowrap">Rec vs Ord</th>
-                                <th className="w-[180px] px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right whitespace-nowrap">Outstanding Cost</th>
-                                <th className="w-[280px] px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right whitespace-nowrap">Operational Status & Action</th>
+                                <th className="w-[280px] px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right whitespace-nowrap">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -206,16 +211,6 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
                                                     style={{ width: `${(line.receivedQuantity / line.quantity) * 100}%` }}
                                                 />
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-4 text-right">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                                                ${line.outstandingValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                            </span>
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-tight font-medium">
-                                                {line.quantity - line.receivedQuantity} outstanding
-                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-8 py-4 text-right">

@@ -8,6 +8,7 @@ import {
     calculateAgingDays, 
     calculateOutstandingValue, 
     determineLineAction,
+    determineOperationalPOStatus,
     ProcurementActionMetadata,
     ProjectProcurementContext 
 } from '@/lib/procurement-logic';
@@ -157,6 +158,7 @@ export interface BackorderItem {
     daysOutstanding: number;
     action: ProcurementActionMetadata;
     hydrationStatus?: string;
+    workguruStatus?: string;
 }
 
 export interface SupplierRiskItem {
@@ -380,7 +382,8 @@ export async function getBackordersData(options: { onlyProblems?: boolean } = {}
                 expectedDate: item.po.expectedDate,
                 daysOutstanding,
                 action,
-                hydrationStatus: item.po.hydrationStatus
+                hydrationStatus: item.po.hydrationStatus,
+                workguruStatus: item.po.status
             };
         });
 
@@ -474,25 +477,31 @@ export async function getProjectProcurementDetail(projectId: number) {
 
         const grouped = pos.map(po => {
             const poLines = lines.filter(l => l.purchaseOrderId === po.id);
+            const poLinesForRisk = poLines.map(l => ({
+                workguruId: l.workguruId,
+                poNumber: po.poNumber || l.poNumber,
+                supplierName: (l.supplierName && l.supplierName !== 'Unknown') ? l.supplierName : (po.supplierName || 'Unknown'),
+                name: l.name || 'Unknown',
+                quantity: l.quantity,
+                receivedQuantity: l.receivedQuantity,
+                unitPrice: l.unitPrice,
+                expectedDate: po.expectedDate
+            }));
+
             const context: ProjectProcurementContext = {
                 projectNumber: project.projectNumber,
                 deliveryDate: project.deliveryDate,
-                poLines: poLines.map(l => ({
-                    workguruId: l.workguruId,
-                    poNumber: po.poNumber || l.poNumber,
-                    supplierName: (l.supplierName && l.supplierName !== 'Unknown') ? l.supplierName : (po.supplierName || 'Unknown'),
-                    name: l.name || 'Unknown',
-                    quantity: l.quantity,
-                    receivedQuantity: l.receivedQuantity,
-                    unitPrice: l.unitPrice,
-                    expectedDate: po.expectedDate
-                }))
+                poLines: poLinesForRisk
             };
+            
             const action = calculateProjectProcurementRisk(context);
+            const operationalStatus = determineOperationalPOStatus(poLinesForRisk);
 
             return {
                 ...po,
+                workguruStatus: po.status,
                 action,
+                operationalStatus,
                 lines: poLines.map(l => ({
                     ...l,
                     outstandingQuantity: l.quantity - l.receivedQuantity,

@@ -54,11 +54,11 @@ export function ProcurementProjectList({
         <TableHeader className="bg-slate-50/50">
           <TableRow className="hover:bg-transparent border-slate-200">
             <TableHead 
-                className="w-[280px] text-[10px] font-bold uppercase tracking-widest text-slate-500 py-5 pl-8 cursor-pointer group whitespace-nowrap"
+                className="w-[180px] text-[10px] font-bold uppercase tracking-widest text-slate-500 py-5 pl-8 cursor-pointer group whitespace-nowrap"
                 onClick={() => onSort?.('action')}
             >
                 <div className="flex items-center">
-                    Operational Status
+                    Status
                     <SortIcon k="action" />
                 </div>
             </TableHead>
@@ -81,15 +81,6 @@ export function ProcurementProjectList({
                 </div>
             </TableHead>
             <TableHead className="w-[200px] text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">Waiting on Materials</TableHead>
-            <TableHead 
-                className="w-[160px] text-right text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
-                onClick={() => onSort?.('outstandingValue')}
-            >
-                <div className="flex items-center justify-end">
-                    Outstanding Cost
-                    <SortIcon k="outstandingValue" />
-                </div>
-            </TableHead>
             <TableHead 
                 className="w-[160px] text-right text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer group whitespace-nowrap"
                 onClick={() => onSort?.('deliveryDate')}
@@ -161,11 +152,6 @@ export function ProcurementProjectList({
                     <span className="text-[9px] uppercase font-bold tracking-tight">Missing ETAs</span>
                   </div>
                 </div>
-              </TableCell>
-              <TableCell className="text-right">
-                <span className="text-sm font-semibold text-slate-900 tabular-nums">
-                    ${item.stats.outstandingValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </span>
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex flex-col items-end">
