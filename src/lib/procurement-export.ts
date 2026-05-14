@@ -192,16 +192,16 @@ function createWorkbook(headers: string[], rows: any[][], fileNameBase: string, 
     const dateStr = format(new Date(), 'dd-MMM-yyyy');
     const fileName = `${fileNameBase}_${dateStr}.${formatType}`;
 
-    let buffer: Buffer;
+    let data: Uint8Array;
     let contentType: string;
 
     if (formatType === 'csv') {
-        buffer = Buffer.from(XLSX.utils.sheet_to_csv(ws));
+        data = new TextEncoder().encode(XLSX.utils.sheet_to_csv(ws));
         contentType = 'text/csv';
     } else {
-        buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        data = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     }
 
-    return { buffer, fileName, contentType };
+    return { data, fileName, contentType };
 }

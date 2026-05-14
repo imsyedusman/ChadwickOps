@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         const sortKey = searchParams.get('sortKey') || 'action';
         const sortOrder = (searchParams.get('sortOrder') || 'asc') as 'asc' | 'desc';
 
-        let exportData: { buffer: Buffer; fileName: string; contentType: string };
+        let exportData: { data: Uint8Array; fileName: string; contentType: string };
 
         if (tab === 'projects') {
             const result = await getProcurementDashboardData();
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid tab' }, { status: 400 });
         }
 
-        return new Response(exportData.buffer, {
+        return new Response(exportData.data, {
             headers: {
                 'Content-Type': exportData.contentType,
                 'Content-Disposition': `attachment; filename="${exportData.fileName}"`,
