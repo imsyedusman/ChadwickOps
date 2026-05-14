@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid tab' }, { status: 400 });
         }
 
-        return new Response(exportData.data, {
+        return new Response(new Blob([exportData.data]), {
             headers: {
                 'Content-Type': exportData.contentType,
                 'Content-Disposition': `attachment; filename="${exportData.fileName}"`,
