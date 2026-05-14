@@ -125,7 +125,18 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
                             )}
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.poNumber || po.workguruId}</span>
+                            <div className="flex items-center gap-1.5 group/po">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PO: {po.poNumber || po.workguruId}</span>
+                                <a 
+                                    href={`https://app.workguru.io/App/PurchaseOrders/Details/${po.workguruId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="opacity-20 group-hover/po:opacity-100 transition-opacity p-0.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <ExternalLink className="h-2.5 w-2.5 text-slate-400 hover:text-brand" />
+                                </a>
+                            </div>
                             <span className="text-[9px] font-medium text-slate-300 uppercase tracking-tight">WG: {po.workguruStatus}</span>
                         </div>
                     </div>

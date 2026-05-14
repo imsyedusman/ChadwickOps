@@ -206,9 +206,20 @@ export function BackorderTable({
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] text-slate-400 font-medium">
-                                                PO: {item.poNumber}
-                                            </span>
+                                            <div className="flex items-center gap-1.5 group/po">
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    PO: {item.poNumber}
+                                                </span>
+                                                <a 
+                                                    href={`https://app.workguru.io/App/PurchaseOrders/Details/${item.poWorkguruId}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="opacity-20 group-hover/po:opacity-100 transition-opacity p-0.5 hover:bg-slate-100 rounded"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <ExternalLink className="h-2.5 w-2.5 text-slate-400 hover:text-brand" />
+                                                </a>
+                                            </div>
                                             <span className="text-[9px] text-slate-300 font-medium uppercase tracking-tight">
                                                 WG: {item.workguruStatus}
                                             </span>
