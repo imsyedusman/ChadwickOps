@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs, masterSuppliers, projectSuppliers } from '@/db/schema';
+import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs, masterSuppliers, projectSuppliers, clients } from '@/db/schema';
 import { eq, and, desc, sql, lt, ne, inArray, count } from 'drizzle-orm';
 import { 
     calculateProjectProcurementRisk, 
@@ -125,9 +125,11 @@ export interface ProcurementDashboardItem {
   id: number;
   projectNumber: string;
   projectName: string;
+  clientName: string;
   projectUrl: string;
   deliveryDate: Date | null;
   action: ProcurementActionMetadata;
+  supplierNames: string[];
   stats: {
     totalLines: number;
     outstandingLines: number;
@@ -148,6 +150,7 @@ export interface BackorderItem {
     projectDeliveryDate: Date | null;
     supplierName: string;
     poNumber: string;
+    poWorkguruId: string;
     materialName: string;
     quantity: number;
     receivedQuantity: number;
@@ -169,6 +172,8 @@ export interface SupplierRiskItem {
     delayedLineCount: number;
     missingEtaCount: number;
     deliveryRiskCount: number;
+    oldestDelayDays: number;
+    highestRiskProject: string;
     // Drilldown data
     affectedProjectIds: number[];
 }
@@ -185,13 +190,18 @@ export async function getProcurementDashboardData() {
     }).from(projects);
     console.log(`[Procurement-Diag] Project Status Counts:`, projectCounts[0]);
 
-    console.time('fetch_projects');
-    const allProjects = await db.select().from(projects)
-      .where(eq(projects.isArchived, false))
-      .orderBy(desc(projects.updatedAt));
-    console.timeEnd('fetch_projects');
 
-    console.time('fetch_po_data');
+    const allProjects = await db.select({
+        project: projects,
+        clientName: clients.name
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .where(eq(projects.isArchived, false))
+    .orderBy(desc(projects.updatedAt));
+
+
+
     const allPoData = await db.select({
       line: purchaseOrderLines,
       po: purchaseOrders
@@ -200,7 +210,7 @@ export async function getProcurementDashboardData() {
     .innerJoin(purchaseOrders, eq(purchaseOrderLines.purchaseOrderId, purchaseOrders.id))
     .innerJoin(projects, eq(purchaseOrderLines.projectId, projects.id))
     .where(eq(projects.isArchived, false));
-    console.timeEnd('fetch_po_data');
+
 
     const dataByProject = new Map<number, { line: any; po: any }[]>();
     for (const item of allPoData) {
@@ -219,7 +229,9 @@ export async function getProcurementDashboardData() {
     let missingSupplierEtas = 0;
     let projectsWaitingOnMaterials = 0;
 
-    for (const project of allProjects) {
+    for (const item of allProjects) {
+      const project = item.project;
+      const clientName = item.clientName;
       const items = dataByProject.get(project.id) || [];
       
       const context: ProjectProcurementContext = {
@@ -263,13 +275,17 @@ export async function getProcurementDashboardData() {
           if (lineAction.type === 'ACTION_CONFIRM_ETA') missingSupplierEtas++;
       });
 
+      const supplierNames = Array.from(new Set(context.poLines.map(l => l.supplierName).filter(Boolean)));
+
       dashboardData.push({
         id: project.id,
         projectNumber: project.projectNumber,
         projectName: project.name || 'Unnamed Project',
+        clientName: clientName,
         projectUrl: `https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`,
         deliveryDate: project.deliveryDate,
         action,
+        supplierNames,
         stats
       });
     }
@@ -280,11 +296,11 @@ export async function getProcurementDashboardData() {
         return a.projectNumber.localeCompare(b.projectNumber);
     });
 
-    console.time('fetch_config');
+
     const retryQueueConfig = await db.query.systemConfig.findFirst({ where: eq(systemConfig.key, 'PROCUREMENT_RETRY_QUEUE') });
     const permFailuresConfig = await db.query.systemConfig.findFirst({ where: eq(systemConfig.key, 'PROCUREMENT_PERMANENT_FAILURES') });
     const lastSyncLog = await db.query.procurementSyncLogs.findFirst({ orderBy: [desc(procurementSyncLogs.timestamp)] });
-    console.timeEnd('fetch_config');
+
 
     const retryQueue = (Array.isArray(retryQueueConfig?.value) ? retryQueueConfig.value : []) as any[];
     const permFailures = (Array.isArray(permFailuresConfig?.value) ? permFailuresConfig.value : []) as any[];
@@ -373,6 +389,7 @@ export async function getBackordersData(options: { onlyProblems?: boolean } = {}
                 projectDeliveryDate: item.project.deliveryDate,
                 supplierName: (item.line.supplierName && item.line.supplierName !== 'Unknown') ? item.line.supplierName : (item.po.supplierName || 'Unknown'),
                 poNumber: item.line.poNumber,
+                poWorkguruId: item.po.workguruId,
                 materialName: item.line.name || 'Unknown',
                 quantity: item.line.quantity,
                 receivedQuantity: item.line.receivedQuantity,
@@ -421,6 +438,8 @@ export async function getSupplierRiskData() {
                     delayedLineCount: 0,
                     missingEtaCount: 0,
                     deliveryRiskCount: 0,
+                    oldestDelayDays: 0,
+                    highestRiskProject: '--',
                     affectedProjectIds: []
                 });
             }
@@ -428,10 +447,14 @@ export async function getSupplierRiskData() {
             const s = supplierMap.get(item.supplierName)!;
             s.totalOutstandingValue += item.outstandingValue;
             s.totalLineCount++;
+            s.oldestDelayDays = Math.max(s.oldestDelayDays, item.daysOutstanding);
             
             if (item.action.type === 'ACTION_FOLLOW_UP') s.delayedLineCount++;
             if (item.action.type === 'ACTION_CONFIRM_ETA') s.missingEtaCount++;
-            if (item.action.type === 'ACTION_ESCALATE') s.deliveryRiskCount++;
+            if (item.action.type === 'ACTION_ESCALATE') {
+                s.deliveryRiskCount++;
+                s.highestRiskProject = item.projectName; // Just take the last one encountered for now
+            }
         }
 
         // Project counts and drilldown IDs

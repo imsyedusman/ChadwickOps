@@ -6,6 +6,7 @@ import { ProcurementSummaryCards } from "./ProcurementSummaryCards";
 import { ProcurementProjectList } from "./ProcurementProjectList";
 import { BackorderTable } from "./BackorderTable";
 import { SupplierRiskTable } from "./SupplierRiskTable";
+import { ProcurementExportButton } from "./ProcurementExportButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LayoutGrid, Package, Users, HelpCircle, Search, X, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -159,24 +160,37 @@ export function ProcurementHubClient({
                 )}
             </div>
 
-            {/* Global Search Bar */}
-            <div className="relative w-full md:w-[400px]">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input 
-                    type="text"
-                    placeholder="Search by Project, Supplier, PO or Material..."
-                    className="w-full h-12 pl-12 pr-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all text-sm font-medium"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+            {/* Global Search & Export */}
+            <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="relative flex-1 md:w-[400px]">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input 
+                        type="text"
+                        placeholder="Search by Project, Supplier, PO or Material..."
+                        className="w-full h-12 pl-12 pr-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all text-sm font-medium"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                        <button 
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+
+                <ProcurementExportButton 
+                    activeTab={activeTab}
+                    filters={{
+                        query: searchQuery,
+                        backorderFilter,
+                        supplierFilter,
+                        sortKey: sortConfig.key,
+                        sortOrder: sortConfig.order
+                    }}
                 />
-                {searchQuery && (
-                    <button 
-                        onClick={() => setSearchQuery("")}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
             </div>
         </div>
 
