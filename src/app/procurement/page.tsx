@@ -1,4 +1,5 @@
 import { getProcurementDashboardData, getBackordersData, getSupplierRiskData } from "@/app/actions/procurement";
+import { getProcurementSyncProgress } from "@/app/actions/procurement-sync";
 import { ProcurementHubClient } from "@/components/procurement/ProcurementHubClient";
 import { ProcurementSyncStatus } from "@/components/dashboard/ProcurementSyncStatus";
 import { ProcurementIntegrityBanner } from "@/components/procurement/ProcurementIntegrityBanner";
@@ -7,10 +8,11 @@ import { HelpCircle } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function ProcurementPage() {
-  const [dashboardResult, backordersResult, supplierResult] = await Promise.all([
+  const [dashboardResult, backordersResult, supplierResult, syncProgressResult] = await Promise.all([
     getProcurementDashboardData(),
     getBackordersData(),
-    getSupplierRiskData()
+    getSupplierRiskData(),
+    getProcurementSyncProgress()
   ]);
 
   if (!dashboardResult.success || !dashboardResult.data) {
@@ -44,16 +46,19 @@ export default async function ProcurementPage() {
           <p className="text-slate-500 font-medium text-sm">Operational investigation and traceability command center.</p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <ProcurementSyncStatus />
+        <div className="flex-1 flex justify-end items-center gap-4">
+          <ProcurementSyncStatus initialProgress={syncProgressResult} />
         </div>
       </div>
       
       {summary.integrity && (
-        <ProcurementIntegrityBanner 
-          integrity={summary.integrity} 
-          syncHealth={summary.syncHealth} 
-        />
+        <div className="mb-8">
+          <ProcurementIntegrityBanner 
+            integrity={summary.integrity} 
+            syncHealth={summary.syncHealth} 
+            isSyncing={!!syncProgressResult?.active}
+          />
+        </div>
       )}
 
       <ProcurementHubClient 

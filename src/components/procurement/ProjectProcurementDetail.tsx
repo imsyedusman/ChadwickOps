@@ -119,8 +119,8 @@ export function ProjectProcurementDetail({ project, purchaseOrders }: ProjectPro
                         <div className="flex items-center gap-2">
                             <span className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">{po.supplierName}</span>
                             {po.hydrationStatus !== 'HYDRATED' && (
-                                <span className="text-[8px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1 py-0.5 rounded border border-red-100 animate-pulse">
-                                    Sync Incomplete
+                                <span className="text-[8px] font-bold text-red-500 uppercase tracking-tight bg-red-50 px-1 py-0.5 rounded border border-red-100">
+                                    PO details missing
                                 </span>
                             )}
                         </div>

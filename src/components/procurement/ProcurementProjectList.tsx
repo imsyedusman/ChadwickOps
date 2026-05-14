@@ -106,12 +106,12 @@ export function ProcurementProjectList({
                     </span>
                     {item.stats.hydrationStatus !== 'HYDRATED' && (
                         <div className={cn(
-                            "flex items-center gap-1 px-1.5 py-0.5 rounded border animate-pulse",
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded border",
                             item.stats.hydrationStatus === 'FAILED' ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100"
                         )}>
                             <AlertCircle className="h-2.5 w-2.5" />
                             <span className="text-[9px] font-bold uppercase tracking-tight">
-                                {item.stats.hydrationStatus === 'FAILED' ? "Data Error" : "Sync Pending"}
+                                {item.stats.hydrationStatus === 'FAILED' ? "PO details failed to load" : "Waiting for PO details"}
                             </span>
                         </div>
                     )}

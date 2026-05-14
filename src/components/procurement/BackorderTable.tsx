@@ -214,7 +214,7 @@ export function BackorderTable({
                                             </span>
                                         </div>
                                         {item.hydrationStatus !== 'HYDRATED' && (
-                                            <Tooltip content="Sync Pending - Detailed lines are still being downloaded."><AlertCircle className="h-3 w-3 text-amber-500 animate-pulse" /></Tooltip>
+                                            <Tooltip content="Waiting for PO details - Detailed lines are still being downloaded."><AlertCircle className="h-3 w-3 text-amber-500" /></Tooltip>
                                         )}
                                     </div>
                                 </div>

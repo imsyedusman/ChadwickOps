@@ -12,12 +12,12 @@ interface SyncStatus {
   details: string | null;
 }
 
-export function ProcurementSyncStatus() {
+export function ProcurementSyncStatus({ initialProgress }: { initialProgress?: any }) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(initialProgress?.active || false);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ current: number; total: number; percent: number; lastPo: string } | null>(null);
+  const [progress, setProgress] = useState<{ current: number; total: number; percent: number; lastPo: string } | null>(initialProgress?.progress || null);
   const [integrityStats, setIntegrityStats] = useState<{ summaryOnlyCount: number, failedCount: number } | null>(null);
   
   const isAdmin = true; 
@@ -75,7 +75,13 @@ export function ProcurementSyncStatus() {
         const result = await getProcurementSyncProgress();
         if (result.success && result.active && result.progress) {
           setProgress(result.progress);
-          setCurrentStep(`Hydrating lines for PO ${result.progress.lastPo}...`);
+          setCurrentStep(`Updating details for PO ${result.progress.lastPo}...`);
+        } else if (result.success && !result.active && isSyncing) {
+            // Sync finished in background
+            setIsSyncing(false);
+            setProgress(null);
+            setCurrentStep(null);
+            await fetchStatus();
         }
       }, 1500);
     }
@@ -118,7 +124,7 @@ export function ProcurementSyncStatus() {
               "text-[9px] font-bold uppercase tracking-widest leading-none mb-0.5",
               isSyncing ? "text-brand" : isPartial ? "text-amber-600" : "text-slate-500"
             )}>
-              {isSyncing ? "Syncing Procurement" : isPartial ? "Partial Sync" : "Procurement Data"}
+              {isSyncing ? "Syncing Procurement" : isPartial ? "Last sync completed with missing PO details" : "Procurement Data"}
             </span>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none tabular-nums">
               {isSyncing && progress ? (
@@ -129,7 +135,7 @@ export function ProcurementSyncStatus() {
                 <div className="flex items-center gap-1.5">
                    <span>{syncStatus.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                    {stats.totalFailed > 0 && (
-                       <span className="text-red-500 font-bold">({stats.totalFailed} FAILED)</span>
+                       <span className="text-red-500 font-bold">({stats.totalFailed} MISSING DETAILS)</span>
                    )}
                 </div>
               ) : (
@@ -143,12 +149,12 @@ export function ProcurementSyncStatus() {
                   <p className="font-bold text-slate-300 mb-1.5 uppercase tracking-widest text-[9px]">Last Sync Details</p>
                   <div className="grid grid-cols-2 gap-y-1 gap-x-4">
                       <span className="text-slate-400">Status:</span>
-                      <span className={cn("font-bold", isSuccess ? "text-emerald-400" : "text-amber-400")}>{syncStatus.status}</span>
+                      <span className={cn("font-bold", isSuccess ? "text-emerald-400" : "text-amber-400")}>{syncStatus.status === 'PARTIAL' ? 'Incomplete' : syncStatus.status}</span>
                       
                       <span className="text-slate-400">Fetched:</span>
                       <span className="font-bold">{stats.totalFetched || 0} POs</span>
                       
-                      <span className="text-slate-400">Hydrated:</span>
+                      <span className="text-slate-400">Details Loaded:</span>
                       <span className="font-bold text-emerald-400">{stats.totalHydrated || 0}</span>
                       
                       <span className="text-slate-400">Failed:</span>
@@ -161,7 +167,7 @@ export function ProcurementSyncStatus() {
                           </>
                       )}
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-500 border-t border-slate-800 pt-2">{syncStatus.details}</p>
+                  <p className="mt-2 text-[10px] text-slate-500 border-t border-slate-800 pt-2">{syncStatus.details?.replace(/Hydrated/g, 'Details Loaded')}</p>
               </div>
           )}
         </div>
@@ -216,7 +222,7 @@ export function ProcurementSyncStatus() {
              </button>
              <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 shadow-xl border border-slate-800">
                 <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Retry Failed Only</p>
-                Attempts to hydrate only the failed or incomplete purchase orders.
+                Attempts to load missing details for failed or incomplete purchase orders.
              </div>
           </div>
         </div>
@@ -225,7 +231,7 @@ export function ProcurementSyncStatus() {
       {isSyncing && progress && (
         <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-brand/5 border border-brand/20 rounded-xl animate-in slide-in-from-left-2">
            <span className="text-[10px] font-bold text-brand uppercase tracking-tighter truncate max-w-[150px]">
-             Hydrating: {progress.lastPo}
+             Updating: {progress.lastPo}
            </span>
         </div>
       )}
