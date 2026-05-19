@@ -21,7 +21,7 @@ import {
 import Link from "next/link";
 import { format } from "date-fns";
 import { getJobCostReport } from "@/app/actions/financials";
-import { JobCostTable } from "@/app/reports/job-cost/job-cost-table";
+import { JobCostTable } from "@/app/(dashboard)/reports/job-cost/job-cost-table";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PENDING_LABOUR_THRESHOLD_RATIO, PENDING_LABOUR_THRESHOLD_ABSOLUTE } from "@/lib/constants/financials";

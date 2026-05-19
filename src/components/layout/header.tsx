@@ -8,21 +8,61 @@ import {
   Sun, 
   Moon, 
   Bell,
-  Command
+  Command,
+  LogOut,
+  UserCircle
 } from "lucide-react";
-import React, { useState, useEffect, useSyncExternalStore } from "react";
+import React, { useState, useEffect, useSyncExternalStore, useRef } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { SyncIndicator } from "@/components/dashboard/SyncIndicator";
+import { signOut } from "next-auth/react";
+import Link from "next/link";
 
-export function Header() {
+interface HeaderProps {
+  user?: {
+    name: string;
+    email: string;
+  };
+}
+
+export function Header({ user }: HeaderProps) {
   const { theme, setTheme } = useTheme();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Avoid hydration mismatch
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false
   );
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const handleLogout = async () => {
+    toast.loading("Signing out...");
+    await signOut({ callbackUrl: "/login" });
+  };
 
   return (
     <header className="h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 transition-all duration-300 w-full">
@@ -59,8 +99,50 @@ export function Header() {
           </button>
         </div>
 
-        <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:ring-4 hover:ring-brand/10 hover:border-brand/30 transition-all ml-1 overflow-hidden group">
-          <User className="h-5 w-5 text-slate-400 group-hover:text-brand transition-colors" />
+        <div className="relative ml-1" ref={dropdownRef}>
+          <button 
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className={cn(
+              "h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 border flex items-center justify-center transition-all overflow-hidden relative",
+              dropdownOpen ? "border-brand ring-4 ring-brand/10" : "border-slate-200 dark:border-slate-700 hover:border-brand/30 hover:ring-4 hover:ring-brand/10"
+            )}
+          >
+            {user?.name ? (
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tracking-wider">
+                {getInitials(user.name)}
+              </span>
+            ) : (
+              <User className="h-5 w-5 text-slate-400 hover:text-brand transition-colors" />
+            )}
+          </button>
+          
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.name || "User"}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{user?.email}</p>
+              </div>
+              <div className="p-1">
+                <Link 
+                  href="/profile"
+                  onClick={() => setDropdownOpen(false)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors text-left"
+                >
+                  <UserCircle className="h-4 w-4 text-slate-400" />
+                  Profile & Preferences
+                </Link>
+                <div className="h-px w-full bg-slate-100 dark:bg-slate-800 my-1" />
+                <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors text-left"
+                >
+                  <LogOut className="h-4 w-4 text-red-500" />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

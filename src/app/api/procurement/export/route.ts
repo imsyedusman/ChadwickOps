@@ -13,9 +13,15 @@ import {
     filterSuppliers,
     sortData
 } from '@/lib/procurement-export';
+import { validateSession } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
     try {
+        const session = await validateSession();
+        if (!session) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const searchParams = req.nextUrl.searchParams;
         const tab = searchParams.get('tab') || 'projects';
         const format = (searchParams.get('format') || 'xlsx') as 'xlsx' | 'csv';

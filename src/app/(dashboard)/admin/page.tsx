@@ -14,11 +14,13 @@ import {
   Plus,
   Clock,
   AlertTriangle,
-  Archive
+  Archive,
+  Users
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
+import Link from "next/link";
 
 export default async function AdminPage() {
   const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
@@ -52,9 +54,18 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">System Administration</h1>
-        <p className="text-sm text-slate-500 font-bold">Manage connectivity, mappings, and operational validation.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">System Administration</h1>
+          <p className="text-sm text-slate-500 font-bold">Manage connectivity, mappings, and operational validation.</p>
+        </div>
+        <Link 
+          href="/admin/users" 
+          className="flex items-center gap-2 bg-brand hover:bg-brand/90 text-white font-bold text-xs uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md shadow-brand/10 hover:scale-[1.01] active:scale-[0.99] border border-brand/20 w-fit"
+        >
+          <Users className="h-4 w-4" />
+          Manage Users
+        </Link>
       </div>
 
       {!isEncryptionKeySet && (

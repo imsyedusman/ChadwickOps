@@ -255,6 +255,19 @@ export const procurementFailures = pgTable('procurement_failures', {
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  username: varchar('username', { length: 255 }).notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  role: varchar('role', { length: 50 }).default('viewer').notNull(), // 'admin' | 'user' | 'viewer'
+  isActive: boolean('is_active').default(true).notNull(),
+  sessionVersion: integer('session_version').default(1).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  lastLoginAt: timestamp('last_login_at'),
+});
+
 // Relations
 export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
