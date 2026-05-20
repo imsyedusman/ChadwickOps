@@ -25,6 +25,8 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [remainingPoints, setRemainingPoints] = useState<number | null>(null);
+  const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
 
   // Parse error parameters from NextAuth redirection (e.g. CredentialsSignin)
   useEffect(() => {
@@ -38,8 +40,53 @@ function LoginForm() {
     }
   }, [searchParams]);
 
+  // Check rate limit on mount
+  useEffect(() => {
+    const checkRateLimit = async () => {
+      try {
+        const res = await fetch("/api/auth/rate-limit");
+        if (res.ok) {
+          const data = await res.json();
+          setRemainingPoints(data.remainingPoints);
+          if (data.retryAfter > 0) {
+            setLockoutSeconds(data.retryAfter);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check rate limit:", err);
+      }
+    };
+    checkRateLimit();
+  }, []);
+
+  // Real-time countdown timer for lockout
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+
+    const interval = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          // Reset the attempt counter visually when the lockout timer reaches zero
+          setRemainingPoints(5);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
+
+  const formatCountdown = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutSeconds > 0) return;
+
     if (!username || !password) {
       setError("Please fill in all fields.");
       return;
@@ -64,10 +111,30 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        if (result.status === 401) {
-          setError("Invalid username or password.");
-        } else {
-          setError("Authentication failed. Please try again.");
+        // Sync rate limit details from server
+        try {
+          const limitRes = await fetch("/api/auth/rate-limit");
+          if (limitRes.ok) {
+            const limitData = await limitRes.json();
+            setRemainingPoints(limitData.remainingPoints);
+            if (limitData.retryAfter > 0) {
+              setLockoutSeconds(limitData.retryAfter);
+              setError("Too many login attempts, please try again later");
+            } else {
+              if (result.status === 401) {
+                setError("Invalid username or password.");
+              } else {
+                setError("Authentication failed. Please try again.");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to sync rate limit after login error:", err);
+          if (result.status === 401) {
+            setError("Invalid username or password.");
+          } else {
+            setError("Authentication failed. Please try again.");
+          }
         }
       } else {
         // Successful login
@@ -112,12 +179,23 @@ function LoginForm() {
         </div>
 
         {/* Error Alert Display */}
-        {error && (
+        {(error || (remainingPoints !== null && remainingPoints < 5)) && (
           <div className="mt-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
             <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 w-full">
               <h4 className="text-[10px] font-bold text-red-800 dark:text-red-400 uppercase tracking-widest">Authentication Alert</h4>
-              <p className="text-xs text-red-700 dark:text-red-300 leading-normal font-medium">{error}</p>
+              <p className="text-xs text-red-700 dark:text-red-300 leading-normal font-medium">
+                {lockoutSeconds > 0 ? (
+                  `Locked out. Too many login attempts. Please try again in ${formatCountdown(lockoutSeconds)}.`
+                ) : (
+                  error || "Invalid login attempt."
+                )}
+              </p>
+              {remainingPoints !== null && remainingPoints < 5 && lockoutSeconds <= 0 && (
+                <p className="text-[11px] font-bold text-red-600 dark:text-red-400 mt-1">
+                  {remainingPoints} attempt{remainingPoints !== 1 ? 's' : ''} remaining
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -135,7 +213,7 @@ function LoginForm() {
               <input
                 type="email"
                 required
-                disabled={loading}
+                disabled={loading || lockoutSeconds > 0}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="name@chadwickswitchboards.com.au"
@@ -155,7 +233,7 @@ function LoginForm() {
               <input
                 type={showPassword ? "text" : "password"}
                 required
-                disabled={loading}
+                disabled={loading || lockoutSeconds > 0}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
@@ -165,6 +243,7 @@ function LoginForm() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
+                disabled={loading || lockoutSeconds > 0}
                 className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
               >
                 {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
@@ -174,13 +253,17 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || lockoutSeconds > 0}
             className="w-full bg-brand hover:bg-brand/90 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 border border-brand/20 shadow-md shadow-brand/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 mt-6"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Validating...
+              </>
+            ) : lockoutSeconds > 0 ? (
+              <>
+                Locked Out ({formatCountdown(lockoutSeconds)})
               </>
             ) : (
               <>
