@@ -42,3 +42,20 @@ next-env.d.ts
 
 /src/generated/prisma
 /tmp/
+
+# Root-level diagnostic and scratch scripts
+/diag_final.js
+/db_diag.js
+/diag*
+/db_*
+/scratch_*
+/check_*
+/find_*
+/parse_*
+/test_*
+/verify_*
+/diagnostic_trace.ts
+/final_validation_diag.ts
+/fetch_raw.js
+/merge_test.js
+

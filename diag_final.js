@@ -2,7 +2,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 // Values directly from .env and knowledge
-const DATABASE_URL = 'postgresql://chadwick_user:Developer2k26!@localhost:5432/chadwick_ops';
+const DATABASE_URL = process.env.DATABASE_URL;
 const ENCRYPTION_KEY = '8a07cf0a4e89f1b4e927e4c6ea2eafbd';
 
 function decrypt(text) {

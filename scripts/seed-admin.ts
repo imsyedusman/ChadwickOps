@@ -3,9 +3,13 @@ import { users } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
+if (!process.env.SEED_ADMIN_PASSWORD) {
+  throw new Error('SEED_ADMIN_PASSWORD environment variable is not set.');
+}
+
 async function seedAdmin() {
   const username = 'susman@chadwickswitchboards.com.au';
-  const password = 'Developer@2k26!';
+  const password = process.env.SEED_ADMIN_PASSWORD;
   const name = 'S Usman';
   
   console.log(`[Seed] Hashing password for admin ${username}...`);

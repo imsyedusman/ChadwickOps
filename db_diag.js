@@ -1,6 +1,6 @@
 const postgres = require('postgres');
 
-const DATABASE_URL = 'postgresql://chadwick_user:Developer2k26!@localhost:5432/chadwick_ops';
+const DATABASE_URL = process.env.DATABASE_URL;
 const sql = postgres(DATABASE_URL);
 
 async function diag() {
