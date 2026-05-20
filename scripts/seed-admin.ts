@@ -9,7 +9,7 @@ if (!process.env.SEED_ADMIN_PASSWORD) {
 
 async function seedAdmin() {
   const username = 'susman@chadwickswitchboards.com.au';
-  const password = process.env.SEED_ADMIN_PASSWORD;
+  const password = process.env.SEED_ADMIN_PASSWORD!;
   const name = 'S Usman';
   
   console.log(`[Seed] Hashing password for admin ${username}...`);
