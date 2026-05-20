@@ -51,13 +51,18 @@ async function handleSync() {
 }
 
 export async function testApiConnection(apiKey: string, apiSecret: string) {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   console.log('[SyncAction] Testing Connection...');
   try {
     const client = new WorkGuruClient(apiKey, apiSecret);
     await client.authenticate();
     
     return { 
-      success: true, 
+      success: true as const, 
       message: "Connection successful!",
       details: "Token received. Credentials validated."
     };
@@ -115,13 +120,18 @@ export async function updateApiCredentials(apiKey: string, apiSecret: string) {
       set: { value: { apiKey: encryptedKey, apiSecret: encryptedSecret }, updatedAt: new Date() },
     });
 
-    return { success: true };
+    return { success: true, error: undefined };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 export async function initializeSystem() {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   const stageService = new StageService();
   await stageService.seedDefaultStages();
   await stageService.seedDefaultMappings();
@@ -129,6 +139,11 @@ export async function initializeSystem() {
 }
 
 export async function getLatestSyncStatus() {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
     const latestLog = await db.query.syncLogs.findFirst({
       orderBy: [desc(syncLogs.timestamp)],
@@ -140,6 +155,11 @@ export async function getLatestSyncStatus() {
 }
 
 export async function getSyncProgress() {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'SYNC_PROGRESS'),

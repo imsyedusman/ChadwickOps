@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { systemConfig } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { validateSession } from "@/lib/auth-helpers";
 
 export interface CapacitySettings {
   staff: number;
@@ -24,6 +25,11 @@ const DEFAULT_SETTINGS: CapacitySettings = {
 const CONFIG_KEY = 'capacity_settings';
 
 export async function getCapacitySettings(): Promise<CapacitySettings> {
+  const session = await validateSession();
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
   try {
     const record = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, CONFIG_KEY)
@@ -43,6 +49,11 @@ export async function getCapacitySettings(): Promise<CapacitySettings> {
 }
 
 export async function updateCapacitySettings(data: CapacitySettings) {
+  const session = await validateSession();
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
   if (data.staff <= 0) throw new Error("Staff must be > 0");
   if (data.hoursPerWeek <= 0) throw new Error("Hours per week must be > 0");
   if (data.efficiency < 0 || data.efficiency > 1) throw new Error("Efficiency must be between 0 and 1");

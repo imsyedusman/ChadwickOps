@@ -5,8 +5,14 @@ import { decrypt } from '@/lib/crypto';
 import { eq, isNotNull } from 'drizzle-orm';
 import { SyncService } from '@/lib/sync';
 import axios from 'axios';
+import { validateSession } from '@/lib/auth-helpers';
 
 export async function GET() {
+  const session = await validateSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const configRes = await db.select().from(systemConfig).where(eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS')).limit(1);
     const config = configRes[0];

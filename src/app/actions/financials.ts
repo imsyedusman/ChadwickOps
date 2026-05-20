@@ -8,6 +8,7 @@ import {
 } from '@/db/schema';
 import { eq, and, desc, or } from 'drizzle-orm';
 import { ProjectFinancialService } from '@/lib/financials';
+import { validateSession } from '@/lib/auth-helpers';
 
 import { subMonths, format, parseISO, endOfMonth } from 'date-fns';
 import { inArray, sql, lte } from 'drizzle-orm';
@@ -15,6 +16,11 @@ import { ACTIVE_PROJECT_STATUSES, normalizeStatus } from '@/lib/constants';
 import { invoices, timeEntries, purchaseOrders } from '@/db/schema';
 
 export async function getJobCostReport(monthStr: string) {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
+
     const currentMonthDate = parseISO(monthStr + '-01');
     const prevMonthDate = subMonths(currentMonthDate, 1);
     const prevMonthStr = format(prevMonthDate, 'yyyy-MM');
@@ -179,6 +185,11 @@ import { SyncService } from '@/lib/sync';
 import { decrypt } from '@/lib/crypto';
 
 export async function syncProjectFinancials(projectId: number) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         // 1. Fetch credentials
         const config = await db.query.systemConfig.findFirst({

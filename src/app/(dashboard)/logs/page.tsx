@@ -5,8 +5,15 @@ import { desc } from "drizzle-orm";
 import { format } from "date-fns";
 import { History, CheckCircle2, AlertTriangle, XCircle, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { validateSession } from "@/lib/auth-helpers";
+import { redirect } from "next/navigation";
 
 export default async function LogsPage() {
+  const session = await validateSession();
+  if (!session || session.user.role !== "admin") {
+    redirect("/");
+  }
+
   const logs = await db.query.syncLogs.findMany({
     orderBy: [desc(syncLogs.timestamp)],
     limit: 50,

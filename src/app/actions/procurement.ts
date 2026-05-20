@@ -13,6 +13,7 @@ import {
     ProjectProcurementContext 
 } from '@/lib/procurement-logic';
 import { revalidatePath } from 'next/cache';
+import { validateSession } from '@/lib/auth-helpers';
 
 // ... (existing interfaces and functions)
 
@@ -20,6 +21,11 @@ import { revalidatePath } from 'next/cache';
  * Adds a manual supplier record to a project.
  */
 export async function addSupplier(projectId: number, data: any) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         const [result] = await db.insert(projectSuppliers).values({
             projectId,
@@ -44,6 +50,11 @@ export async function addSupplier(projectId: number, data: any) {
  * Updates a manual supplier record.
  */
 export async function updateSupplier(supplierId: number, data: any) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         await db.update(projectSuppliers)
             .set({
@@ -70,6 +81,11 @@ export async function updateSupplier(supplierId: number, data: any) {
  * Deletes a manual supplier record.
  */
 export async function deleteSupplier(supplierId: number) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         await db.delete(projectSuppliers).where(eq(projectSuppliers.id, supplierId));
         revalidatePath('/procurement');
@@ -84,6 +100,11 @@ export async function deleteSupplier(supplierId: number) {
  * Adds a new master supplier.
  */
 export async function addMasterSupplier(name: string) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         const [result] = await db.insert(masterSuppliers).values({
             name,
@@ -104,6 +125,11 @@ export async function addMasterSupplier(name: string) {
  * Updates project-level procurement fields.
  */
 export async function updateProjectProcurement(projectId: number, data: { procurementStatus?: string, procurementNotes?: string }) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         await db.update(projects)
             .set({
@@ -182,6 +208,11 @@ export interface SupplierRiskItem {
  * Fetches data for the main Procurement Hub overview.
  */
 export async function getProcurementDashboardData() {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
     // DIAGNOSTIC: Check project archiving status
     const projectCounts = await db.select({ 
@@ -353,6 +384,11 @@ export async function getProcurementDashboardData() {
  * Fetches all items that have not been fully received.
  */
 export async function getBackordersData(options: { onlyProblems?: boolean } = {}) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         const allData = await db.select({
             line: purchaseOrderLines,
@@ -422,6 +458,11 @@ export async function getBackordersData(options: { onlyProblems?: boolean } = {}
  * Groups procurement bottlenecks by Supplier.
  */
 export async function getSupplierRiskData() {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         const backorders = await getBackordersData();
         if (!backorders.success || !backorders.data) throw new Error(backorders.error);
@@ -491,6 +532,11 @@ export async function getSupplierRiskData() {
  * Detailed procurement drilldown for a single project.
  */
 export async function getProjectProcurementDetail(projectId: number) {
+    const session = await validateSession();
+    if (!session) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
     try {
         const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
         if (!project) throw new Error('Project not found');

@@ -21,8 +21,15 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
 import Link from "next/link";
+import { validateSession } from "@/lib/auth-helpers";
+import { redirect } from "next/navigation";
 
 export default async function AdminPage() {
+  const session = await validateSession();
+  if (!session || session.user.role !== "admin") {
+    redirect("/");
+  }
+
   const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
   const archivedCount = archivedCountResults[0]?.value || 0;
 
