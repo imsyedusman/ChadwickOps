@@ -99,7 +99,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
         const m = format(new Date(p.deliveryDate), 'yyyy-MM');
         if (data[m]) {
             const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
-            const calculatedRemaining = Math.max(0, p.budgetHours - adjustedActual);
+            const calculatedRemaining = p.budgetHours - adjustedActual;
 
             const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
 
