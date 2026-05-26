@@ -90,28 +90,33 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
     }
   }, [months, selectedMonth]);
 
-  // Aggregate Data
   const monthlyData = useMemo(() => {
-    const data: Record<string, { budget: number; actual: number; remaining: number; internalRemaining: number; projects: Project[] }> = {};
-    months.forEach(m => data[m] = { budget: 0, actual: 0, remaining: 0, internalRemaining: 0, projects: [] });
+    const data: Record<string, { budget: number; actual: number; rawActual: number; remaining: number; internalRemaining: number; projects: Project[] }> = {};
+    months.forEach(m => data[m] = { budget: 0, actual: 0, rawActual: 0, remaining: 0, internalRemaining: 0, projects: [] });
 
     activeProjects.forEach(p => {
         if (!p.deliveryDate) return; 
         const m = format(new Date(p.deliveryDate), 'yyyy-MM');
         if (data[m]) {
+            const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
+            const calculatedRemaining = Math.max(0, p.budgetHours - adjustedActual);
+
+            const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
+
             if (isProductiveProject(p.projectNumber)) {
                 data[m].budget += p.budgetHours;
-                data[m].actual += p.actualHours;
-                data[m].remaining += p.remainingHours;
+                data[m].actual += adjustedActual;
+                data[m].rawActual += p.actualHours;
+                data[m].remaining += calculatedRemaining;
             } else {
-                data[m].internalRemaining += p.remainingHours;
+                data[m].internalRemaining += calculatedRemaining;
             }
-            data[m].projects.push(p);
+            data[m].projects.push(modifiedProject);
         }
     });
 
     return data;
-  }, [activeProjects, months]);
+  }, [activeProjects, months, settings.actualsFactor]);
 
   // Summary Metrics
   const totalCapacity = currentCapacity * months.length;
@@ -217,7 +222,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                     </Tooltip>
                                   </th>
                                   <th className="px-5 py-3 text-right">
-                                    <Tooltip content="Total hours logged in WorkGuru timesheets as of the last sync.">
+                                    <Tooltip content="Adjusted productive hours (raw actuals × actuals factor). Raw WorkGuru hours shown in brackets.">
                                       <span className="cursor-help border-b border-dotted border-slate-300">Actual</span>
                                     </Tooltip>
                                   </th>
@@ -269,7 +274,10 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                               </span>
                                           </td>
                                           <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.budget)}</td>
-                                          <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.actual)}</td>
+                                          <td className="px-5 py-4 text-right tabular-nums">
+                                              <div className="text-xs text-slate-400 font-bold">{formatHours(d.actual)}</div>
+                                              <div className="text-[10px] text-slate-400/70 font-medium">({formatHours(d.rawActual)})</div>
+                                          </td>
                                           
                                           {/* Emphasized Fields */}
                                           <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums text-base">{formatHours(planned)}</td>
@@ -405,6 +413,15 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                       <div className="grid grid-cols-2 gap-3">
                           <SettingField label="Efficiency" value={settings.efficiency} onChange={(v) => setSettings({...settings, efficiency: v})} step={0.05} min={0} max={1} />
                           <SettingField label="Wks/Mo" value={settings.weeksPerMonth} onChange={(v) => setSettings({...settings, weeksPerMonth: v})} step={0.01} min={1} />
+                          <SettingField 
+                              label="Actuals Factor" 
+                              value={settings.actualsFactor ?? 0.7} 
+                              onChange={(v) => setSettings({...settings, actualsFactor: v})} 
+                              step={0.05} 
+                              min={0} 
+                              max={1}
+                              tooltip="Adjusts raw actual hours logged against jobs to better reflect true productive output. At 0.7, 1000 hours logged is treated as 700 productive hours." 
+                          />
                       </div>
                   </div>
               </div>
@@ -482,10 +499,17 @@ function SettingsIcon(props: React.SVGProps<SVGSVGElement>) {
     return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 }
 
-function SettingField({ label, value, onChange, min, max, step }: { label: string, value: number, onChange: (v: number) => void, min?: number, max?: number, step?: number }) {
+function SettingField({ label, value, onChange, min, max, step, tooltip }: { label: string, value: number, onChange: (v: number) => void, min?: number, max?: number, step?: number, tooltip?: string }) {
+    const labelContent = <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>;
     return (
         <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</label>
+            {tooltip ? (
+                <Tooltip content={tooltip}>
+                    <div className="cursor-help border-b border-dotted border-slate-300 w-fit">{labelContent}</div>
+                </Tooltip>
+            ) : (
+                labelContent
+            )}
             <input 
               type="number" 
               min={min} max={max} step={step}

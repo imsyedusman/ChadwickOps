@@ -12,6 +12,7 @@ export interface CapacitySettings {
   efficiency: number; // 0 to 1
   weeksPerMonth: number;
   riskThreshold: number; // % (e.g. 90)
+  actualsFactor: number;
 }
 
 const DEFAULT_SETTINGS: CapacitySettings = {
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS: CapacitySettings = {
   hoursPerWeek: 38,
   efficiency: 0.8,
   weeksPerMonth: 4.33,
-  riskThreshold: 90
+  riskThreshold: 90,
+  actualsFactor: 0.7
 };
 
 const CONFIG_KEY = 'capacity_settings';
@@ -58,6 +60,7 @@ export async function updateCapacitySettings(data: CapacitySettings) {
   if (data.hoursPerWeek <= 0) throw new Error("Hours per week must be > 0");
   if (data.efficiency < 0 || data.efficiency > 1) throw new Error("Efficiency must be between 0 and 1");
   if (data.weeksPerMonth <= 0) throw new Error("Weeks per month must be > 0");
+  if (data.actualsFactor < 0 || data.actualsFactor > 1) throw new Error("Actuals Factor must be between 0 and 1");
 
   const existing = await db.query.systemConfig.findFirst({
     where: eq(systemConfig.key, CONFIG_KEY)
