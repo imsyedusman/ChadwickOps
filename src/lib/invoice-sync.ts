@@ -117,9 +117,11 @@ export class InvoiceSyncService {
 
         const total = Number(item.Total) || 0;
         const status = item.Status || 'Draft';
+        const invoiceNumber = item.InvoiceNumber || null;
 
         upserts.push({
           workguruId,
+          invoiceNumber,
           projectId: localProjectId,
           total,
           status,
@@ -142,6 +144,7 @@ export class InvoiceSyncService {
               await tx.insert(invoices).values(row).onConflictDoUpdate({
                 target: invoices.workguruId,
                 set: {
+                  invoiceNumber: row.invoiceNumber,
                   total: row.total,
                   status: row.status,
                   issueDate: row.issueDate,

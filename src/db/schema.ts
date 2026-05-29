@@ -157,6 +157,7 @@ export const purchaseOrderLines = pgTable('purchase_order_lines', {
 export const invoices = pgTable('invoices', {
   id: serial('id').primaryKey(),
   workguruId: varchar('workguru_id', { length: 255 }).notNull().unique(),
+  invoiceNumber: varchar('invoice_number', { length: 100 }),
   projectId: integer('project_id').notNull().references(() => projects.id),
   total: doublePrecision('total').default(0).notNull(),
   status: varchar('status', { length: 50 }).notNull(),

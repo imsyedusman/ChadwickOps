@@ -28,6 +28,8 @@ interface InvoiceData {
   invoiceDate: Date | string | null;
   invoiceAmount: string | number | null;
   invoiceStatus: string | null;
+  invoiceNumber: string | null;
+  invoiceWorkguruId: string | null;
 }
 
 interface SummaryData {
@@ -42,6 +44,7 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -63,7 +66,7 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
     }
     fetchData();
     return () => { isMounted = false; };
-  }, [currentMonth]);
+  }, [currentMonth, refreshKey]);
 
   const handlePrevMonth = () => {
     setCurrentMonth(prev => format(subMonths(parseISO(prev + '-01'), 1), 'yyyy-MM'));
@@ -90,7 +93,7 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return "-";
-    return format(new Date(date), 'dd/MM/yy');
+    return format(new Date(date), 'dd MMM yyyy');
   };
 
   const getStatusColor = (status: string | null) => {
@@ -128,14 +131,28 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
   // Calculate trend
   let trendPercent = 0;
   let isUp = false;
+  let diffAmount = 0;
+  let diffText = "-";
+  
   if (summary && summary.previousMonthAmount > 0) {
-    const diff = summary.totalAmount - summary.previousMonthAmount;
-    trendPercent = Math.round(Math.abs(diff / summary.previousMonthAmount) * 100);
-    isUp = diff >= 0;
+    diffAmount = summary.totalAmount - summary.previousMonthAmount;
+    trendPercent = Math.round(Math.abs(diffAmount / summary.previousMonthAmount) * 100);
+    isUp = diffAmount >= 0;
+    diffText = `${isUp ? '+' : '-'}${formatCurrency(Math.abs(diffAmount))}`;
   } else if (summary && summary.totalAmount > 0) {
+    diffAmount = summary.totalAmount;
     trendPercent = 100;
     isUp = true;
+    diffText = `+${formatCurrency(diffAmount)}`;
   }
+  
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      const dateA = a.invoiceDate ? new Date(a.invoiceDate).getTime() : 0;
+      const dateB = b.invoiceDate ? new Date(b.invoiceDate).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [filteredData]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -155,7 +172,10 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
           </div>
           
           <div className="flex flex-col items-end gap-3">
-            <InvoiceSyncButton lastSyncedText={lastSyncedText} />
+            <InvoiceSyncButton 
+              lastSyncedText={lastSyncedText} 
+              onSuccess={() => setRefreshKey(k => k + 1)}
+            />
             <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-2 py-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
               <button 
                 onClick={handlePrevMonth}
@@ -194,12 +214,13 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
           />
           <StatCard 
             title="Vs Last Month" 
-            value={loading ? '-' : formatCurrency(summary?.previousMonthAmount)} 
+            value={loading ? '-' : diffText} 
+            valueClass={isUp ? "text-emerald-500" : "text-red-500"}
             icon={isUp ? <TrendingUp className="h-5 w-5 text-indigo-500" /> : <TrendingDown className="h-5 w-5 text-indigo-500" />}
-            trend={summary ? `${trendPercent}%` : undefined}
+            trend={summary && summary.previousMonthAmount > 0 ? `${trendPercent}%` : undefined}
             trendColor={isUp ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/10" : "text-red-500 border-red-500/20 bg-red-500/10"}
             trendDirection={isUp ? 'up' : 'down'}
-            description="Amount invoiced in the previous month"
+            description="Difference in invoiced amount from the previous month"
           />
         </div>
 
@@ -238,14 +259,15 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
                 <tr className="bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm">
                   <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Project</th>
                   <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Client</th>
+                  <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Invoice Number</th>
                   <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap">Invoice Date</th>
                   <th className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap text-right">Amount</th>
                   <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 whitespace-nowrap text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                {filteredData.length > 0 ? (
-                  filteredData.map((inv, idx) => (
+                {sortedData.length > 0 ? (
+                  sortedData.map((inv, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="px-8 py-6">
                         <div className="flex flex-col gap-1.5">
@@ -259,6 +281,21 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
                         <span className="text-[11px] text-slate-500 font-bold uppercase tracking-tight">
                           {inv.clientName || 'No Client'}
                         </span>
+                      </td>
+                      <td className="px-4 py-6 whitespace-nowrap">
+                        {inv.invoiceWorkguruId ? (
+                          <a 
+                            href={`https://app.workguru.io/App/Invoices/Details/${inv.invoiceWorkguruId}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="text-xs font-bold text-brand hover:underline flex items-center gap-1 w-fit"
+                          >
+                            {inv.invoiceNumber || `INV-${inv.invoiceWorkguruId}`}
+                            <ArrowUpRight className="h-3 w-3 opacity-50" />
+                          </a>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-6 whitespace-nowrap">
                         <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -282,7 +319,7 @@ export function InvoicedThisMonthSection({ lastSyncedText }: { lastSyncedText: s
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-8 py-12 text-center">
+                    <td colSpan={6} className="px-8 py-12 text-center">
                       <p className="text-sm text-slate-400 font-medium">No invoices found for this month.</p>
                     </td>
                   </tr>
@@ -303,7 +340,8 @@ function StatCard({
   trend, 
   trendColor, 
   trendDirection,
-  description 
+  description,
+  valueClass
 }: { 
   title: string;
   value: string | number;
@@ -312,6 +350,7 @@ function StatCard({
   trendColor?: string;
   trendDirection?: 'up' | 'down';
   description: string;
+  valueClass?: string;
 }) {
   return (
     <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm group hover:shadow-md hover:border-brand/20 transition-all duration-300 overflow-hidden relative">
@@ -330,7 +369,7 @@ function StatCard({
         )}
       </div>
       <div className="space-y-1">
-        <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums leading-none">
+        <h3 className={cn("text-3xl font-bold tracking-tight tabular-nums leading-none", valueClass || "text-slate-900 dark:text-white")}>
           {value}
         </h3>
         <p className="text-sm font-bold text-slate-500 dark:text-slate-400 tracking-tight">{title}</p>

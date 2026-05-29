@@ -239,6 +239,8 @@ export async function getInvoicedThisMonthReport(monthStr: string) {
         projectNumber: projects.projectNumber,
         projectName: projects.name,
         clientName: clients.name,
+        invoiceNumber: invoices.invoiceNumber,
+        invoiceWorkguruId: invoices.workguruId,
         invoiceDate: invoices.issueDate,
         invoiceAmount: invoices.total,
         invoiceStatus: invoices.status,

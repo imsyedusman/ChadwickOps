@@ -7,9 +7,10 @@ import { toast } from 'sonner';
 
 interface InvoiceSyncButtonProps {
   lastSyncedText: string;
+  onSuccess?: () => void;
 }
 
-export function InvoiceSyncButton({ lastSyncedText }: InvoiceSyncButtonProps) {
+export function InvoiceSyncButton({ lastSyncedText, onSuccess }: InvoiceSyncButtonProps) {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSync = async () => {
@@ -27,6 +28,9 @@ export function InvoiceSyncButton({ lastSyncedText }: InvoiceSyncButtonProps) {
             description: `Fetched ${result.stats.fetched} invoices. Upserted ${result.stats.upserted}.`
           }
         );
+        if (onSuccess) {
+          onSuccess();
+        }
       } else {
         toast.error('Invoice Sync Failed', { 
           id: toastId,
