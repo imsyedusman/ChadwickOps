@@ -223,3 +223,56 @@ export async function syncProjectFinancials(projectId: number) {
         return { success: false, error: error.message };
     }
 }
+
+export async function getInvoicedThisMonthReport(monthStr: string) {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
+
+    const currentMonthDate = parseISO(monthStr + '-01');
+    const prevMonthDate = subMonths(currentMonthDate, 1);
+    const prevMonthStr = format(prevMonthDate, 'yyyy-MM');
+
+    // Current month invoices
+    const currentInvoices = await db.select({
+        projectNumber: projects.projectNumber,
+        projectName: projects.name,
+        clientName: clients.name,
+        invoiceDate: invoices.issueDate,
+        invoiceAmount: invoices.total,
+        invoiceStatus: invoices.status,
+    })
+    .from(invoices)
+    .innerJoin(projects, eq(invoices.projectId, projects.id))
+    .leftJoin(clients, eq(projects.clientId, clients.id))
+    .where(and(
+        inArray(invoices.status, ['Approved', 'Sent', 'Paid']),
+        sql`TO_CHAR(${invoices.issueDate}, 'YYYY-MM') = ${monthStr}`
+    ));
+
+    // Previous month total
+    const prevInvoicesTotal = await db.select({
+        total: sql<number>`sum(${invoices.total})`
+    })
+    .from(invoices)
+    .where(and(
+        inArray(invoices.status, ['Approved', 'Sent', 'Paid']),
+        sql`TO_CHAR(${invoices.issueDate}, 'YYYY-MM') = ${prevMonthStr}`
+    ));
+
+    const previousMonthAmount = Number(prevInvoicesTotal[0]?.total || 0);
+
+    const totalAmount = currentInvoices.reduce((sum, inv) => sum + Number(inv.invoiceAmount || 0), 0);
+    const totalCount = currentInvoices.length;
+
+    return {
+        invoices: currentInvoices,
+        summary: {
+            totalAmount,
+            totalCount,
+            previousMonthAmount
+        }
+    };
+}
+

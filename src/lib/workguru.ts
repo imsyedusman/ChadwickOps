@@ -405,4 +405,20 @@ export class WorkGuruClient {
       throw error;
     }
   }
+
+  async getInvoicesByDateRange(start: string, end: string) {
+    const url = `${BASE_URL}/api/services/app/InvoicePivotReport/GetInvoicesByDate`;
+    const headers = await this.getAuthHeader();
+    const params = { start, end };
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
 }

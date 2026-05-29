@@ -8,7 +8,8 @@ import {
   PieChart,
   ArrowUpRight,
   ArrowDownRight,
-  Users
+  Users,
+  Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/db";
@@ -18,6 +19,7 @@ import { PeriodSelector } from "@/components/reports/PeriodSelector";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { BreakdownTable } from "@/components/reports/BreakdownTable";
 import Link from "next/link";
+import { getInvoicedThisMonthReport } from "@/app/actions/financials";
 import { 
   getPeriodBounds, 
   getComparisonBounds, 
@@ -222,6 +224,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const canForecast = isPartial && daysPassed >= 3;
   const forecastedValue = canForecast ? (ordersVal / daysPassed) * daysInMonth : null;
 
+  const currentMonthStr = format(now, 'yyyy-MM');
+  const invoicedReport = await getInvoicedThisMonthReport(currentMonthStr);
+  const invoicedTrend = calculateTrend(invoicedReport.summary.totalAmount, invoicedReport.summary.previousMonthAmount);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       {/* Header Area */}
@@ -301,6 +307,17 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
            icon={<TrendingUp className="h-5 w-5 text-red-500" />}
            color="indigo"
            href={`/reports/job-cost`}
+        />
+        <ReportMetricCard 
+          title="Invoiced This Month"
+          value={invoicedReport.summary.totalAmount}
+          trend={invoicedTrend}
+          description="Total value of all approved invoices for the current month."
+          sourceField="WorkGuru Invoices"
+          insight="Compare billing performance against previous months"
+          icon={<Receipt className="h-5 w-5 text-emerald-500" />}
+          color="emerald"
+          href={`/reports/invoiced`}
         />
       </div>
 

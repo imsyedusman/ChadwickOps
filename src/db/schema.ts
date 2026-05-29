@@ -230,6 +230,15 @@ export const syncLogs = pgTable('sync_logs', {
   details: text('details'),
 });
 
+export const invoiceSyncLogs = pgTable('invoice_sync_logs', {
+  id: serial('id').primaryKey(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE
+  totalFetched: integer('total_fetched').default(0),
+  totalUpserted: integer('total_upserted').default(0),
+  details: text('details'),
+});
+
 export const procurementSyncLogs = pgTable('procurement_sync_logs', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
