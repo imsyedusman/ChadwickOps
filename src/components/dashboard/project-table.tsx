@@ -38,8 +38,10 @@ import {
   Ban,
   AlertCircle,
   HelpCircle,
-  Circle
+  Circle,
+  Download
 } from "lucide-react";
+import * as XLSX from 'xlsx';
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
@@ -384,6 +386,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
 
+  const [isExportPickerOpen, setIsExportPickerOpen] = useState(false);
+  const exportPickerRef = useRef<HTMLDivElement>(null);
+
   // Close popovers when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -392,6 +397,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       }
       if (presetPickerRef.current && !presetPickerRef.current.contains(event.target as Node)) {
         setIsPresetPickerOpen(false);
+      }
+      if (exportPickerRef.current && !exportPickerRef.current.contains(event.target as Node)) {
+        setIsExportPickerOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -767,6 +775,106 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   };
 
 
+  const handleExport = (exportFormat: 'csv' | 'xlsx') => {
+    // Determine active filters text
+    const activeFilters = [];
+    if (search) activeFilters.push(`Search: "${search}"`);
+    if (pmFilter.length > 0) activeFilters.push(`PM: ${pmFilter.join(', ')}`);
+    if (statusFilter.length > 0) activeFilters.push(`Status: ${statusFilter.join(', ')}`);
+    if (projectTypeFilter.length > 0) activeFilters.push(`Project Type: ${projectTypeFilter.join(', ')}`);
+    if (clientFilter) activeFilters.push(`Client: ${clientFilter}`);
+    if (dueFilterStart || dueFilterEnd) activeFilters.push(`Due Date: ${dueFilterStart || 'Any'} to ${dueFilterEnd || 'Any'}`);
+    if (startFilterStart || startFilterEnd) activeFilters.push(`Start Date: ${startFilterStart || 'Any'} to ${startFilterEnd || 'Any'}`);
+    
+    const filtersText = activeFilters.length > 0 ? activeFilters.join(' | ') : 'None';
+
+    const labels: Record<string, string> = {
+      projectNumber: "Project ID",
+      itemName: "Item",
+      projectName: "Project Name",
+      client: "Client",
+      projectManager: "Manager",
+      status: "Status",
+      bayLocation: "Bay Location",
+      projectType: "Project Type",
+      deliveryDate: "Due Date",
+      drawingApprovalDate: "Drawing Approval",
+      drawingSubmittedDate: "Drawing Submitted",
+      sheetmetalOrderedDate: "SM Ordered",
+      sheetmetalDeliveredDate: "SM Delivered",
+      switchgearOrderedDate: "SG Ordered",
+      switchgearDeliveredDate: "SG Delivered",
+      budgetHours: "Budget",
+      actualHours: "Actual",
+      remainingHours: "Remaining",
+      progressPercent: "Progress %",
+      total: "Value",
+      startDate: "Start Date"
+    };
+
+    const orderedColumnKeys = [
+      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'bayLocation', 'projectType', 
+      'startDate', 'deliveryDate', 'drawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 
+      'switchgearOrderedDate', 'switchgearDeliveredDate', 'budgetHours', 'actualHours', 'remainingHours', 
+      'progressPercent', 'total'
+    ];
+
+    const visibleKeys = orderedColumnKeys.filter(key => columnVisibility[key]);
+
+    const dataRows = filteredAndSortedProjects.map(project => {
+      const rowData: any[] = [];
+      visibleKeys.forEach(key => {
+        let val: any = '';
+        if (key === 'projectNumber') val = project.projectNumber;
+        else if (key === 'projectName') val = project.name;
+        else if (key === 'itemName') val = project.description;
+        else if (key === 'client') val = project.client?.name;
+        else if (key === 'projectManager') val = project.projectManager;
+        else if (key === 'status') val = project.rawStatus;
+        else if (key === 'bayLocation') val = project.bayLocation;
+        else if (key === 'projectType') val = project.projectType;
+        else if (key === 'deliveryDate') val = project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yyyy') : '';
+        else if (key === 'startDate') val = project.startDate ? formatSydneyDate(project.startDate) : '';
+        else if (key === 'drawingApprovalDate') val = project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yyyy') : '';
+        else if (key === 'drawingSubmittedDate') val = project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yyyy') : '';
+        else if (key === 'sheetmetalOrderedDate') val = project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yyyy') : '';
+        else if (key === 'sheetmetalDeliveredDate') val = project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yyyy') : '';
+        else if (key === 'switchgearOrderedDate') val = project.switchgearOrderedDate ? format(new Date(project.switchgearOrderedDate), 'dd MMM yyyy') : '';
+        else if (key === 'switchgearDeliveredDate') val = project.switchgearDeliveredDate ? format(new Date(project.switchgearDeliveredDate), 'dd MMM yyyy') : '';
+        else if (key === 'budgetHours') val = Number(project.budgetHours || 0).toFixed(2);
+        else if (key === 'actualHours') val = Number(project.actualHours || 0).toFixed(2);
+        else if (key === 'remainingHours') val = Number(project.remainingHours || 0).toFixed(2);
+        else if (key === 'progressPercent') val = Math.round(project.progressPercent || 0) + '%';
+        else if (key === 'total') val = project.total || 0;
+        
+        rowData.push(val);
+      });
+      return rowData;
+    });
+
+    const worksheetData = [
+      ['Export Date', format(new Date(), 'dd-MMM-yyyy HH:mm')],
+      ['Total Records', filteredAndSortedProjects.length],
+      ['Active Filters', filtersText],
+      [],
+      visibleKeys.map(k => labels[k]),
+      ...dataRows
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Projects");
+
+    let filterSlug = '';
+    if (statusFilter.length === 1) filterSlug = `-status-${statusFilter[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+    else if (activeFilters.length > 0) filterSlug = '-filtered';
+
+    const filename = `wip-export-${format(new Date(), 'dd-MMM-yy')}${filterSlug}.${exportFormat}`;
+    
+    XLSX.writeFile(wb, filename);
+    setIsExportPickerOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <TableSubtotals
@@ -961,6 +1069,36 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                         );
                       })}
                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="relative" ref={exportPickerRef}>
+              <button
+                onClick={() => setIsExportPickerOpen(!isExportPickerOpen)}
+                className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                title="Export Data"
+              >
+                <Download className="h-3.5 w-3.5 text-slate-400" />
+                Export
+              </button>
+
+              {isExportPickerOpen && (
+                <div className="absolute right-0 mt-2 w-48 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => handleExport('csv')}
+                      className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                    >
+                      Export as CSV
+                    </button>
+                    <button
+                      onClick={() => handleExport('xlsx')}
+                      className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                    >
+                      Export as Excel (.xlsx)
+                    </button>
                   </div>
                 </div>
               )}
