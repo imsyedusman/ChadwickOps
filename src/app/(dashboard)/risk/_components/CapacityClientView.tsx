@@ -6,7 +6,7 @@ import { format, addMonths, startOfMonth, parseISO } from 'date-fns';
 import { AlertTriangle, TrendingDown, TrendingUp, Users, Activity, Save, Loader2, Info, Lightbulb, PieChart, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from '@/lib/project-utils';
+import { isProductiveProject, INTERNAL_WORK_DESCRIPTION, isActiveWorkStatus } from '@/lib/project-utils';
 import { Tooltip } from '@/components/ui/Tooltip';
 
 interface Project {
@@ -24,7 +24,7 @@ interface Project {
 
 interface CapacityClientViewProps {
   initialSettings: CapacitySettings;
-  activeProjects: Project[];
+  allProjects: Project[];
   initialHorizon: number; // Ignored for Phase 4 since we track local state
 }
 
@@ -44,7 +44,7 @@ const formatCompactCurrency = (value: number) => {
 
 type TimeRangeType = '3' | '6' | '12' | 'custom';
 
-export default function CapacityClientView({ initialSettings, activeProjects }: CapacityClientViewProps) {
+export default function CapacityClientView({ initialSettings, allProjects }: CapacityClientViewProps) {
   const [settings, setSettings] = useState<CapacitySettings>(initialSettings);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -102,34 +102,42 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
   }, [months, selectedMonth]);
 
   const monthlyData = useMemo(() => {
-    const data: Record<string, { budget: number; actual: number; rawActual: number; remaining: number; internalRemaining: number; totalValue: number; projects: Project[] }> = {};
-    months.forEach(m => data[m] = { budget: 0, actual: 0, rawActual: 0, remaining: 0, internalRemaining: 0, totalValue: 0, projects: [] });
+    const data: Record<string, { budget: number; actual: number; rawActual: number; remaining: number; internalRemaining: number; totalValue: number; activeValue: number; activeJobs: number; projects: Project[] }> = {};
+    months.forEach(m => data[m] = { budget: 0, actual: 0, rawActual: 0, remaining: 0, internalRemaining: 0, totalValue: 0, activeValue: 0, activeJobs: 0, projects: [] });
 
-    activeProjects.forEach(p => {
+    allProjects.forEach(p => {
         if (!p.deliveryDate) return; 
         const m = format(new Date(p.deliveryDate), 'yyyy-MM');
         if (data[m]) {
-            const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
-            const calculatedRemaining = p.budgetHours - adjustedActual;
-
-            const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
-
+            // 1. Total Value includes EVERY unarchived project mapped to this month
             data[m].totalValue += (Number(p.total) || 0);
 
-            if (isProductiveProject(p.projectNumber)) {
-                data[m].budget += p.budgetHours;
-                data[m].actual += adjustedActual;
-                data[m].rawActual += p.actualHours;
-                data[m].remaining += calculatedRemaining;
-            } else {
-                data[m].internalRemaining += calculatedRemaining;
+            // 2. Gate operational metrics to active production statuses
+            if (isActiveWorkStatus(p.rawStatus)) {
+                const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
+                const calculatedRemaining = p.budgetHours - adjustedActual;
+                const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
+
+                // 3. Separate productive vs internal load
+                if (isProductiveProject(p.projectNumber)) {
+                    data[m].budget += p.budgetHours;
+                    data[m].actual += adjustedActual;
+                    data[m].rawActual += p.actualHours;
+                    data[m].remaining += calculatedRemaining;
+                    data[m].activeValue += (Number(p.total) || 0);
+                    data[m].activeJobs += 1;
+                } else {
+                    data[m].internalRemaining += calculatedRemaining;
+                }
+
+                // 4. Only active projects populate the Top Drivers & PM Load arrays
+                data[m].projects.push(modifiedProject);
             }
-            data[m].projects.push(modifiedProject);
         }
     });
 
     return data;
-  }, [activeProjects, months, settings.actualsFactor]);
+  }, [allProjects, months, settings.actualsFactor]);
 
   // Summary Metrics
   const totalCapacity = currentCapacity * months.length;
@@ -230,8 +238,18 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                               <tr>
                                   <th className="px-5 py-3">Month</th>
                                   <th className="px-5 py-3 text-right">
-                                    <Tooltip content="Total value of all scheduled projects for this month.">
-                                      <span className="cursor-help border-b border-dotted border-slate-300">Project Value</span>
+                                    <Tooltip content="Number of active productive projects contributing to workload this month.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Active Jobs</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right">
+                                    <Tooltip content="Total value of active productive projects contributing to workload this month.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Active Value</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right">
+                                    <Tooltip content="Total value of all scheduled projects for this month (including internal/non-productive).">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Total Value</span>
                                     </Tooltip>
                                   </th>
                                   <th className="px-5 py-3 text-right">
@@ -292,8 +310,20 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                               </span>
                                           </td>
                                           <td className="px-5 py-4 text-right tabular-nums">
-                                              <Tooltip content={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(d.totalValue)}>
+                                              <span className="font-bold text-sm text-slate-700 dark:text-slate-300">
+                                                  {d.activeJobs}
+                                              </span>
+                                          </td>
+                                          <td className="px-5 py-4 text-right tabular-nums">
+                                              <Tooltip content={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(d.activeValue)}>
                                                   <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400 cursor-help">
+                                                      {formatCompactCurrency(d.activeValue)}
+                                                  </span>
+                                              </Tooltip>
+                                          </td>
+                                          <td className="px-5 py-4 text-right tabular-nums">
+                                              <Tooltip content={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(d.totalValue)}>
+                                                  <span className="font-bold text-sm text-slate-500 dark:text-slate-400 cursor-help opacity-80">
                                                       {formatCompactCurrency(d.totalValue)}
                                                   </span>
                                               </Tooltip>
@@ -340,7 +370,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                             <td className="px-5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-8">
                                                 Internal Load
                                             </td>
-                                            <td colSpan={3}></td>
+                                            <td colSpan={5}></td>
                                             <td className="px-5 py-1.5 text-right font-bold text-slate-400 tabular-nums text-xs">
                                                 +{formatHours(internal)}
                                             </td>

@@ -35,7 +35,7 @@ export default async function CapacityPage({
 
       <CapacityClientView 
         initialSettings={settings} 
-        activeProjects={activeProjects} 
+        allProjects={allProjects} 
         initialHorizon={horizon}
       />
     </div>
