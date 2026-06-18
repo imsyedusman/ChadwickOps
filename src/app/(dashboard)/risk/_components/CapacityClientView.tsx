@@ -20,6 +20,7 @@ interface Project {
   deliveryDate: Date | null;
   projectManager: string | null;
   total: number;
+  rawStatus: string | null;
 }
 
 interface CapacityClientViewProps {
