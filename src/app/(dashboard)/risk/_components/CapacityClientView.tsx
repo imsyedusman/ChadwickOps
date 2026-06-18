@@ -19,6 +19,7 @@ interface Project {
   remainingHours: number;
   deliveryDate: Date | null;
   projectManager: string | null;
+  total: number;
 }
 
 interface CapacityClientViewProps {
@@ -29,6 +30,16 @@ interface CapacityClientViewProps {
 
 const formatHours = (value: number) => {
     return new Intl.NumberFormat('en-AU').format(Math.round(value)) + 'h';
+};
+
+const formatCompactCurrency = (value: number) => {
+    if (value >= 1000000) {
+        return '$' + (value / 1000000).toFixed(1) + 'M';
+    }
+    if (value >= 1000) {
+        return '$' + Math.round(value / 1000) + 'K';
+    }
+    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(value || 0);
 };
 
 type TimeRangeType = '3' | '6' | '12' | 'custom';
@@ -91,8 +102,8 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
   }, [months, selectedMonth]);
 
   const monthlyData = useMemo(() => {
-    const data: Record<string, { budget: number; actual: number; rawActual: number; remaining: number; internalRemaining: number; projects: Project[] }> = {};
-    months.forEach(m => data[m] = { budget: 0, actual: 0, rawActual: 0, remaining: 0, internalRemaining: 0, projects: [] });
+    const data: Record<string, { budget: number; actual: number; rawActual: number; remaining: number; internalRemaining: number; totalValue: number; projects: Project[] }> = {};
+    months.forEach(m => data[m] = { budget: 0, actual: 0, rawActual: 0, remaining: 0, internalRemaining: 0, totalValue: 0, projects: [] });
 
     activeProjects.forEach(p => {
         if (!p.deliveryDate) return; 
@@ -102,6 +113,8 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
             const calculatedRemaining = p.budgetHours - adjustedActual;
 
             const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
+
+            data[m].totalValue += (Number(p.total) || 0);
 
             if (isProductiveProject(p.projectNumber)) {
                 data[m].budget += p.budgetHours;
@@ -217,6 +230,11 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                               <tr>
                                   <th className="px-5 py-3">Month</th>
                                   <th className="px-5 py-3 text-right">
+                                    <Tooltip content="Total value of all scheduled projects for this month.">
+                                      <span className="cursor-help border-b border-dotted border-slate-300">Project Value</span>
+                                    </Tooltip>
+                                  </th>
+                                  <th className="px-5 py-3 text-right">
                                     <Tooltip content="Total estimated hours from all project tasks in WorkGuru.">
                                       <span className="cursor-help border-b border-dotted border-slate-300">Budget</span>
                                     </Tooltip>
@@ -273,6 +291,13 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                                   {format(parseISO(`${m}-01`), 'MMM yyyy')}
                                               </span>
                                           </td>
+                                          <td className="px-5 py-4 text-right tabular-nums">
+                                              <Tooltip content={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(d.totalValue)}>
+                                                  <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400 cursor-help">
+                                                      {formatCompactCurrency(d.totalValue)}
+                                                  </span>
+                                              </Tooltip>
+                                          </td>
                                           <td className="px-5 py-4 text-right text-xs text-slate-400 tabular-nums">{formatHours(d.budget)}</td>
                                           <td className="px-5 py-4 text-right tabular-nums">
                                               <div className="text-xs text-slate-400 font-bold">{formatHours(d.actual)}</div>
@@ -315,7 +340,7 @@ export default function CapacityClientView({ initialSettings, activeProjects }: 
                                             <td className="px-5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-8">
                                                 Internal Load
                                             </td>
-                                            <td colSpan={2}></td>
+                                            <td colSpan={3}></td>
                                             <td className="px-5 py-1.5 text-right font-bold text-slate-400 tabular-nums text-xs">
                                                 +{formatHours(internal)}
                                             </td>

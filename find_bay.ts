@@ -3,6 +3,7 @@ import fs from 'fs';
 async function findProjectWithBayLocation() {
     try {
         let content = fs.readFileSync('diag_result_utf8.json', 'utf8');
+        content = content.replace(/^\uFEFF/, '');
         const data = JSON.parse(content);
         
         const projects = data.result?.items || [];

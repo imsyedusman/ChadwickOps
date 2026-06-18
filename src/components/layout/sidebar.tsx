@@ -25,6 +25,7 @@ import {
 
 const navigation = [
   { name: 'WIP Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Workshop Board', href: '/workshop', icon: Activity },
   { name: 'Procurement', href: '/procurement', icon: ShoppingBag },
   { name: 'Capacity & Risk', href: '/risk', icon: BarChart3 },
   { name: 'Reports', href: '/reports', icon: TrendingUp },

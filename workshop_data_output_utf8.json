@@ -1,0 +1,613 @@
+﻿=== Query 1: Arrivals ===
+[
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-27",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-05-29",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Cleanpeak Transfer Switch",
+    "projectNumber": "12463-01",
+    "expectedDate": "2026-06-01",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Cleanpeak Transfer Switch",
+    "projectNumber": "12463-01",
+    "expectedDate": "2026-06-01",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Cleanpeak Transfer Switch",
+    "projectNumber": "12463-01",
+    "expectedDate": "2026-06-01",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Cleanpeak Transfer Switch",
+    "projectNumber": "12463-01",
+    "expectedDate": "2026-06-01",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "MCN-00100 - MDB",
+    "projectNumber": "12453-01",
+    "expectedDate": "2026-06-01",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "LV back up request during MV migration - LV BACK UP 800A TIER",
+    "projectNumber": "12447-01",
+    "expectedDate": "2026-06-02",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "NUCLEUS CLINICAL TRIAL FACILIT - MDB-5BTN",
+    "projectNumber": "12392-01",
+    "expectedDate": "2026-06-05",
+    "riskStatus": "Delivery Risk",
+    "actionRequired": "Escalate delay"
+  },
+  {
+    "projectName": "Amity College Girls HS Extension - MDB",
+    "projectNumber": "12454-02",
+    "expectedDate": "2026-06-05",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "39-41 Montague St North Wollongong",
+    "projectNumber": "12427-02",
+    "expectedDate": "2026-06-08",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "39-41 Montague St North Wollongong",
+    "projectNumber": "12427-02",
+    "expectedDate": "2026-06-08",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "CONSUMABLES",
+    "projectNumber": "99003 CONS",
+    "expectedDate": "2026-06-11",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Oxley",
+    "projectNumber": "12404-02",
+    "expectedDate": "2026-06-12",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Oxley",
+    "projectNumber": "12404-01",
+    "expectedDate": "2026-06-12",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Oxley",
+    "projectNumber": "12404-01",
+    "expectedDate": "2026-06-12",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Warrawong MSB",
+    "projectNumber": "12452-01",
+    "expectedDate": "2026-06-15",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Warrawong MSB",
+    "projectNumber": "12452-01",
+    "expectedDate": "2026-06-15",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "39-41 Montague St North Wollongong",
+    "projectNumber": "12427-01",
+    "expectedDate": "2026-06-15",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "39-41 Montague St North Wollongong",
+    "projectNumber": "12427-01",
+    "expectedDate": "2026-06-15",
+    "riskStatus": "Supplier Delay",
+    "actionRequired": "Follow up supplier"
+  },
+  {
+    "projectName": "Amity College Girls HS Extension - MSB",
+    "projectNumber": "12454-01",
+    "expectedDate": "2026-06-19",
+    "riskStatus": "Awaiting Materials",
+    "actionRequired": "On track"
+  }
+]
+
+=== Query 2: In Progress ===
+[
+  {
+    "projectName": "CIRCULAR QUAY WHARVES METERING",
+    "projectNumber": "12385-03",
+    "bayNumber": "7",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "CIRCULAR QUAY WHARVES METERING",
+    "projectNumber": "12385-02",
+    "bayNumber": "7",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "CALALA BESS YARD",
+    "projectNumber": "12311-04",
+    "bayNumber": "11",
+    "progressPercent": 77.3
+  },
+  {
+    "projectName": "Catherine Hamlin Park",
+    "projectNumber": "12329-01",
+    "bayNumber": "14",
+    "progressPercent": 40
+  },
+  {
+    "projectName": "CRONULLA POWER BOLLARDS",
+    "projectNumber": "12354-01",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "Event Power Bollard Cronulla Stage 2  (2 X DB)",
+    "projectNumber": "12317-01",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "CALALA BESS YARD",
+    "projectNumber": "12311-05",
+    "bayNumber": "11",
+    "progressPercent": 49.7
+  },
+  {
+    "projectName": "DAPTO LEAGUES CARK PARK",
+    "projectNumber": "12217-01",
+    "bayNumber": "5",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "Guildford Aquatic Centre",
+    "projectNumber": "12269-01",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "6-8 Wiseman Road  Bowral (MSB)",
+    "projectNumber": "12331-01",
+    "bayNumber": "10",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "MOORE THEOLOGICAL COLLEGE",
+    "projectNumber": "12411-01",
+    "bayNumber": "14",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-01",
+    "bayNumber": "19",
+    "progressPercent": 11.1
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-02",
+    "bayNumber": "21",
+    "progressPercent": 22.9
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-03",
+    "bayNumber": "17",
+    "progressPercent": 24.3
+  },
+  {
+    "projectName": "75 The Esplanade  Mosman (MSB)",
+    "projectNumber": "12422-01",
+    "bayNumber": "12",
+    "progressPercent": 163.9
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-08",
+    "bayNumber": "16",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "City Tattersalls Club TOB",
+    "projectNumber": "11874-05",
+    "bayNumber": "20",
+    "progressPercent": 0.3
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-04",
+    "bayNumber": "17",
+    "progressPercent": 5.6
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL -DB-PV",
+    "projectNumber": "12384-06",
+    "bayNumber": "9",
+    "progressPercent": 89.8
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL -MDB 5",
+    "projectNumber": "12384-01",
+    "bayNumber": "6",
+    "progressPercent": 31.2
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL -MDB-UPS-B",
+    "projectNumber": "12384-05",
+    "bayNumber": "13",
+    "progressPercent": 6.1
+  },
+  {
+    "projectName": "BATTERY CHARGER - DB BC3",
+    "projectNumber": "12446-01",
+    "bayNumber": "12",
+    "progressPercent": 31.4
+  },
+  {
+    "projectName": "BATTERY CHARGER - DB BC4",
+    "projectNumber": "12446-02",
+    "bayNumber": "12",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-10",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "NUCLEUS CLINICAL TRIAL FACILIT -DB-I/O",
+    "projectNumber": "12392-06",
+    "bayNumber": "17",
+    "progressPercent": 70.8
+  },
+  {
+    "projectName": "2 Bando Road  Cronulla",
+    "projectNumber": "12336-01",
+    "bayNumber": "13",
+    "progressPercent": 185.8
+  },
+  {
+    "projectName": "84 WHARF ROAD MELROSE PARK -MSB",
+    "projectNumber": "12435-01",
+    "bayNumber": "17",
+    "progressPercent": 98.5
+  },
+  {
+    "projectName": "518 Pacific Hwy  Lane Cove (MSB)",
+    "projectNumber": "12418-01",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "Olds Park Sport Facility 624 Forest Rd Penshurst-DB-EV",
+    "projectNumber": "12387-02",
+    "bayNumber": "2",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "Narang Rd  Bomaderry",
+    "projectNumber": "12403-01",
+    "bayNumber": "14",
+    "progressPercent": 13.8
+  },
+  {
+    "projectName": "Ulladulla Childcare MSB",
+    "projectNumber": "12408-01",
+    "bayNumber": "20",
+    "progressPercent": 109.6
+  },
+  {
+    "projectName": "Madge Metals MSB",
+    "projectNumber": "12409-01",
+    "bayNumber": "7",
+    "progressPercent": 62.4
+  },
+  {
+    "projectName": "Sydney Water - SP1238",
+    "projectNumber": "12344-01",
+    "bayNumber": "24",
+    "progressPercent": 148.2
+  },
+  {
+    "projectName": "City Tattersalls Club",
+    "projectNumber": "11874-07",
+    "bayNumber": "16",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "TBS MSB GERGORY HILLS",
+    "projectNumber": "12374-01",
+    "bayNumber": "14",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "CIRCULAR QUAY WHARVES METERING",
+    "projectNumber": "12385-04",
+    "bayNumber": "7",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "CIRCULAR QUAY WHARVES METERING",
+    "projectNumber": "12385-01",
+    "bayNumber": "7",
+    "progressPercent": 0
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL -GEN. MDB",
+    "projectNumber": "12384-02",
+    "bayNumber": "9",
+    "progressPercent": 39.2
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL - MDB-UPS-A",
+    "projectNumber": "12384-04",
+    "bayNumber": "13",
+    "progressPercent": 9.6
+  },
+  {
+    "projectName": "CHRISTIAN BROTHER'S HS   MSB",
+    "projectNumber": "12290-01",
+    "bayNumber": "10",
+    "progressPercent": 68.9
+  },
+  {
+    "projectName": "Adroit Lawson (FaultΓÇælimited chassis)",
+    "projectNumber": "12399-01",
+    "bayNumber": "6",
+    "progressPercent": 132
+  }
+]
+
+=== Query 3: Departures ===
+[
+  {
+    "projectName": "THE WATER LANE RESERVE MSB",
+    "projectNumber": "12353-01",
+    "deliveryDate": "2026-05-15",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "CALALA BESS YARD",
+    "projectNumber": "12311-01",
+    "deliveryDate": "2026-05-14",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "CALALA BESS YARD",
+    "projectNumber": "12311-03",
+    "deliveryDate": "2026-05-14",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "MIDDLE HEAD OVAL PAVILLION- MSB",
+    "projectNumber": "12361-01",
+    "deliveryDate": "2026-04-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "HEFFRON PARK AMENITIES",
+    "projectNumber": "12347-01",
+    "deliveryDate": "2026-05-29",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "BELMORE BANKSTOWN LINE (MP)",
+    "projectNumber": "12299-01",
+    "deliveryDate": "2026-04-30",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "Guildford Aquatic Centre -DB's",
+    "projectNumber": "12269-02",
+    "deliveryDate": "2026-06-30",
+    "status": "On track"
+  },
+  {
+    "projectName": "CHRISTIAN BROTHER'S HS MDB2",
+    "projectNumber": "12290-02",
+    "deliveryDate": "2026-05-29",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "877 Richmond Road  Marsden Park (MSB)",
+    "projectNumber": "12343-01",
+    "deliveryDate": "2026-05-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "Elizabeth Bay MP",
+    "projectNumber": "12370-01",
+    "deliveryDate": "2026-04-22",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "RAZORBACK SWITCHBOARD",
+    "projectNumber": "12390-01",
+    "deliveryDate": "2026-05-15",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "4CYTE Pathology (Gen DB)",
+    "projectNumber": "12362-02",
+    "deliveryDate": "2026-04-30",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "4CYTE Pathology (ATS)",
+    "projectNumber": "12362-04",
+    "deliveryDate": "2026-05-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "SHPR 1 Tundra CL -TEMP GEN. CP",
+    "projectNumber": "12384-03",
+    "deliveryDate": "2026-06-12",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "CANCEL 264-268 Kiera Street  Wollongong-Meter Panel",
+    "projectNumber": "A1014",
+    "deliveryDate": "2026-04-20",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "BOX HILL PUBLIC SCHOOL -MSB",
+    "projectNumber": "12443-01",
+    "deliveryDate": "2026-05-21",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "98 SOUTHWELL ROAD  ORAN PARK (MSB)",
+    "projectNumber": "12367-01",
+    "deliveryDate": "2026-04-29",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "CALALA BESS YARD",
+    "projectNumber": "12311-02",
+    "deliveryDate": "2026-05-14",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "264-268 Kiera Street  Wollongong-Meter Panel",
+    "projectNumber": "12320-03",
+    "deliveryDate": "2026-04-20",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "FIVE DOCK DEPOT MSB",
+    "projectNumber": "12352-01",
+    "deliveryDate": "2026-04-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "Elizabeth Bay 02 OFF MP",
+    "projectNumber": "12370-02",
+    "deliveryDate": "2026-05-01",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "10 Bellingham Street Narellan",
+    "projectNumber": "11907-01",
+    "deliveryDate": "2026-04-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "HEFFRON PARK AMENITIES",
+    "projectNumber": "12347-02",
+    "deliveryDate": "2026-05-15",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "Auburn 160A MSB",
+    "projectNumber": "12360-01",
+    "deliveryDate": "2026-04-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "Woodland Metal Spinners - MDB",
+    "projectNumber": "12398-01",
+    "deliveryDate": "2026-05-22",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "4CYTE Pathology (Lab DB)",
+    "projectNumber": "12362-03",
+    "deliveryDate": "2026-04-30",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "4CYTE Pathology (MSB)",
+    "projectNumber": "12362-01",
+    "deliveryDate": "2026-05-25",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "ALL PRODUCT MSB",
+    "projectNumber": "12429-01",
+    "deliveryDate": "2026-05-22",
+    "status": "Overdue"
+  },
+  {
+    "projectName": "CHRISTIAN BROTHER'S HS",
+    "projectNumber": "12290-03",
+    "deliveryDate": "2026-05-15",
+    "status": "Overdue"
+  }
+]
