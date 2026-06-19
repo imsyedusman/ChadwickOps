@@ -87,10 +87,25 @@ export async function getWorkshopInProgress() {
             bayGroups[bay].push({
                 projectName: p.name,
                 projectNumber: p.projectNumber,
-                progressPercent: p.progressPercent // Uncapped, exactly as calculated
+                progressPercent: p.progressPercent, // Uncapped, exactly as calculated
+                deliveryDate: p.deliveryDate
             });
         }
     }
+    
+    // TEMPORARY LOGGING
+    let totalInBays = 0;
+    let withDate = 0;
+    for (const bay in bayGroups) {
+        for (const p of bayGroups[bay]) {
+            totalInBays++;
+            if (p.deliveryDate) withDate++;
+        }
+    }
+    console.log(`\n\n--- DATABASE CHECK ---`);
+    console.log(`Total projects in bays: ${totalInBays}`);
+    console.log(`Projects with non-null deliveryDate: ${withDate}`);
+    console.log(`----------------------\n\n`);
 
     return bayGroups;
 }

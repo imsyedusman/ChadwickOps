@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { AlertOctagon, Clock, CheckCircle2, ShieldAlert, Truck, PauseCircle } from "lucide-react";
+import { AlertOctagon, Clock, CheckCircle2, ShieldAlert, Truck, PauseCircle, PlaneLanding, PlaneTakeoff, FlaskConical, TrendingUp } from "lucide-react";
 
-export default function WorkshopBoard({ arrivals, inProgress, departures }: any) {
+export default function WorkshopBoard({ arrivals, inProgress, departures, lastUpdatedText }: any) {
     const testingJobs = departures.filter((d: any) => d.classification === 'Blocked');
     testingJobs.sort((a: any, b: any) => a.statusReason.includes('Defective') ? -1 : 1);
-    
+
     const dispatchJobs = departures.filter((d: any) => d.classification === 'Ready' || d.classification === 'On Hold');
+
+    const router = useRouter();
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            router.refresh();
+        }, 30000); // 30 seconds
+        return () => clearInterval(timer);
+    }, [router]);
 
     return (
         <div className="flex flex-col h-full w-full bg-slate-50 text-slate-900 p-4 gap-4 overflow-hidden font-sans">
             {/* Top: Arrivals Strip */}
-            <div className="h-28 shrink-0 bg-white rounded-xl border border-slate-200 shadow-sm p-3 flex flex-col justify-center overflow-hidden">
-                <ArrivalsStrip arrivals={arrivals} />
+            <div className="shrink-0 w-full flex flex-col">
+                <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
+                    <PlaneLanding className="w-6 h-6 text-slate-400" /> Arrivals
+                </h2>
+                <div className="h-36 w-full overflow-hidden">
+                    <ArrivalsStrip arrivals={arrivals} />
+                </div>
             </div>
 
             {/* Bottom Section */}
@@ -24,7 +39,7 @@ export default function WorkshopBoard({ arrivals, inProgress, departures }: any)
                     {/* Testing Section */}
                     <div className="flex-[0.8] bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col overflow-hidden min-h-0">
                         <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
-                            <ShieldAlert className="w-6 h-6 text-slate-400" /> Testing Queue
+                            <FlaskConical className="w-6 h-6 text-slate-400" /> Testing Queue
                         </h2>
                         <div className="flex-1 overflow-hidden">
                             <TestingList items={testingJobs} />
@@ -34,7 +49,7 @@ export default function WorkshopBoard({ arrivals, inProgress, departures }: any)
                     {/* Dispatch Section */}
                     <div className="flex-[1.2] bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col overflow-hidden min-h-0">
                         <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
-                            <Truck className="w-6 h-6 text-slate-400" /> Dispatch
+                            <PlaneTakeoff className="w-6 h-6 text-slate-400" /> Departures
                         </h2>
                         <div className="flex-1 overflow-hidden">
                             <DispatchList items={dispatchJobs} />
@@ -44,9 +59,15 @@ export default function WorkshopBoard({ arrivals, inProgress, departures }: any)
 
                 {/* Right Area: Bay Grid - Wider (75%) */}
                 <div className="w-3/4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col overflow-hidden min-h-0">
-                    <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0">
-                        Workshop Floor
-                    </h2>
+                    <div className="flex justify-between items-center mb-4 shrink-0">
+                        <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500">
+                            Workshop Floor
+                        </h2>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100/50 px-3 py-1.5 rounded-full border border-slate-200/50">
+                            <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
+                            Last Updated: {lastUpdatedText}
+                        </div>
+                    </div>
                     <div className="flex-1 flex flex-col gap-4">
                         {/* Top Row: Odds right-to-left physically (23, 21, ... 1) */}
                         <div className="flex-1 flex gap-3">
@@ -69,7 +90,7 @@ export default function WorkshopBoard({ arrivals, inProgress, departures }: any)
 
 function ArrivalsStrip({ arrivals }: { arrivals: any[] }) {
     const [index, setIndex] = useState(0);
-    const limit = 4;
+    const limit = 3;
 
     const sortedArrivals = useMemo(() => {
         return [...arrivals].sort((a, b) => {
@@ -97,36 +118,46 @@ function ArrivalsStrip({ arrivals }: { arrivals: any[] }) {
     const visible = sortedArrivals.slice(index, index + limit);
 
     return (
-        <div className="flex gap-4 w-full h-full">
-            {visible.map((item, i) => {
-                let cardClass = "bg-emerald-50 border-emerald-100";
-                let badgeClass = "bg-white text-emerald-700";
-                
-                if (item.actionRequired?.toLowerCase().includes("escalate")) {
-                    cardClass = "bg-red-50 border-red-100";
-                    badgeClass = "bg-white text-red-700";
-                } else if (item.actionRequired?.toLowerCase().includes("follow up") || item.riskStatus?.toLowerCase().includes("delay")) {
-                    cardClass = "bg-amber-50 border-amber-100";
-                    badgeClass = "bg-white text-amber-700";
-                }
+        <div className="flex flex-col h-full gap-2 w-full">
+            <div className="flex gap-4 w-full flex-1">
+                {visible.map((item, i) => {
+                    let cardClass = "bg-white border-slate-200 shadow-sm";
+                    let badgeClass = "bg-emerald-100 text-emerald-800";
 
-                return (
-                    <div key={i} className={cn("flex-1 rounded-xl p-4 flex flex-col justify-between overflow-hidden border", cardClass)}>
-                        <div className="flex justify-between items-start gap-2">
-                            <span className="font-bold text-xl truncate text-slate-900" title={item.projectName}>{item.projectName}</span>
-                            <span className="text-sm font-bold px-2 py-1 bg-white/60 text-slate-700 rounded-full uppercase tracking-wider whitespace-nowrap">
-                                {item.expectedDate ? new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : 'No ETA'}
-                            </span>
+                    if (item.actionRequired?.toLowerCase().includes("escalate")) {
+                        badgeClass = "bg-red-100 text-red-800";
+                    } else if (item.actionRequired?.toLowerCase().includes("follow up") || item.riskStatus?.toLowerCase().includes("delay")) {
+                        badgeClass = "bg-amber-100 text-amber-800";
+                    }
+
+                    return (
+                        <div key={i} className={cn("flex-1 rounded-xl p-4 flex flex-col justify-between overflow-hidden border", cardClass)}>
+                            <div className="flex justify-between items-start gap-2">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-sm font-bold text-slate-500 truncate">{item.projectNumber}</span>
+                                    <span className="font-bold text-lg truncate text-slate-900" title={item.projectName}>{item.projectName}</span>
+                                </div>
+                                <span className="text-sm font-bold px-2 py-1 bg-slate-100 text-slate-700 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                    {item.expectedDate ? `ETA: ${new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}` : 'No ETA'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-end mt-2">
+                                <span className="text-base text-slate-600 truncate max-w-[60%] font-medium">{item.supplierName}</span>
+                                <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
+                                    {item.riskStatus}
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex justify-between items-end">
-                            <span className="text-base text-slate-600 truncate max-w-[60%] font-medium">{item.supplierName}</span>
-                            <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
-                                {item.riskStatus}
-                            </span>
-                        </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
+            {sortedArrivals.length > limit && (
+                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
+                    {Array.from({ length: Math.ceil(sortedArrivals.length / limit) }).map((_, i) => (
+                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -150,37 +181,46 @@ function TestingList({ items }: { items: any[] }) {
     const visible = items.slice(index, index + limit);
 
     return (
-        <div className="flex flex-col gap-3 h-full justify-center">
-            {visible.map((item, i) => {
-                const isDefective = item.statusReason.includes("Defective");
-                const cardClass = isDefective ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100";
-                const badgeClass = isDefective ? "bg-white text-red-700" : "bg-white text-amber-700";
+        <div className="flex flex-col h-full gap-2">
+            <div className="flex flex-col gap-3 flex-1 justify-center">
+                {visible.map((item, i) => {
+                    const isDefective = item.statusReason.includes("Defective");
+                    const cardClass = "bg-white border-slate-200";
+                    const badgeClass = isDefective ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800";
 
-                return (
-                    <div key={i} className={cn("flex flex-col p-4 rounded-xl border", cardClass)}>
-                        <div className="flex justify-between items-center mb-3">
-                            <span className="font-bold text-xl text-slate-900 truncate">{item.projectName}</span>
-                            <span className="text-sm text-slate-500 font-mono ml-2 shrink-0">{item.projectNumber}</span>
+                    return (
+                        <div key={i} className={cn("flex flex-col p-3 rounded-xl border", cardClass)}>
+                            <div className="flex flex-col mb-2 min-w-0">
+                                <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
+                                <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
+                            </div>
+                            <div className="flex items-center">
+                                <span className={cn(
+                                    "flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+                                    badgeClass
+                                )}>
+                                    {isDefective ? <AlertOctagon className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                    {item.statusReason}
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex items-center">
-                            <span className={cn(
-                                "flex items-center gap-2 text-sm font-bold uppercase tracking-widest px-3 py-1.5 rounded-full",
-                                badgeClass
-                            )}>
-                                {isDefective ? <AlertOctagon className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                                {item.statusReason}
-                            </span>
-                        </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
+            {items.length > limit && (
+                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
+                    {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
+                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
 
 function DispatchList({ items }: { items: any[] }) {
     const [index, setIndex] = useState(0);
-    const limit = 4;
+    const limit = 3;
 
     useEffect(() => {
         if (items.length <= limit) return;
@@ -197,43 +237,50 @@ function DispatchList({ items }: { items: any[] }) {
     const visible = items.slice(index, index + limit);
 
     return (
-        <div className="flex flex-col gap-3 h-full justify-center">
-            {visible.map((item, i) => {
-                let cardClass = "bg-emerald-50 border-emerald-100";
-                let badgeClass = "bg-white text-emerald-700";
-                let Icon = CheckCircle2;
-                
-                if (item.classification === 'On Hold') {
-                    cardClass = "bg-slate-50 border-slate-200";
-                    badgeClass = "bg-white text-slate-700";
-                    Icon = PauseCircle;
-                } else if (item.dateStatus === 'Overdue') {
-                    cardClass = "bg-red-50 border-red-200";
-                    badgeClass = "bg-white text-red-700";
-                    Icon = AlertOctagon;
-                } else if (item.dateStatus === 'Due soon') {
-                    cardClass = "bg-amber-50 border-amber-100";
-                    badgeClass = "bg-white text-amber-700";
-                    Icon = Clock;
-                }
+        <div className="flex flex-col h-full gap-2">
+            <div className="flex flex-col gap-3 flex-1 justify-center">
+                {visible.map((item, i) => {
+                    let cardClass = "bg-white border-slate-200";
+                    let badgeClass = "bg-emerald-100 text-emerald-800";
+                    let Icon = CheckCircle2;
 
-                return (
-                    <div key={i} className={cn("flex flex-col justify-center p-4 rounded-xl border", cardClass)}>
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="flex flex-col overflow-hidden">
-                                <span className="font-bold text-xl text-slate-900 truncate">{item.projectName}</span>
-                                <span className="text-sm text-slate-600 uppercase tracking-wider truncate font-medium">{item.statusReason}</span>
-                            </div>
-                            <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full shrink-0 shadow-sm", badgeClass)}>
-                                <Icon className="w-5 h-5 shrink-0" />
-                                <span className="text-sm font-bold uppercase tracking-widest whitespace-nowrap">
-                                    {item.classification === 'On Hold' ? 'On Hold' : item.dateStatus}
-                                </span>
+                    if (item.classification === 'On Hold') {
+                        badgeClass = "bg-slate-100 text-slate-800";
+                        Icon = PauseCircle;
+                    } else if (item.dateStatus === 'Overdue') {
+                        badgeClass = "bg-red-100 text-red-800";
+                        Icon = AlertOctagon;
+                    } else if (item.dateStatus === 'Due soon') {
+                        badgeClass = "bg-amber-100 text-amber-800";
+                        Icon = Clock;
+                    }
+
+                    return (
+                        <div key={i} className={cn("flex flex-col justify-center p-4 rounded-xl border", cardClass)}>
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-col overflow-hidden">
+                                    <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
+                                    <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
+                                    <span className="text-xs text-slate-500 uppercase tracking-wider truncate font-medium mt-1">{item.statusReason}</span>
+                                </div>
+                                <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full shrink-0 shadow-sm", badgeClass)}>
+                                    <Icon className="w-5 h-5 shrink-0" />
+                                    <span className="text-sm font-bold uppercase tracking-widest whitespace-nowrap">
+                                        {item.classification === 'On Hold' ? 'On Hold' : item.dateStatus}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
+            {items.length > limit && (
+                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
+                    {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
+                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -264,10 +311,8 @@ function Bay({ number, projects }: { number: number, projects: any[] }) {
             )}>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Bay {number}</span>
                 {!isEmpty && projects.length > 1 && (
-                    <div className="flex gap-1.5">
-                        {projects.map((_, i) => (
-                            <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === idx ? "bg-slate-800" : "bg-slate-300")} />
-                        ))}
+                    <div className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center justify-center min-w-[20px]">
+                        {projects.length}
                     </div>
                 )}
             </div>
@@ -280,24 +325,46 @@ function Bay({ number, projects }: { number: number, projects: any[] }) {
                     </div>
                 ) : (
                     <div className="flex flex-col h-full justify-between animate-in fade-in zoom-in-95 duration-300 min-w-0">
-                        <span className="font-bold text-sm text-slate-900 truncate" title={p.projectName}>
-                            {p.projectName}
-                        </span>
-                        
-                        <div className="mt-2 flex flex-col gap-1 w-full">
-                            <div className="flex justify-end">
-                                <span className={cn(
-                                    "text-base font-black tracking-tighter tabular-nums shrink-0 leading-none",
-                                    p.progressPercent > 100 ? "text-red-700 bg-white px-1.5 py-0.5 rounded-md shadow-sm" : "text-slate-700"
-                                )}>
-                                    {Math.round(p.progressPercent)}%
-                                </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                <div 
-                                    className={cn("h-full rounded-full transition-all duration-1000", p.progressPercent > 100 ? "bg-red-500" : "bg-emerald-500")}
-                                    style={{ width: `${Math.min(p.progressPercent, 100)}%` }}
-                                />
+                        <div className="flex flex-col min-w-0">
+                            <span className="font-black text-lg text-slate-900 truncate" title={p.projectNumber}>
+                                {p.projectNumber}
+                            </span>
+                            <span className="font-medium text-xs text-slate-500 line-clamp-2" title={p.projectName}>
+                                {p.projectName}
+                            </span>
+                            {p.deliveryDate && (
+                                <div className="mt-1.5">
+                                    <span className="inline-flex items-center text-[11px] font-bold text-slate-600 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/60">
+                                        {new Date(p.deliveryDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-2 flex flex-col w-full justify-end flex-1">
+                            {!isEmpty && projects.length > 1 && (
+                                <div className="flex justify-center gap-1.5 mb-2 shrink-0">
+                                    {projects.map((_, i) => (
+                                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full", i === idx ? "bg-slate-500" : "bg-slate-200")} />
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-1 w-full shrink-0">
+                                <div className="flex justify-end">
+                                    <span className={cn(
+                                        "text-base font-black tracking-tighter tabular-nums shrink-0 leading-none",
+                                        p.progressPercent > 100 ? "text-red-600" : "text-slate-700"
+                                    )}>
+                                        {Math.round(p.progressPercent)}%
+                                    </span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={cn("h-full rounded-full transition-all duration-1000", p.progressPercent > 100 ? "bg-red-500" : "bg-emerald-500")}
+                                        style={{ width: `${Math.min(p.progressPercent, 100)}%` }}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
