@@ -16,7 +16,7 @@ export default async function WorkshopPage() {
         orderBy: [desc(syncLogs.timestamp)],
     });
 
-    const lastUpdatedText = latestSync 
+    const lastUpdatedText = latestSync
         ? new Date(latestSync.timestamp).toLocaleString('en-AU', {
             timeZone: 'Australia/Sydney',
             month: 'short',
@@ -25,15 +25,15 @@ export default async function WorkshopPage() {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
-          })
+        })
         : "Never";
 
     return (
-        <div className="h-screen w-screen overflow-hidden bg-slate-50">
-            <WorkshopBoard 
-                arrivals={arrivals} 
-                inProgress={inProgress} 
-                departures={departures} 
+        <div className="h-screen w-screen overflow-hidden bg-slate-50 p-6 sm:p-5">
+            <WorkshopBoard
+                arrivals={arrivals}
+                inProgress={inProgress}
+                departures={departures}
                 testing={testing}
                 lastUpdatedText={lastUpdatedText}
             />
