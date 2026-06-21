@@ -7,7 +7,11 @@ import {
   Activity,
   Target,
   BarChart3,
-  HelpCircle
+  HelpCircle,
+  DollarSign,
+  Timer,
+  ClipboardClock,
+  ChartNoAxesColumn
 } from "lucide-react";
 import { StatCard } from "./DashboardSummaries";
 
@@ -52,21 +56,21 @@ export function TableSubtotals({
         <StatCard
           title="Filtered Value"
           value={new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(totalValue)}
-          icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
+          icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
           description="Total for visible rows"
           tooltip="Total value of all projects currently visible in the table based on applied filters. No statuses or project types are excluded from this calculation."
         />
         <StatCard
           title="Budget Hours"
           value={`${Math.round(totalBudget).toLocaleString()}h`}
-          icon={<Target className="h-5 w-5 text-indigo-500" />}
+          icon={<Timer className="h-5 w-5 text-indigo-500" />}
           description="Total allocated time"
           tooltip="Total budget hours for the filtered results."
         />
         <StatCard
           title="Actual Hours"
           value={`${Math.round(totalActual).toLocaleString()}h`}
-          icon={<Activity className="h-5 w-5 text-blue-500" />}
+          icon={<ClipboardClock className="h-5 w-5 text-blue-500" />}
           description="Total time logged"
           tooltip="Total actual hours for the filtered results."
         />
@@ -80,7 +84,7 @@ export function TableSubtotals({
         <StatCard
           title="Overall Progress"
           value={`${Math.round(overallProgress)}%`}
-          icon={<BarChart3 className="h-5 w-5 text-brand" />}
+          icon={<ChartNoAxesColumn className="h-5 w-5 text-brand" />}
           description="Combined completion"
           tooltip="Overall progress percentage: (Total Actual / Total Budget) * 100"
         />

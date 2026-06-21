@@ -10,7 +10,12 @@ import {
   Clock,
   HelpCircle,
   ArrowUpRight,
-  Activity
+  Activity,
+  BriefcaseBusiness,
+  Play,
+  CalendarClock,
+  ClockAlert,
+  CalendarRange
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -56,7 +61,7 @@ export function DashboardSummaries({
         <StatCard
           title="All Jobs"
           value={allCount.toString()}
-          icon={<Activity className="h-6 w-6 text-slate-500" />}
+          icon={<BriefcaseBusiness className="h-6 w-6 text-slate-500" />}
           description="Full system dataset"
           href="/?filter=all"
           isActive={currentFilter === "" || currentFilter === "all"}
@@ -65,7 +70,7 @@ export function DashboardSummaries({
         <StatCard
           title="Active Jobs"
           value={totalCount.toString()}
-          icon={<Layers className="h-6 w-6 text-indigo-500" />}
+          icon={<Play className="h-6 w-6 text-indigo-500" />}
           description="Live production only"
           href="/?filter=active"
           isActive={currentFilter === "active"}
@@ -74,7 +79,7 @@ export function DashboardSummaries({
         <StatCard
           title="Due This Week"
           value={dueThisWeekCount.toString()}
-          icon={<Calendar className="h-6 w-6 text-brand" />}
+          icon={<CalendarClock className="h-6 w-6 text-brand" />}
           description="Deadline approaching"
           href="/?filter=due_this_week"
           isActive={currentFilter === "due_this_week"}
@@ -83,7 +88,7 @@ export function DashboardSummaries({
         <StatCard
           title="Overdue"
           value={overdueCount.toString()}
-          icon={<Clock className="h-6 w-6 text-orange-500" />}
+          icon={<ClockAlert className="h-6 w-6 text-orange-500" />}
           description="Past delivery date"
           href="/?filter=overdue"
           isActive={currentFilter === "overdue"}
@@ -92,7 +97,7 @@ export function DashboardSummaries({
         <StatCard
           title="This Month"
           value={thisMonthCount.toString()}
-          icon={<Calendar className="h-6 w-6 text-blue-500" />}
+          icon={<CalendarRange className="h-6 w-6 text-blue-500" />}
           description="Due in current month"
           href="/?filter=this_month"
           isActive={currentFilter === "this_month"}

@@ -20,15 +20,19 @@ import {
   BookOpen,
   PieChart,
   TrendingUp,
-  ShoppingBag
+  ShoppingBag,
+  Monitor,
+  Truck,
+  SlidersHorizontal,
+  ChartPie
 } from "lucide-react";
 
 const navigation = [
   { name: 'WIP Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Workshop Board', href: '/workshop', icon: Activity },
-  { name: 'Procurement', href: '/procurement', icon: ShoppingBag },
-  { name: 'Capacity & Risk', href: '/risk', icon: BarChart3 },
-  { name: 'Reports', href: '/reports', icon: TrendingUp },
+  { name: 'Workshop Board', href: '/workshop', icon: Monitor },
+  { name: 'Procurement', href: '/procurement', icon: Truck },
+  { name: 'Capacity & Risk', href: '/risk', icon: SlidersHorizontal },
+  { name: 'Reports', href: '/reports', icon: ChartPie },
   { name: 'Sync Logs', href: '/logs', icon: History },
   { name: 'Help Guide', href: '/help', icon: BookOpen },
 ];
