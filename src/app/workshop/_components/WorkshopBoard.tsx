@@ -23,38 +23,14 @@ export default function WorkshopBoard({ arrivals, inProgress, departures, lastUp
     return (
         <div className="flex flex-col h-full w-full bg-slate-50 text-slate-900 p-4 gap-4 overflow-hidden font-sans">
             {/* Top: Arrivals Strip */}
-            <div className="shrink-0 w-full flex flex-col">
-                <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
-                    <PlaneLanding className="w-6 h-6 text-slate-400" /> Arrivals
-                </h2>
-                <div className="h-36 w-full overflow-hidden">
-                    <ArrivalsStrip arrivals={arrivals} />
-                </div>
-            </div>
+            <ArrivalsStrip arrivals={arrivals} />
 
             {/* Bottom Section */}
             <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
                 {/* Left Column: Testing & Dispatch - Narrower (25%) */}
                 <div className="w-1/4 flex flex-col gap-4 overflow-hidden">
-                    {/* Testing Section */}
-                    <div className="flex-[0.8] bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col overflow-hidden min-h-0">
-                        <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
-                            <FlaskConical className="w-6 h-6 text-slate-400" /> Testing Queue
-                        </h2>
-                        <div className="flex-1 overflow-hidden">
-                            <TestingList items={testingJobs} />
-                        </div>
-                    </div>
-
-                    {/* Dispatch Section */}
-                    <div className="flex-[1.2] bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col overflow-hidden min-h-0">
-                        <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 mb-4 shrink-0 flex items-center gap-2">
-                            <PlaneTakeoff className="w-6 h-6 text-slate-400" /> Departures
-                        </h2>
-                        <div className="flex-1 overflow-hidden">
-                            <DispatchList items={dispatchJobs} />
-                        </div>
-                    </div>
+                    <TestingList items={testingJobs} />
+                    <DispatchList items={dispatchJobs} />
                 </div>
 
                 {/* Right Area: Bay Grid - Wider (75%) */}
@@ -93,7 +69,17 @@ function ArrivalsStrip({ arrivals }: { arrivals: any[] }) {
     const limit = 3;
 
     const sortedArrivals = useMemo(() => {
-        return [...arrivals].sort((a, b) => {
+        const unique = [];
+        const seen = new Set();
+        for (const item of arrivals) {
+            const key = `${item.projectNumber}-${item.supplierName}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(item);
+            }
+        }
+
+        return unique.sort((a, b) => {
             const getRiskLevel = (item: any) => {
                 if (item.actionRequired?.toLowerCase().includes("escalate")) return 3;
                 if (item.actionRequired?.toLowerCase().includes("follow up") || item.riskStatus?.toLowerCase().includes("delay")) return 2;
@@ -118,46 +104,55 @@ function ArrivalsStrip({ arrivals }: { arrivals: any[] }) {
     const visible = sortedArrivals.slice(index, index + limit);
 
     return (
-        <div className="flex flex-col h-full gap-2 w-full">
-            <div className="flex gap-4 w-full flex-1">
-                {visible.map((item, i) => {
-                    let cardClass = "bg-white border-slate-200 shadow-sm";
-                    let badgeClass = "bg-emerald-100 text-emerald-800";
-
-                    if (item.actionRequired?.toLowerCase().includes("escalate")) {
-                        badgeClass = "bg-red-100 text-red-800";
-                    } else if (item.actionRequired?.toLowerCase().includes("follow up") || item.riskStatus?.toLowerCase().includes("delay")) {
-                        badgeClass = "bg-amber-100 text-amber-800";
-                    }
-
-                    return (
-                        <div key={i} className={cn("flex-1 rounded-xl p-4 flex flex-col justify-between overflow-hidden border", cardClass)}>
-                            <div className="flex justify-between items-start gap-2">
-                                <div className="flex flex-col min-w-0">
-                                    <span className="text-sm font-bold text-slate-500 truncate">{item.projectNumber}</span>
-                                    <span className="font-bold text-lg truncate text-slate-900" title={item.projectName}>{item.projectName}</span>
-                                </div>
-                                <span className="text-sm font-bold px-2 py-1 bg-slate-100 text-slate-700 rounded-full uppercase tracking-wider whitespace-nowrap">
-                                    {item.expectedDate ? `ETA: ${new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}` : 'No ETA'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-end mt-2">
-                                <span className="text-base text-slate-600 truncate max-w-[60%] font-medium">{item.supplierName}</span>
-                                <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
-                                    {item.riskStatus}
-                                </span>
-                            </div>
-                        </div>
-                    );
-                })}
+        <div className="shrink-0 w-full flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+                <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
+                    <PlaneLanding className="w-6 h-6 text-slate-400" /> Arrivals
+                </h2>
+                {sortedArrivals.length > limit && (
+                    <div className="flex justify-center gap-1.5 items-center">
+                        {Array.from({ length: Math.ceil(sortedArrivals.length / limit) }).map((_, i) => (
+                            <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                        ))}
+                    </div>
+                )}
             </div>
-            {sortedArrivals.length > limit && (
-                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
-                    {Array.from({ length: Math.ceil(sortedArrivals.length / limit) }).map((_, i) => (
-                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
-                    ))}
+            <div className="h-36 w-full overflow-hidden">
+                <div className="flex flex-col h-full gap-2 w-full">
+                    <div className="flex gap-4 w-full flex-1">
+                        {visible.map((item, i) => {
+                            let cardClass = "bg-white border-slate-200 shadow-sm";
+                            let badgeClass = "bg-emerald-100 text-emerald-800";
+
+                            if (item.actionRequired?.toLowerCase().includes("escalate")) {
+                                badgeClass = "bg-red-100 text-red-800";
+                            } else if (item.actionRequired?.toLowerCase().includes("follow up") || item.riskStatus?.toLowerCase().includes("delay")) {
+                                badgeClass = "bg-amber-100 text-amber-800";
+                            }
+
+                            return (
+                                <div key={i} className={cn("flex-1 rounded-xl p-4 flex flex-col justify-between overflow-hidden border", cardClass)}>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-sm font-bold text-slate-500 truncate">{item.projectNumber}</span>
+                                            <span className="font-bold text-lg truncate text-slate-900" title={item.projectName}>{item.projectName}</span>
+                                        </div>
+                                        <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                                            {item.expectedDate ? `ETA: ${new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}` : 'No ETA'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-end mt-2">
+                                        <span className="text-base text-slate-600 truncate max-w-[60%] font-medium">{item.supplierName}</span>
+                                        <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
+                                            {item.riskStatus}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
@@ -181,39 +176,53 @@ function TestingList({ items }: { items: any[] }) {
     const visible = items.slice(index, index + limit);
 
     return (
-        <div className="flex flex-col h-full gap-2">
-            <div className="flex flex-col gap-3 flex-1 justify-center">
-                {visible.map((item, i) => {
-                    const isDefective = item.statusReason.includes("Defective");
-                    const cardClass = "bg-white border-slate-200";
-                    const badgeClass = isDefective ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800";
-
-                    return (
-                        <div key={i} className={cn("flex flex-col p-3 rounded-xl border", cardClass)}>
-                            <div className="flex flex-col mb-2 min-w-0">
-                                <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
-                                <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
-                            </div>
-                            <div className="flex items-center">
-                                <span className={cn(
-                                    "flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
-                                    badgeClass
-                                )}>
-                                    {isDefective ? <AlertOctagon className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                                    {item.statusReason}
-                                </span>
-                            </div>
-                        </div>
-                    );
-                })}
+        <div className="flex-[0.8] flex flex-col overflow-hidden min-h-0">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+                <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
+                    <FlaskConical className="w-6 h-6 text-slate-400" /> Testing Queue
+                </h2>
+                {items.length > limit && (
+                    <div className="flex justify-center gap-1.5 items-center">
+                        {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
+                            <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                        ))}
+                    </div>
+                )}
             </div>
-            {items.length > limit && (
-                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
-                    {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
-                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
-                    ))}
+            <div className="flex-1 overflow-hidden">
+                <div className="flex flex-col h-full gap-2">
+                    <div className="flex flex-col gap-3 flex-1 justify-center">
+                        {visible.map((item, i) => {
+                            const isDefective = item.statusReason.includes("Defective");
+                            const cardClass = "bg-white border-slate-200";
+                            const badgeClass = isDefective ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800";
+
+                            return (
+                                <div key={i} className={cn("flex flex-col p-3 rounded-xl border", cardClass)}>
+                                    <div className="flex flex-col mb-2 min-w-0">
+                                        <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
+                                        <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={cn(
+                                            "flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+                                            badgeClass
+                                        )}>
+                                            {isDefective ? <AlertOctagon className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                            {item.statusReason}
+                                        </span>
+                                        {item.deliveryDate && (
+                                            <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                                                Due: {new Date(item.deliveryDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
@@ -237,50 +246,66 @@ function DispatchList({ items }: { items: any[] }) {
     const visible = items.slice(index, index + limit);
 
     return (
-        <div className="flex flex-col h-full gap-2">
-            <div className="flex flex-col gap-3 flex-1 justify-center">
-                {visible.map((item, i) => {
-                    let cardClass = "bg-white border-slate-200";
-                    let badgeClass = "bg-emerald-100 text-emerald-800";
-                    let Icon = CheckCircle2;
-
-                    if (item.classification === 'On Hold') {
-                        badgeClass = "bg-slate-100 text-slate-800";
-                        Icon = PauseCircle;
-                    } else if (item.dateStatus === 'Overdue') {
-                        badgeClass = "bg-red-100 text-red-800";
-                        Icon = AlertOctagon;
-                    } else if (item.dateStatus === 'Due soon') {
-                        badgeClass = "bg-amber-100 text-amber-800";
-                        Icon = Clock;
-                    }
-
-                    return (
-                        <div key={i} className={cn("flex flex-col justify-center p-4 rounded-xl border", cardClass)}>
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex flex-col overflow-hidden">
-                                    <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
-                                    <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
-                                    <span className="text-xs text-slate-500 uppercase tracking-wider truncate font-medium mt-1">{item.statusReason}</span>
-                                </div>
-                                <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full shrink-0 shadow-sm", badgeClass)}>
-                                    <Icon className="w-5 h-5 shrink-0" />
-                                    <span className="text-sm font-bold uppercase tracking-widest whitespace-nowrap">
-                                        {item.classification === 'On Hold' ? 'On Hold' : item.dateStatus}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
+        <div className="flex-[1.2] flex flex-col overflow-hidden min-h-0">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+                <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
+                    <PlaneTakeoff className="w-6 h-6 text-slate-400" /> Departures
+                </h2>
+                {items.length > limit && (
+                    <div className="flex justify-center gap-1.5 items-center">
+                        {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
+                            <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
+                        ))}
+                    </div>
+                )}
             </div>
-            {items.length > limit && (
-                <div className="flex justify-center gap-1.5 shrink-0 h-2 items-center">
-                    {Array.from({ length: Math.ceil(items.length / limit) }).map((_, i) => (
-                        <div key={i} className={cn("w-1.5 h-1.5 rounded-full transition-colors", i === index / limit ? "bg-slate-400" : "bg-slate-200")} />
-                    ))}
+            <div className="flex-1 overflow-hidden">
+                <div className="flex flex-col h-full gap-2">
+                    <div className="flex flex-col gap-3 flex-1 justify-center">
+                        {visible.map((item, i) => {
+                            let cardClass = "bg-white border-slate-200";
+                            let badgeClass = "bg-emerald-100 text-emerald-800";
+                            let Icon = CheckCircle2;
+
+                            if (item.classification === 'On Hold') {
+                                badgeClass = "bg-slate-100 text-slate-800";
+                                Icon = PauseCircle;
+                            } else if (item.dateStatus === 'Overdue') {
+                                badgeClass = "bg-red-100 text-red-800";
+                                Icon = AlertOctagon;
+                            } else if (item.dateStatus === 'Due soon') {
+                                badgeClass = "bg-amber-100 text-amber-800";
+                                Icon = Clock;
+                            }
+
+                            return (
+                                <div key={i} className={cn("flex flex-col justify-center p-4 rounded-xl border", cardClass)}>
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex flex-col overflow-hidden">
+                                            <span className="font-black text-lg text-slate-900 truncate">{item.projectNumber}</span>
+                                            <span className="text-sm text-slate-600 truncate">{item.projectName}</span>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs text-slate-500 uppercase tracking-wider truncate font-medium">{item.statusReason}</span>
+                                                {item.deliveryDate && (
+                                                    <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                                                        Due: {new Date(item.deliveryDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className={cn("flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0", badgeClass)}>
+                                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="whitespace-nowrap">
+                                                {item.classification === 'On Hold' ? 'On Hold' : item.dateStatus}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
