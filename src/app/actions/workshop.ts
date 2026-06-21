@@ -48,6 +48,7 @@ export async function getWorkshopArrivals() {
             projectName: item.project.name,
             projectNumber: item.project.projectNumber,
             expectedDate: item.po.expectedDate,
+            deliveryDate: item.project.deliveryDate,
             riskStatus: action.label,
             actionRequired: action.actionRequired,
             severity: action.severity,
@@ -116,21 +117,16 @@ export async function getWorkshopDepartures() {
         .from(projects)
         .where(and(
             eq(projects.isArchived, false), // Drop inactive projects
-            eq(projects.bayLocation, 'Dispatch')
+            sql`LOWER(TRIM(${projects.bayLocation})) = 'dispatch'`
         ));
 
     const today = startOfDay(new Date());
-    const departures = [];
+    const departures: any[] = [];
 
     for (const p of dispatchProjects) {
         const status = p.rawStatus;
 
-        // 1. Drop completely finished jobs
-        if (status === '3.2 - Delivered' || status === 'Completed' || status === 'Cancelled') {
-            continue;
-        }
-
-        // 2. Blocked (Hasn't passed testing)
+        // Blocked (Hasn't passed testing)
         if (status === '2.3 - Ready for Testing' || status === '2.4 - Tested Defective') {
             departures.push({
                 projectName: p.name,
@@ -142,7 +138,7 @@ export async function getWorkshopDepartures() {
             continue;
         }
 
-        // 3. On Hold (Separate bucket, skips date check)
+        // On Hold
         if (status === 'On Hold') {
             departures.push({
                 projectName: p.name,
@@ -154,8 +150,8 @@ export async function getWorkshopDepartures() {
             continue;
         }
 
-        // 4. Genuinely finished and waiting
-        if (status === '2.6 - Ready for Invoicing' || status === '3.1 - Invoiced') {
+        // Finished and waiting (now includes Delivered, Completed, Cancelled so they don't drop)
+        if (status === '2.6 - Ready for Invoicing' || status === '3.1 - Invoiced' || status === '3.2 - Delivered' || status === 'Completed' || status === 'Cancelled') {
             let dateStatus = "On track";
             if (p.deliveryDate) {
                 const dDate = startOfDay(new Date(p.deliveryDate));
@@ -179,7 +175,7 @@ export async function getWorkshopDepartures() {
             continue;
         }
 
-        // 5. Data Check Needed (Remaining statuses)
+        // Data Check Needed (Remaining statuses)
         departures.push({
             projectName: p.name,
             projectNumber: p.projectNumber,
@@ -190,4 +186,29 @@ export async function getWorkshopDepartures() {
     }
 
     return departures;
+}
+
+export async function getWorkshopTesting() {
+    const testingProjects = await db.select()
+        .from(projects)
+        .where(and(
+            eq(projects.isArchived, false),
+            sql`LOWER(TRIM(${projects.bayLocation})) = 'testing'`
+        ));
+
+    const testing = testingProjects.map(p => ({
+        projectName: p.name,
+        projectNumber: p.projectNumber,
+        deliveryDate: p.deliveryDate,
+        statusReason: p.rawStatus || 'Unknown'
+    }));
+
+    // sort defective first
+    testing.sort((a, b) => {
+        const aDef = a.statusReason.includes('Defective') ? -1 : 1;
+        const bDef = b.statusReason.includes('Defective') ? -1 : 1;
+        return aDef - bDef;
+    });
+
+    return testing;
 }

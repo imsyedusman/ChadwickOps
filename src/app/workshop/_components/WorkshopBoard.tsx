@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AlertOctagon, Clock, CheckCircle2, ShieldAlert, Truck, PauseCircle, PlaneLanding, PlaneTakeoff, FlaskConical, TrendingUp } from "lucide-react";
 
-export default function WorkshopBoard({ arrivals, inProgress, departures, lastUpdatedText }: any) {
-    const testingJobs = departures.filter((d: any) => d.classification === 'Blocked');
-    testingJobs.sort((a: any, b: any) => a.statusReason.includes('Defective') ? -1 : 1);
-
-    const dispatchJobs = departures.filter((d: any) => d.classification === 'Ready' || d.classification === 'On Hold');
+export default function WorkshopBoard({ arrivals, inProgress, testing, departures, lastUpdatedText }: any) {
+    const testingJobs = testing;
+    const dispatchJobs = departures;
 
     const router = useRouter();
 
@@ -30,7 +28,7 @@ export default function WorkshopBoard({ arrivals, inProgress, departures, lastUp
                 {/* Left Column: Testing & Dispatch - Narrower (25%) */}
                 <div className="w-1/4 flex flex-col gap-4 overflow-hidden">
                     <TestingList items={testingJobs} />
-                    <DispatchList items={dispatchJobs} />
+                    <DispatchList items={dispatchJobs} testingQueueEmpty={testingJobs.length === 0} />
                 </div>
 
                 {/* Right Area: Bay Grid - Wider (75%) */}
@@ -137,15 +135,24 @@ function ArrivalsStrip({ arrivals }: { arrivals: any[] }) {
                                             <span className="text-sm font-bold text-slate-500 truncate">{item.projectNumber}</span>
                                             <span className="font-bold text-lg truncate text-slate-900" title={item.projectName}>{item.projectName}</span>
                                         </div>
-                                        <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">
-                                            {item.expectedDate ? `ETA: ${new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}` : 'No ETA'}
-                                        </span>
+                                        <div className="flex flex-col gap-1.5 items-end shrink-0">
+                                            {item.deliveryDate && (
+                                                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                                                    DUE: {new Date(item.deliveryDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex justify-between items-end mt-2">
-                                        <span className="text-base text-slate-600 truncate max-w-[60%] font-medium">{item.supplierName}</span>
-                                        <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
-                                            {item.riskStatus}
-                                        </span>
+                                        <span className="text-base text-slate-600 truncate min-w-0 font-medium pr-2">{item.supplierName}</span>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                                                {item.expectedDate ? `ETA: ${new Date(item.expectedDate).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}` : 'No ETA'}
+                                            </span>
+                                            <span className={cn("text-sm font-bold uppercase tracking-widest px-3 py-1 rounded-full", badgeClass)}>
+                                                {item.riskStatus}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -170,7 +177,18 @@ function TestingList({ items }: { items: any[] }) {
     }, [items.length]);
 
     if (items.length === 0) {
-        return <div className="text-slate-400 font-bold text-center h-full flex items-center justify-center uppercase tracking-widest text-lg">No Jobs in Testing</div>;
+        return (
+            <div className="shrink-0 flex flex-col">
+                <div className="flex justify-between items-center mb-4 shrink-0">
+                    <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
+                        <FlaskConical className="w-6 h-6 text-slate-400" /> Testing Queue
+                    </h2>
+                </div>
+                <div className="text-slate-400 font-bold text-center py-6 uppercase tracking-widest text-lg bg-slate-100/50 rounded-xl border border-slate-200/50">
+                    No Jobs in Testing
+                </div>
+            </div>
+        );
     }
 
     const visible = items.slice(index, index + limit);
@@ -191,7 +209,7 @@ function TestingList({ items }: { items: any[] }) {
             </div>
             <div className="flex-1 overflow-hidden">
                 <div className="flex flex-col h-full gap-2">
-                    <div className="flex flex-col gap-3 flex-1 justify-center">
+                    <div className="flex flex-col gap-3 flex-1">
                         {visible.map((item, i) => {
                             const isDefective = item.statusReason.includes("Defective");
                             const cardClass = "bg-white border-slate-200";
@@ -227,20 +245,34 @@ function TestingList({ items }: { items: any[] }) {
     );
 }
 
-function DispatchList({ items }: { items: any[] }) {
+function DispatchList({ items, testingQueueEmpty }: { items: any[], testingQueueEmpty: boolean }) {
     const [index, setIndex] = useState(0);
-    const limit = 3;
+    const limit = testingQueueEmpty ? 4 : 3;
 
     useEffect(() => {
-        if (items.length <= limit) return;
+        if (items.length <= limit) {
+            setIndex(0); // Ensure index resets if limit changes and items fit
+            return;
+        }
         const timer = setInterval(() => {
             setIndex(prev => (prev + limit >= items.length ? 0 : prev + limit));
         }, 6000);
         return () => clearInterval(timer);
-    }, [items.length]);
+    }, [items.length, limit]);
 
     if (items.length === 0) {
-        return <div className="text-slate-400 font-bold text-center h-full flex items-center justify-center uppercase tracking-widest text-lg">Dispatch Empty</div>;
+        return (
+            <div className="shrink-0 flex flex-col">
+                <div className="flex justify-between items-center mb-4 shrink-0">
+                    <h2 className="text-xl font-bold tracking-widest uppercase text-slate-500 flex items-center gap-2">
+                        <PlaneTakeoff className="w-6 h-6 text-slate-400" /> Departures
+                    </h2>
+                </div>
+                <div className="text-slate-400 font-bold text-center py-6 uppercase tracking-widest text-lg bg-slate-100/50 rounded-xl border border-slate-200/50">
+                    Dispatch Empty
+                </div>
+            </div>
+        );
     }
 
     const visible = items.slice(index, index + limit);
@@ -261,7 +293,7 @@ function DispatchList({ items }: { items: any[] }) {
             </div>
             <div className="flex-1 overflow-hidden">
                 <div className="flex flex-col h-full gap-2">
-                    <div className="flex flex-col gap-3 flex-1 justify-center">
+                    <div className="flex flex-col gap-3 flex-1">
                         {visible.map((item, i) => {
                             let cardClass = "bg-white border-slate-200";
                             let badgeClass = "bg-emerald-100 text-emerald-800";
