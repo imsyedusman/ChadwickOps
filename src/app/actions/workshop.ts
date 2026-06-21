@@ -126,6 +126,11 @@ export async function getWorkshopDepartures() {
     for (const p of dispatchProjects) {
         const status = p.rawStatus;
 
+        // Drop completely finished jobs
+        if (status === '3.2 - Delivered' || status === 'Completed' || status === 'Cancelled') {
+            continue;
+        }
+
         // Blocked (Hasn't passed testing)
         if (status === '2.3 - Ready for Testing' || status === '2.4 - Tested Defective') {
             departures.push({
@@ -150,8 +155,8 @@ export async function getWorkshopDepartures() {
             continue;
         }
 
-        // Finished and waiting (now includes Delivered, Completed, Cancelled so they don't drop)
-        if (status === '2.6 - Ready for Invoicing' || status === '3.1 - Invoiced' || status === '3.2 - Delivered' || status === 'Completed' || status === 'Cancelled') {
+        // Genuinely finished and waiting
+        if (status === '2.6 - Ready for Invoicing' || status === '3.1 - Invoiced') {
             let dateStatus = "On track";
             if (p.deliveryDate) {
                 const dDate = startOfDay(new Date(p.deliveryDate));
