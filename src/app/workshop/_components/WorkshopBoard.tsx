@@ -326,15 +326,22 @@ function Bay({ number, projects }: { number: number, projects: any[] }) {
 
     return (
         <div className={cn(
-            "flex-1 flex flex-col rounded-xl overflow-hidden relative border shadow-sm transition-colors duration-500",
-            isEmpty ? "bg-slate-50/50 border-slate-100" : (p.progressPercent > 100 ? "bg-red-50 border-red-200" : "bg-white border-slate-200")
+            "flex-1 flex flex-col rounded-xl overflow-hidden relative shadow-sm transition-colors duration-500",
+            !isEmpty && p.priority === 'Critical' ? "border-2 border-red-600" : "border",
+            isEmpty ? "bg-slate-50/50 border-slate-100" : (p.priority === 'Critical' || p.progressPercent > 100 ? "bg-red-50" : "bg-white"),
+            !isEmpty && p.priority !== 'Critical' ? (p.progressPercent > 100 ? "border-red-200" : "border-slate-200") : ""
         )}>
             {/* Bay Header */}
             <div className={cn(
                 "px-2 py-1.5 border-b flex justify-between items-center shrink-0",
-                isEmpty ? "bg-slate-100/50 border-slate-100" : (p.progressPercent > 100 ? "bg-red-100/50 border-red-200" : "bg-slate-50 border-slate-200")
+                isEmpty ? "bg-slate-100/50 border-slate-100" : (p.priority === 'Critical' || p.progressPercent > 100 ? "bg-red-100/50 border-red-200" : "bg-slate-50 border-slate-200")
             )}>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Bay {number}</span>
+                <div className="flex items-center gap-1.5">
+                    {!isEmpty && p.priority === 'Critical' && (
+                        <div className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse shrink-0" />
+                    )}
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Bay {number}</span>
+                </div>
                 {!isEmpty && projects.length > 1 && (
                     <div className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center justify-center min-w-[20px]">
                         {projects.length}
