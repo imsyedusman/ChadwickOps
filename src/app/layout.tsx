@@ -13,6 +13,9 @@ const albertSans = Albert_Sans({
 export const metadata: Metadata = {
   title: "WorkGuru Operations Dashboard | Chadwick Switchboards",
   description: "Real-time production planning and delivery risk management.",
+  icons: {
+    icon: "/chadwick-favicon.png",
+  },
 };
 
 export default function RootLayout({
