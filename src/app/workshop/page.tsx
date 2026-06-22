@@ -29,7 +29,7 @@ export default async function WorkshopPage() {
         : "Never";
 
     return (
-        <div className="h-screen w-screen overflow-hidden bg-slate-50 p-6 sm:p-5">
+        <div className="h-screen w-screen overflow-hidden bg-slate-50 p-10 sm:p-10">
             <WorkshopBoard
                 arrivals={arrivals}
                 inProgress={inProgress}
