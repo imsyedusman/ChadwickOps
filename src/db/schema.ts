@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean, unique } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const clients = pgTable('clients', {
@@ -265,6 +265,21 @@ export const procurementFailures = pgTable('procurement_failures', {
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
+export const roles = pgTable('roles', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 50 }).notNull().unique(),
+  description: varchar('description', { length: 255 }),
+});
+
+export const userRoles = pgTable('user_roles', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleId: integer('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+}, (table) => {
+  return [
+    primaryKey({ columns: [table.userId, table.roleId] }),
+  ];
+});
+
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   username: varchar('username', { length: 255 }).notNull().unique(),
@@ -303,4 +318,17 @@ export const projectSuppliersRelations = relations(projectSuppliers, ({ one }) =
 
 export const stageMappingsRelations = relations(stageMappings, ({ one }) => ({
   displayStage: one(displayStages, { fields: [stageMappings.displayStageId], references: [displayStages.id] }),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  userRoles: many(userRoles),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  userRoles: many(userRoles),
+}));
+
+export const userRolesRelations = relations(userRoles, ({ one }) => ({
+  user: one(users, { fields: [userRoles.userId], references: [users.id] }),
+  role: one(roles, { fields: [userRoles.roleId], references: [roles.id] }),
 }));

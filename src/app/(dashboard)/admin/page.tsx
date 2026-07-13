@@ -20,14 +20,15 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
+import { BlurredValue } from "@/components/ui/BlurredValue";
 import Link from "next/link";
-import { validateSession } from "@/lib/auth-helpers";
+import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
 
 export default async function AdminPage() {
   const session = await validateSession();
-  if (!session || session.user.role !== "admin") {
-    redirect("/");
+  if (!session || !hasRole(session, "admin")) {
+    redirect("/login");
   }
 
   const archivedCountResults = await db.select({ value: count() }).from(projects).where(eq(projects.isArchived, true));
@@ -66,13 +67,20 @@ export default async function AdminPage() {
           <h1 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight">System Administration</h1>
           <p className="text-sm text-slate-500 font-bold">Manage connectivity, mappings, and operational validation.</p>
         </div>
-        <Link 
-          href="/admin/users" 
-          className="flex items-center gap-2 bg-brand hover:bg-brand/90 text-white font-bold text-xs uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md shadow-brand/10 hover:scale-[1.01] active:scale-[0.99] border border-brand/20 w-fit"
-        >
-          <Users className="h-4 w-4" />
-          Manage Users
-        </Link>
+        <div className="flex flex-col items-end gap-2">
+          <Link 
+            href="/admin/users" 
+            className="flex items-center gap-2 bg-brand hover:bg-brand/90 text-white font-bold text-xs uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md shadow-brand/10 hover:scale-[1.01] active:scale-[0.99] border border-brand/20 w-fit"
+          >
+            <Users className="h-4 w-4" />
+            Manage Users
+          </Link>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl shadow-sm">
+             <BlurredValue label="Test Financial Value" canUnblur={hasRole(session, 'finance')}>
+               <span className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">$12,450.00</span>
+             </BlurredValue>
+          </div>
+        </div>
       </div>
 
       {!isEncryptionKeySet && (

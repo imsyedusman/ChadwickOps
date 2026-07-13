@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 declare module "next-auth" {
   interface User {
     role?: string;
+    roles?: string[];
     sessionVersion?: number;
     isActive?: boolean;
   }
@@ -20,6 +21,7 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       role: string;
+      roles: string[];
       sessionVersion: number;
       isActive: boolean;
     };
@@ -30,6 +32,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
     role?: string;
+    roles?: string[];
     sessionVersion?: number;
     isActive?: boolean;
   }
@@ -56,6 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await db.query.users.findFirst({
           where: eq(users.username, usernameStr),
+          with: { userRoles: { with: { role: true } } },
         });
 
         if (!user || !user.isActive) return null;
@@ -81,6 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           email: user.username,
           role: user.role,
+          roles: user.userRoles?.map((ur) => ur.role.name) || [],
           sessionVersion: user.sessionVersion,
           isActive: user.isActive,
         };
@@ -92,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.roles = user.roles;
         token.sessionVersion = user.sessionVersion;
         token.isActive = user.isActive;
         return token;
@@ -112,11 +118,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               role: true,
               sessionVersion: true,
               isActive: true,
-            }
+            },
+            with: { userRoles: { with: { role: true } } }
           });
 
           if (dbUser) {
             token.role = dbUser.role;
+            token.roles = dbUser.userRoles?.map((ur) => ur.role.name) || [];
             token.isActive = dbUser.isActive;
             if (dbUser.sessionVersion !== token.sessionVersion) {
               // Session version mismatch (e.g. password changed), invalidate session
@@ -136,6 +144,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.roles = (token.roles as string[]) || [];
         session.user.sessionVersion = token.sessionVersion as number;
         session.user.isActive = token.isActive as boolean;
       }

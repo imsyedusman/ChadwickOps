@@ -30,6 +30,7 @@ interface UserData {
   username: string;
   name: string;
   role: string;
+  roles: string[];
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -48,7 +49,7 @@ export function UsersManagementClient({ initialUsers }: Props) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState("viewer");
+  const [newRoles, setNewRoles] = useState<string[]>(["viewer"]);
   const [newPassword, setNewPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -99,7 +100,7 @@ export function UsersManagementClient({ initialUsers }: Props) {
       const res = await createUser({
         name: newName,
         username: newEmail,
-        role: newRole,
+        roles: newRoles,
         password: newPassword
       });
 
@@ -112,6 +113,7 @@ export function UsersManagementClient({ initialUsers }: Props) {
           name: res.user.name,
           username: res.user.username,
           role: res.user.role,
+          roles: res.user.roles || [],
           isActive: res.user.isActive,
           createdAt: new Date(res.user.createdAt),
           updatedAt: new Date(res.user.updatedAt),
@@ -123,7 +125,7 @@ export function UsersManagementClient({ initialUsers }: Props) {
         // Reset state
         setNewName("");
         setNewEmail("");
-        setNewRole("viewer");
+        setNewRoles(["viewer"]);
         setNewPassword("");
         setIsCreateOpen(false);
       }
@@ -149,11 +151,21 @@ export function UsersManagementClient({ initialUsers }: Props) {
     }
   };
 
-  const handleRoleChange = async (userId: number, role: string) => {
+  const handleRoleChange = async (userId: number, roleName: string, checked: boolean) => {
     try {
-      const res = await updateUserRole(userId, role);
+      const user = usersList.find(u => u.id === userId);
+      if (!user) return;
+      
+      let updatedRoles = [...(user.roles || [])];
+      if (checked && !updatedRoles.includes(roleName)) {
+        updatedRoles.push(roleName);
+      } else if (!checked) {
+        updatedRoles = updatedRoles.filter(r => r !== roleName);
+      }
+      
+      const res = await updateUserRole(userId, updatedRoles);
       if (res.success) {
-        setUsersList(usersList.map(u => u.id === userId ? { ...u, role } : u));
+        setUsersList(usersList.map(u => u.id === userId ? { ...u, roles: updatedRoles } : u));
         toast.success("User permissions updated successfully.");
       }
     } catch (err: any) {
@@ -254,15 +266,19 @@ export function UsersManagementClient({ initialUsers }: Props) {
 
                     {/* Role selector */}
                     <td className="px-6 py-5">
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold rounded-xl px-3 py-2 focus:ring-4 focus:ring-brand/5 focus:border-brand outline-none transition-all text-slate-700 dark:text-slate-200 hover:border-brand/30 cursor-pointer"
-                      >
-                        <option value="viewer">Viewer (Read-only)</option>
-                        <option value="user">Operational User</option>
-                        <option value="admin">Administrator</option>
-                      </select>
+                      <div className="flex flex-col gap-2">
+                        {['admin', 'finance', 'scheduler', 'viewer'].map((r) => (
+                          <label key={r} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={user.roles?.includes(r) || false}
+                              onChange={(e) => handleRoleChange(user.id, r, e.target.checked)}
+                              className="rounded border-slate-300 text-brand focus:ring-brand/20"
+                            />
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 capitalize">{r}</span>
+                          </label>
+                        ))}
+                      </div>
                     </td>
 
                     {/* Last Login timestamp */}
@@ -382,16 +398,26 @@ export function UsersManagementClient({ initialUsers }: Props) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Default Role</label>
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-brand outline-none transition-all text-slate-800 dark:text-slate-100"
-                >
-                  <option value="viewer">Viewer (Read-only)</option>
-                  <option value="user">Operational User</option>
-                  <option value="admin">Administrator</option>
-                </select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Roles</label>
+                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 flex flex-col gap-2">
+                  {['admin', 'finance', 'scheduler', 'viewer'].map((r) => (
+                    <label key={r} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newRoles.includes(r)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewRoles([...newRoles, r]);
+                          } else {
+                            setNewRoles(newRoles.filter(role => role !== r));
+                          }
+                        }}
+                        className="rounded border-slate-300 text-brand focus:ring-brand/20"
+                      />
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 capitalize">{r}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-1">

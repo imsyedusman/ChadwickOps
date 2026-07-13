@@ -1,17 +1,18 @@
 export const dynamic = "force-dynamic";
 import { db } from "@/db";
-import { syncLogs } from "@/db/schema";
+import { syncLogs, procurementSyncLogs, invoiceSyncLogs } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { format } from "date-fns";
 import { History, CheckCircle2, AlertTriangle, XCircle, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { validateSession } from "@/lib/auth-helpers";
+import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default async function LogsPage() {
   const session = await validateSession();
-  if (!session || session.user.role !== "admin") {
-    redirect("/");
+  if (!session || !hasRole(session, "admin")) {
+    redirect("/login");
   }
 
   const logs = await db.query.syncLogs.findMany({

@@ -127,6 +127,13 @@
       "when": 1780038134558,
       "tag": "0017_gorgeous_pixie",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783921909941,
+      "tag": "0018_small_strong_guy",
+      "breakpoints": true
     }
   ]
 }

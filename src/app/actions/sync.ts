@@ -9,7 +9,7 @@ import { encrypt, decrypt } from '@/lib/crypto';
 import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { StageService } from '@/lib/stages';
-import { validateSession } from '@/lib/auth-helpers';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function triggerSync() {
   return handleSync();
@@ -98,7 +98,7 @@ export async function testApiConnection(apiKey: string, apiSecret: string) {
 
 export async function updateApiCredentials(apiKey: string, apiSecret: string) {
   const session = await validateSession();
-  if (!session || session.user.role !== 'admin') {
+  if (!session || !hasRole(session, 'admin')) {
     return { success: false, error: 'Unauthorized' };
   }
 

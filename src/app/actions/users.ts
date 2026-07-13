@@ -1,16 +1,16 @@
 "use server";
 
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { users, roles, userRoles } from "@/db/schema";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { validateSession } from "@/lib/auth-helpers";
+import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
 
 // Ensure current request context is an active administrator
 async function checkAdminAuth() {
   const session = await validateSession();
-  if (!session || session.user.role !== "admin") {
+  if (!session || !hasRole(session, "admin")) {
     throw new Error("Unauthorized. Administrator role required.");
   }
   return session;
@@ -22,10 +22,14 @@ export async function getUsersList() {
   try {
     const list = await db.query.users.findMany({
       orderBy: [desc(users.createdAt)],
+      with: { userRoles: { with: { role: true } } }
     });
     
     // Do not return password hashes to the client
-    return list.map(({ passwordHash, ...rest }) => rest);
+    return list.map(({ passwordHash, userRoles: ur, ...rest }) => ({
+      ...rest,
+      roles: ur?.map(u => u.role.name) || []
+    }));
   } catch (error: any) {
     console.error("[getUsersList] Error:", error);
     throw new Error(error.message || "Failed to load user list.");
@@ -35,12 +39,12 @@ export async function getUsersList() {
 export async function createUser(data: {
   name: string;
   username: string;
-  role: string;
+  roles: string[];
   password?: string;
 }) {
   await checkAdminAuth();
 
-  const { name, username, role, password = "TempPassword123!" } = data;
+  const { name, username, roles: userRoleNames, password = "TempPassword123!" } = data;
 
   // Enforce domain check
   const usernameStr = username.trim().toLowerCase();
@@ -61,21 +65,34 @@ export async function createUser(data: {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
+    const legacyRole = userRoleNames.includes("admin") ? "admin" : "viewer";
     
     const [inserted] = await db.insert(users).values({
       name: name.trim(),
       username: usernameStr,
       passwordHash,
-      role: role as any,
+      role: legacyRole as any,
       isActive: true,
       sessionVersion: 1,
     }).returning();
+
+    // Map roles
+    if (userRoleNames && userRoleNames.length > 0) {
+      const allRoles = await db.query.roles.findMany({
+        where: inArray(roles.name, userRoleNames)
+      });
+      if (allRoles.length > 0) {
+        await db.insert(userRoles).values(
+          allRoles.map(r => ({ userId: inserted.id, roleId: r.id }))
+        );
+      }
+    }
 
     revalidatePath("/admin/users");
     
     // Clean user object before sending to client
     const { passwordHash: _, ...cleanUser } = inserted;
-    return { success: true, user: cleanUser };
+    return { success: true, user: { ...cleanUser, roles: userRoleNames } };
   } catch (error: any) {
     console.error("[createUser] Error:", error);
     throw new Error(error.message || "Failed to create user.");
@@ -108,22 +125,38 @@ export async function updateUserStatus(userId: number, isActive: boolean) {
   }
 }
 
-export async function updateUserRole(userId: number, role: string) {
+export async function updateUserRole(userId: number, userRoleNames: string[]) {
   const session = await checkAdminAuth();
 
   // Prevent self-role modification to avoid accidental lockout
-  if (Number(session.user.id) === userId) {
-    throw new Error("You cannot modify your own administrative role.");
+  if (Number(session.user.id) === userId && !userRoleNames.includes("admin")) {
+    throw new Error("You cannot remove your own administrative role.");
   }
 
   try {
+    const legacyRole = userRoleNames.includes("admin") ? "admin" : "viewer";
+
     await db.update(users)
       .set({ 
-        role: role as any,
+        role: legacyRole as any,
         sessionVersion: sql`session_version + 1`,
         updatedAt: new Date()
       })
       .where(eq(users.id, userId));
+
+    // Update user_roles
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    
+    if (userRoleNames && userRoleNames.length > 0) {
+      const allRoles = await db.query.roles.findMany({
+        where: inArray(roles.name, userRoleNames)
+      });
+      if (allRoles.length > 0) {
+        await db.insert(userRoles).values(
+          allRoles.map(r => ({ userId, roleId: r.id }))
+        );
+      }
+    }
 
     revalidatePath("/admin/users");
     return { success: true };
@@ -169,15 +202,12 @@ export async function deleteUser(userId: number) {
   }
 
   // Prevent deleting the last administrator
-  const admins = await db.query.users.findMany({
-    where: eq(users.role, "admin"),
+  const admins = await db.query.userRoles.findMany({
+    with: { role: true }
   });
+  const adminUsers = admins.filter(ur => ur.role.name === "admin").map(ur => ur.userId);
   
-  const targetUser = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
-
-  if (targetUser?.role === "admin" && admins.length <= 1) {
+  if (adminUsers.includes(userId) && adminUsers.length <= 1) {
     throw new Error("You cannot delete the last administrative account.");
   }
 
