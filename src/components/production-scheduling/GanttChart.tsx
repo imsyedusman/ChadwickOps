@@ -1,0 +1,345 @@
+"use client";
+
+import React, { useEffect, useRef } from "react";
+import Gantt from "frappe-gantt";
+import "./gantt-overrides.css";
+import { ProjectSchedulingData, resetScheduledStart } from "@/app/actions/production-scheduling";
+import { format, addDays, startOfDay } from "date-fns";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+
+interface GanttChartProps {
+  projects: ProjectSchedulingData[];
+  viewMode: "Day" | "Week" | "Month" | "Year";
+  canDrag?: boolean;
+  onDateChange?: (projectId: string, start: Date) => void;
+  onClick?: (task: any) => void;
+}
+
+const DIMMED_STATUSES = ["On Hold", "2.5 - Tested Passed", "Tested Passed", "2.6 - Ready for Invoicing"];
+
+const formatStatusLabel = (status: string | null) => {
+  if (!status) return "Unknown";
+  const parts = status.split(" - ");
+  return parts.length > 1 ? parts.slice(1).join(" - ").trim() : status.trim();
+};
+
+const getBadgeColor = (status: string | null) => {
+  if (status && ["2.2 - In Progress", "In Progress", "Waiting to Start"].includes(status)) {
+    return "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800";
+  }
+  if (status && ["1.3 - Drawings Approved", "2.1 - Sheetmetal and switchgear ordrered"].includes(status)) {
+    return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800";
+  }
+  if (status && ["2.3 - Ready for Testing", "2.4 - Tested Defective"].includes(status)) {
+    return "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800";
+  }
+  return "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
+};
+
+export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, onClick }: GanttChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const ganttRef = useRef<Gantt | null>(null);
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const ganttWrapperRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // Sync scroll positions between Gantt and left panel
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    if (leftPanelRef.current) {
+      leftPanelRef.current.scrollTop = scrollTop;
+    }
+    
+    // Fake sticky for the SVG grid header
+    const svgHeader = ganttWrapperRef.current?.querySelector('.gantt .grid-header') as SVGGElement | null;
+    if (svgHeader) {
+      svgHeader.style.transform = `translateY(${scrollTop}px)`;
+    }
+  };
+
+  useEffect(() => {
+    const handleGanttClick = async (e: Event) => {
+      const target = e.target as HTMLElement | SVGElement;
+      
+      // Today button
+      if (target.tagName === 'BUTTON' && target.textContent?.trim().toLowerCase() === 'today') {
+        e.preventDefault();
+        e.stopPropagation();
+        const highlight = ganttWrapperRef.current?.querySelector('.gantt .today-highlight') as SVGRectElement | null;
+        if (highlight && ganttWrapperRef.current) {
+          const x = parseFloat(highlight.getAttribute('x') || '0');
+          const containerWidth = ganttWrapperRef.current.clientWidth;
+          ganttWrapperRef.current.scrollLeft = Math.max(0, x - containerWidth / 2);
+        }
+        return;
+      }
+
+      // Reset button
+      if (canDrag && (target.classList?.contains('reset-btn') || target.closest?.('.reset-btn'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        const wrapper = target.closest?.('.bar-wrapper') || (target.classList?.contains('bar-wrapper') ? target : null);
+        const taskIdStr = wrapper?.getAttribute('data-id');
+        if (taskIdStr) {
+          const toastId = toast.loading("Clearing schedule...");
+          try {
+            const res = await resetScheduledStart(parseInt(taskIdStr, 10));
+            if (res.success) {
+              toast.success("Schedule cleared", { id: toastId });
+              router.refresh();
+            } else {
+              toast.error(res.error || "Failed to clear schedule", { id: toastId });
+            }
+          } catch (err) {
+            toast.error("Failed to clear schedule", { id: toastId });
+          }
+        }
+      }
+    };
+
+    const container = document.querySelector('.frappe-gantt-container');
+    if (container) {
+      container.addEventListener('click', handleGanttClick, true);
+      return () => container.removeEventListener('click', handleGanttClick, true);
+    }
+  }, [projects, canDrag, router]);
+
+  useEffect(() => {
+    if (!canDrag || !ganttWrapperRef.current) return;
+
+    const injectResetButtons = () => {
+      const wrappers = ganttWrapperRef.current?.querySelectorAll('.bar-wrapper');
+      wrappers?.forEach(wrapper => {
+        const bar = wrapper.querySelector('.bar');
+        if (!bar) return;
+        const width = parseFloat(bar.getAttribute('width') || '0');
+        const height = parseFloat(bar.getAttribute('height') || '0');
+        
+        let btn = wrapper.querySelector('.reset-btn');
+        if (!btn) {
+          // Create SVG button
+          btn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          btn.setAttribute('class', 'reset-btn ignore-mutate');
+          (btn as SVGElement).style.cursor = 'pointer';
+          
+          const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          bg.setAttribute('class', 'reset-bg');
+          bg.setAttribute('width', '24');
+          bg.setAttribute('height', '24');
+          bg.setAttribute('rx', '4');
+          bg.setAttribute('fill', 'rgba(255,255,255,0.9)');
+          
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.textContent = '✕';
+          text.setAttribute('class', 'reset-text');
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('dominant-baseline', 'central');
+          text.setAttribute('fill', '#ef4444');
+          text.setAttribute('font-size', '14');
+          text.setAttribute('font-weight', 'bold');
+          
+          btn.appendChild(bg);
+          btn.appendChild(text);
+          wrapper.appendChild(btn);
+        }
+        
+        // Update positions
+        const bg = btn.querySelector('.reset-bg');
+        const text = btn.querySelector('.reset-text');
+        if (bg && text) {
+          bg.setAttribute('x', (width - 28).toString());
+          bg.setAttribute('y', ((height - 24) / 2).toString());
+          text.setAttribute('x', (width - 16).toString());
+          text.setAttribute('y', (height / 2).toString());
+        }
+      });
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      let shouldInject = false;
+      for (const m of mutations) {
+        if (m.type === 'childList') {
+          shouldInject = true; break;
+        }
+        if (m.type === 'attributes' && (m.target as Element).classList?.contains('bar')) {
+          shouldInject = true; break;
+        }
+      }
+      if (shouldInject) {
+        injectResetButtons();
+      }
+    });
+
+    observer.observe(ganttWrapperRef.current, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true, 
+      attributeFilter: ['width', 'x'] 
+    });
+    
+    // Attempt initial injection
+    setTimeout(injectResetButtons, 100);
+
+    return () => observer.disconnect();
+  }, [projects, canDrag, viewMode]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Transform projects into frappe-gantt tasks
+    const tasks = projects.map((p) => {
+      const start = p.scheduledStart ? new Date(p.scheduledStart) : new Date();
+      
+      // Fix 1: Minimum duration of 5 days
+      const remainingDays = Math.max(5, Math.ceil((p.remainingHours || 0) / 8));
+      const end = addDays(start, remainingDays - 1);
+
+      const isDimmed = p.rawStatus && DIMMED_STATUSES.includes(p.rawStatus);
+      const isUnscheduled = !p.scheduledStart;
+
+      // Fix 2: Custom class for unscheduled. Frappe Gantt does classList.add(custom_class)
+      // which fails if there are spaces. Provide a single combined class if both apply.
+      let baseColor = "";
+      if (p.rawStatus) {
+        if (["2.2 - In Progress", "In Progress", "Waiting to Start"].includes(p.rawStatus)) {
+          baseColor = "blue";
+        } else if (["1.3 - Drawings Approved", "2.1 - Sheetmetal and switchgear ordrered"].includes(p.rawStatus)) {
+          baseColor = "amber";
+        } else if (["2.3 - Ready for Testing", "2.4 - Tested Defective"].includes(p.rawStatus)) {
+          baseColor = "purple";
+        }
+      }
+
+      let custom_class = "";
+      if (isDimmed && isUnscheduled) {
+        custom_class = baseColor ? `gantt-dimmed-unscheduled-${baseColor}` : "gantt-dimmed-unscheduled";
+      } else if (isDimmed) {
+        custom_class = baseColor ? `gantt-dimmed-${baseColor}` : "gantt-dimmed";
+      } else if (isUnscheduled) {
+        custom_class = baseColor ? `gantt-unscheduled-${baseColor}` : "gantt-unscheduled";
+      } else if (baseColor) {
+        custom_class = `gantt-status-${baseColor}`;
+      }
+
+      // Fix 3: Short label inside the bar (Due date)
+      let barLabel = "";
+      if (p.deliveryDate) {
+        const delDate = new Date(p.deliveryDate);
+        const overdueText = (delDate < startOfDay(new Date())) ? " [OVERDUE]" : "";
+        barLabel = `Due: ${format(delDate, "dd MMM yy")}${overdueText}`;
+      } else {
+        barLabel = p.projectNumber;
+      }
+
+      return {
+        id: p.id.toString(),
+        name: barLabel,
+        start: format(start, "yyyy-MM-dd"),
+        end: format(end, "yyyy-MM-dd"),
+        progress: Math.min(100, Math.max(0, p.progressPercent || 0)),
+        custom_class,
+        dependencies: "",
+      };
+    });
+
+    if (tasks.length === 0) {
+      if (ganttRef.current) {
+        containerRef.current.innerHTML = "";
+        ganttRef.current = null;
+      }
+      return;
+    }
+
+    if (!ganttRef.current) {
+      ganttRef.current = new Gantt(containerRef.current, tasks, {
+        view_mode: "Week",
+        readonly: !canDrag,
+        header_height: 60,
+        bar_height: 20,
+        padding: 56,
+        on_date_change: (task: any, start: Date) => {
+          onDateChange?.(task.id, start);
+        },
+        on_click: (task: any) => {
+          onClick?.(task);
+        },
+      } as any);
+    } else {
+      ganttRef.current.refresh(tasks);
+    }
+  }, [projects, onDateChange, onClick]); // only on init/data changes
+
+  useEffect(() => {
+    if (ganttRef.current && viewMode) {
+      ganttRef.current.change_view_mode(viewMode);
+    }
+  }, [viewMode]);
+
+  if (projects.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 border-dashed">
+        <p className="text-sm font-medium text-slate-500">No projects to display in Gantt chart.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm p-4 min-h-[400px] max-h-[calc(100vh-250px)] flex flex-col">
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Custom Left Panel for Project Names */}
+        <div 
+          ref={leftPanelRef}
+          className="w-64 flex-shrink-0 pt-[70px] pr-4 border-r border-slate-200 dark:border-slate-800 hidden md:block overflow-hidden"
+        >
+          {projects.map((p) => {
+            return (
+              <div 
+                key={p.id} 
+                className="h-[76px] flex flex-col justify-center text-xs text-slate-700 dark:text-slate-300 truncate border-b border-slate-100 dark:border-slate-800/60"
+                title={`${p.projectNumber} | ${p.name}`}
+              >
+                <div className="flex items-center gap-3">
+                  <a 
+                    href={`https://app.workguru.io/#/projects/${p.workguruId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline hover:text-brand"
+                  >
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm leading-tight flex items-center gap-1.5">
+                      {p.projectNumber}
+                    </h3>
+                    <span className="text-[10px] text-slate-500 truncate leading-tight mt-0.5 block">{p.name}</span>
+                  </a>
+                </div>
+                <div className="mt-1 flex items-center">
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${getBadgeColor(p.rawStatus)} truncate`}>
+                    {formatStatusLabel(p.rawStatus)}
+                  </span>
+                </div>
+                <span className="text-[9px] font-medium text-slate-400 mt-1 truncate">
+                  {p.scheduledStart ? `Starts: ${format(new Date(p.scheduledStart), "dd MMM yy")}` : "Unscheduled"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Gantt Chart Container */}
+        <div 
+          ref={ganttWrapperRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-auto min-w-0"
+        >
+          <div ref={containerRef} className="frappe-gantt-container" />
+        </div>
+      </div>
+      
+      <div className="mt-3 text-center border-t border-slate-100 dark:border-slate-800/60 pt-3">
+        <p className="text-[11px] text-slate-400 font-medium">
+          Drag a bar to set its start date (saved automatically). Resize to preview duration (not saved).
+        </p>
+      </div>
+    </div>
+  );
+}

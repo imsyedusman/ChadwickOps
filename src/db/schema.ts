@@ -317,9 +317,11 @@ export const staffEfficiency = pgTable('staff_efficiency', {
 export const projectStageHours = pgTable('project_stage_hours', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().unique().references(() => projects.id),
-  frameAssembly: decimal('frame_assembly', { precision: 8, scale: 2 }),
+  frameAssemblyIfc: decimal('frame_assembly_ifc', { precision: 8, scale: 2 }),
+  frameAssemblyIfm: decimal('frame_assembly_ifm', { precision: 8, scale: 2 }),
   switchgearMount: decimal('switchgear_mount', { precision: 8, scale: 2 }),
-  busbar: decimal('busbar', { precision: 8, scale: 2 }),
+  busbarIfc: decimal('busbar_ifc', { precision: 8, scale: 2 }),
+  busbarIfm: decimal('busbar_ifm', { precision: 8, scale: 2 }),
   wiring: decimal('wiring', { precision: 8, scale: 2 }),
   labels: decimal('labels', { precision: 8, scale: 2 }),
   testing: decimal('testing', { precision: 8, scale: 2 }),

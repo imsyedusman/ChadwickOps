@@ -141,6 +141,20 @@
       "when": 1783924168765,
       "tag": "0019_harsh_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783990616849,
+      "tag": "0020_drop_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783990637966,
+      "tag": "0021_add_ifm_ifc_columns",
+      "breakpoints": true
     }
   ]
 }

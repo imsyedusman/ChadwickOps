@@ -21,6 +21,7 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "^0.45.1",
+    "frappe-gantt": "^1.2.2",
     "lucide-react": "^1.7.0",
     "next": "^16.2.6",
     "next-auth": "^5.0.0-beta.31",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/frappe-gantt": "^0.9.0",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",

@@ -32,6 +32,7 @@ const navigation = [
   { name: 'Workshop Board', href: '/workshop', icon: Monitor },
   { name: 'Procurement', href: '/procurement', icon: Truck },
   { name: 'Capacity & Risk', href: '/risk', icon: SlidersHorizontal },
+  { name: 'Production Scheduling', href: '/production-scheduling', icon: CalendarDays },
   { name: 'Reports', href: '/reports', icon: ChartPie },
   { name: 'Sync Logs', href: '/logs', icon: History },
   { name: 'Help Guide', href: '/help', icon: BookOpen },
