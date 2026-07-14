@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean, unique, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, timestamp, doublePrecision, integer, jsonb, index, boolean, unique, primaryKey, decimal, date } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const clients = pgTable('clients', {
@@ -292,6 +292,52 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   lastLoginAt: timestamp('last_login_at'),
 });
+
+export const staffEfficiency = pgTable('staff_efficiency', {
+  id: serial('id').primaryKey(),
+  workguruId: integer('workguru_id').unique(),
+  fullName: varchar('full_name', { length: 255 }).notNull(),
+  isApprentice: boolean('is_apprentice').default(false).notNull(),
+  hourlyRate: decimal('hourly_rate', { precision: 8, scale: 2 }).default('0').notNull(),
+  hourlyRateOverridden: boolean('hourly_rate_overridden').default(false).notNull(),
+  frameAssembly: decimal('frame_assembly', { precision: 4, scale: 2 }),
+  switchgearMount: decimal('switchgear_mount', { precision: 4, scale: 2 }),
+  busbar: decimal('busbar', { precision: 4, scale: 2 }),
+  wiring: decimal('wiring', { precision: 4, scale: 2 }),
+  labels: decimal('labels', { precision: 4, scale: 2 }),
+  testing: decimal('testing', { precision: 4, scale: 2 }),
+  packagingFreight: decimal('packaging_freight', { precision: 4, scale: 2 }),
+  isActive: boolean('is_active').default(true).notNull(),
+  isWorkshopStaff: boolean('is_workshop_staff').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// This table must never be modified by any sync process.
+export const projectStageHours = pgTable('project_stage_hours', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().unique().references(() => projects.id),
+  frameAssembly: decimal('frame_assembly', { precision: 8, scale: 2 }),
+  switchgearMount: decimal('switchgear_mount', { precision: 8, scale: 2 }),
+  busbar: decimal('busbar', { precision: 8, scale: 2 }),
+  wiring: decimal('wiring', { precision: 8, scale: 2 }),
+  labels: decimal('labels', { precision: 8, scale: 2 }),
+  testing: decimal('testing', { precision: 8, scale: 2 }),
+  packagingFreight: decimal('packaging_freight', { precision: 8, scale: 2 }),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedBy: integer('updated_by').references(() => users.id),
+});
+
+// This table must never be modified by any sync process.
+export const productionSchedule = pgTable('production_schedule', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().unique().references(() => projects.id),
+  scheduledStart: date('scheduled_start'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedBy: integer('updated_by').references(() => users.id),
+});
+
 
 // Relations
 export const clientsRelations = relations(clients, ({ many }) => ({

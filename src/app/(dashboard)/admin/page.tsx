@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ApiCredentialsForm } from "@/components/admin/ApiCredentialsForm";
 import { BlurredValue } from "@/components/ui/BlurredValue";
+import { WorkshopStaffSection } from "@/components/admin/WorkshopStaffSection";
 import Link from "next/link";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
@@ -357,6 +358,9 @@ export default async function AdminPage() {
            </table>
         </div>
       </section>
+
+      <hr className="my-10 border-slate-200 dark:border-slate-800" />
+      <WorkshopStaffSection isFinance={hasRole(session, "finance")} />
     </div>
   );
 }

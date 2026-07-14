@@ -134,6 +134,13 @@
       "when": 1783921909941,
       "tag": "0018_small_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783924168765,
+      "tag": "0019_harsh_killer_shrike",
+      "breakpoints": true
     }
   ]
 }
