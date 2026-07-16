@@ -127,22 +127,91 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     }
   }, [projects, canDrag, router]);
 
+  // Effect 1: Inject Dependency Indicators (runs for all users)
+  useEffect(() => {
+    if (!ganttWrapperRef.current) return;
+
+    const injectDependencyIndicators = () => {
+      const wrappers = ganttWrapperRef.current?.querySelectorAll('.bar-wrapper');
+      wrappers?.forEach(wrapper => {
+        const taskIdStr = wrapper.getAttribute('data-id');
+        if (!taskIdStr) return;
+        const project = projects.find(p => p.id.toString() === taskIdStr);
+
+        if (project?.isBlocked) {
+          let lockGroup = wrapper.querySelector('.lock-indicator');
+          if (!lockGroup) {
+            lockGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            lockGroup.setAttribute('class', 'lock-indicator ignore-mutate');
+            
+            const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lockSvg.setAttribute('d', 'M10 8V6c0-1.66-1.34-3-3-3S4 4.34 4 6v2H2.5v7h11V8H10zM5.5 6c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v2h-3V6z');
+            lockSvg.setAttribute('fill', '#ffffff');
+            lockSvg.setAttribute('class', 'lock-icon');
+            lockSvg.setAttribute('transform', 'translate(6, 3) scale(0.9)');
+
+            const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+            tooltipGroup.setAttribute('width', '250');
+            tooltipGroup.setAttribute('height', '100');
+            tooltipGroup.setAttribute('class', 'lock-tooltip-container');
+            tooltipGroup.setAttribute('x', '0');
+            tooltipGroup.setAttribute('y', '20');
+
+            const tooltipDiv = document.createElement('div');
+            tooltipDiv.className = 'lock-tooltip';
+            tooltipDiv.innerHTML = project.blockReasons?.join('<br/>') || '';
+            
+            tooltipGroup.appendChild(tooltipDiv);
+            lockGroup.appendChild(lockSvg);
+            lockGroup.appendChild(tooltipGroup);
+            wrapper.appendChild(lockGroup);
+          }
+        }
+      });
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      let shouldInject = false;
+      for (const m of mutations) {
+        if (m.type === 'childList') {
+          shouldInject = true; break;
+        }
+        if (m.type === 'attributes' && (m.target as Element).classList?.contains('bar')) {
+          shouldInject = true; break;
+        }
+      }
+      if (shouldInject) {
+        injectDependencyIndicators();
+      }
+    });
+
+    observer.observe(ganttWrapperRef.current, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true, 
+      attributeFilter: ['width', 'x'] 
+    });
+    
+    setTimeout(injectDependencyIndicators, 100);
+
+    return () => observer.disconnect();
+  }, [projects, viewMode]);
+
+  // Effect 2: Inject Reset Buttons (runs only when canDrag is true)
   useEffect(() => {
     if (!canDrag || !ganttWrapperRef.current) return;
 
     const injectResetButtons = () => {
       const wrappers = ganttWrapperRef.current?.querySelectorAll('.bar-wrapper');
+      
       wrappers?.forEach(wrapper => {
         const bar = wrapper.querySelector('.bar');
         if (!bar) return;
         const width = parseFloat(bar.getAttribute('width') || '0');
         const height = parseFloat(bar.getAttribute('height') || '0');
         
-        const taskIdStr = wrapper.getAttribute('data-id');
-        const project = projects.find(p => p.id.toString() === taskIdStr);
-
         let btn = wrapper.querySelector('.reset-btn');
-        if (!btn && canDrag) {
+        if (!btn) {
           // Create SVG button
           btn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           btn.setAttribute('class', 'reset-btn ignore-mutate');
@@ -178,38 +247,6 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
             bg.setAttribute('y', ((height - 24) / 2).toString());
             text.setAttribute('x', (width - 16).toString());
             text.setAttribute('y', (height / 2).toString());
-          }
-        }
-
-        // Inject Dependency Indicators (Padlock)
-        if (project?.isBlocked) {
-          let lockGroup = wrapper.querySelector('.lock-indicator');
-          if (!lockGroup) {
-            lockGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            lockGroup.setAttribute('class', 'lock-indicator ignore-mutate');
-            
-            const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            lockSvg.setAttribute('d', 'M10 8V6c0-1.66-1.34-3-3-3S4 4.34 4 6v2H2.5v7h11V8H10zM5.5 6c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v2h-3V6z');
-            lockSvg.setAttribute('fill', '#ffffff');
-            lockSvg.setAttribute('class', 'lock-icon');
-            // Scale and center it vertically
-            lockSvg.setAttribute('transform', 'translate(6, 3) scale(0.9)');
-
-            const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-            tooltipGroup.setAttribute('width', '250');
-            tooltipGroup.setAttribute('height', '100');
-            tooltipGroup.setAttribute('class', 'lock-tooltip-container');
-            tooltipGroup.setAttribute('x', '0');
-            tooltipGroup.setAttribute('y', '20');
-
-            const tooltipDiv = document.createElement('div');
-            tooltipDiv.className = 'lock-tooltip';
-            tooltipDiv.innerHTML = project.blockReasons?.join('<br/>') || '';
-            
-            tooltipGroup.appendChild(tooltipDiv);
-            lockGroup.appendChild(lockSvg);
-            lockGroup.appendChild(tooltipGroup);
-            wrapper.appendChild(lockGroup);
           }
         }
       });
