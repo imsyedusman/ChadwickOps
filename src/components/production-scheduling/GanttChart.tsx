@@ -59,6 +59,23 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
   };
 
   useEffect(() => {
+    const wrapper = ganttWrapperRef.current;
+    if (!wrapper) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Allow horizontal scrolling if shift key is held or it's a touchpad horizontal swipe
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      wrapper.scrollTop += e.deltaY;
+    };
+
+    wrapper.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    return () => wrapper.removeEventListener("wheel", handleWheel, { capture: true });
+  }, []);
+
+  useEffect(() => {
     const handleGanttClick = async (e: Event) => {
       const target = e.target as HTMLElement | SVGElement;
       
@@ -185,7 +202,10 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
   }, [projects, canDrag, viewMode]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      ganttRef.current = null;
+      return;
+    }
 
     // Transform projects into frappe-gantt tasks
     const tasks = projects.map((p) => {
@@ -301,7 +321,7 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
               >
                 <div className="flex items-center gap-3">
                   <a 
-                    href={`https://app.workguru.io/#/projects/${p.workguruId}`}
+                    href={`https://app.workguru.io/App/Projects/Detail2/${p.workguruId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:underline hover:text-brand"
