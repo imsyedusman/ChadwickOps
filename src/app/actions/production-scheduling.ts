@@ -74,8 +74,7 @@ export async function getProductionSchedulingData() {
       "2.4 - Tested Defective",
       "On Hold",
       "2.5 - Tested Passed",
-      "Tested Passed",
-      "2.6 - Ready for Invoicing"
+      "Tested Passed"
     ];
 
     // Fetch projects
@@ -83,7 +82,7 @@ export async function getProductionSchedulingData() {
       where: and(
         eq(projects.isArchived, false),
         inArray(projects.rawStatus, activeStatuses),
-        notInArray(projects.rawStatus, ["Delivered", "Completed", "Cancelled"]),
+        notInArray(projects.rawStatus, ["Delivered", "Completed", "Cancelled", "2.6 - Ready for Invoicing", "3.1 - Invoiced"]),
         not(like(projects.projectNumber, "99%")),
         isNotNull(projects.projectType)
       ),

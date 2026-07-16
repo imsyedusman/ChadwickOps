@@ -20,7 +20,7 @@ interface Props {
   isAdmin?: boolean;
 }
 
-const DIMMED_STATUSES = ["On Hold", "Tested Passed", "Ready for Invoicing"];
+const DIMMED_STATUSES = ["On Hold", "Tested Passed"];
 
 export function ProductionSchedulingClient({ initialData, canDrag = false, isAdmin = false }: Props) {
   const { projects } = initialData;

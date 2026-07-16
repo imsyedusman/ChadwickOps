@@ -21,7 +21,7 @@ interface GanttChartProps {
   onClick?: (task: any) => void;
 }
 
-const DIMMED_STATUSES = ["On Hold", "2.5 - Tested Passed", "Tested Passed", "2.6 - Ready for Invoicing"];
+const DIMMED_STATUSES = ["On Hold", "2.5 - Tested Passed", "Tested Passed"];
 
 const formatStatusLabel = (status: string | null) => {
   if (!status) return "Unknown";
@@ -279,6 +279,83 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
 
     return () => observer.disconnect();
   }, [projects, canDrag, viewMode]);
+
+  // Effect 3: Format Week Labels (runs for all users)
+  useEffect(() => {
+    if (viewMode !== "Week" || !ganttWrapperRef.current) return;
+
+    const fixWeekLabels = () => {
+      const labels = ganttWrapperRef.current?.querySelectorAll('.gantt .grid-header .lower-text');
+      if (!labels || labels.length === 0) return;
+
+      let currentMonth = "";
+      
+      labels.forEach(label => {
+        const text = label.textContent || "";
+        if (text.includes(' - ')) {
+          const parts = text.split(' - ');
+          if (parts.length !== 2) return;
+          
+          const startStr = parts[0].trim();
+          const endStr = parts[1].trim();
+
+          const startHasLetters = /[a-zA-Z]/.test(startStr);
+          const endHasLetters = /[a-zA-Z]/.test(endStr);
+
+          let startDay = startStr.replace(/[a-zA-Z]/g, '').trim().padStart(2, '0');
+          let endDay = endStr.replace(/[a-zA-Z]/g, '').trim().padStart(2, '0');
+          
+          let startMonth = currentMonth;
+          let endMonth = currentMonth;
+
+          if (startHasLetters) {
+            startMonth = startStr.match(/[a-zA-Z]+/)?.[0] || startMonth;
+            currentMonth = startMonth;
+          }
+          
+          if (endHasLetters) {
+            endMonth = endStr.match(/[a-zA-Z]+/)?.[0] || endMonth;
+            currentMonth = endMonth; 
+          } else {
+            endMonth = startMonth;
+          }
+          
+          if (!startMonth) {
+            const firstUpper = ganttWrapperRef.current?.querySelector('.gantt .grid-header .upper-text');
+            startMonth = firstUpper?.textContent?.split(' ')[0].substring(0, 3) || "Jan";
+            currentMonth = startMonth;
+            endMonth = startMonth;
+          }
+
+          const newText = `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+          if (label.textContent !== newText) {
+            label.textContent = newText;
+          }
+        }
+      });
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      let shouldInject = false;
+      for (const m of mutations) {
+        if (m.type === 'childList') {
+          shouldInject = true; break;
+        }
+      }
+      if (shouldInject) {
+        fixWeekLabels();
+      }
+    });
+
+    observer.observe(ganttWrapperRef.current, { 
+      childList: true, 
+      subtree: true
+    });
+    
+    setTimeout(fixWeekLabels, 100);
+
+    return () => observer.disconnect();
+  }, [projects, viewMode]);
 
   useEffect(() => {
     if (!containerRef.current) {
