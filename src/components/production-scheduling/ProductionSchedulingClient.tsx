@@ -34,6 +34,8 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
   const [hideDimmed, setHideDimmed] = useState(false);
   const [activeSummaryFilter, setActiveSummaryFilter] = useState<"active" | "testing" | "onHold" | "overdue" | null>(null);
   const [sortBy, setSortBy] = useState("Due Date");
+  const [overtimeHours, setOvertimeHours] = useState(0);
+  const [isSimulateOpen, setIsSimulateOpen] = useState(false);
 
   const uniqueManagers = useMemo(() => {
     const managers = new Set<string>();
@@ -265,6 +267,61 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
             </select>
           </div>
 
+          <div className="flex flex-col gap-1 w-full md:w-auto relative">
+            <button
+              onClick={() => setIsSimulateOpen(!isSimulateOpen)}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium mt-auto md:mb-[1px]",
+                isSimulateOpen || overtimeHours > 0
+                  ? "bg-brand text-white border-brand hover:bg-brand/90 shadow-sm"
+                  : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+              )}
+            >
+              <Clock className="w-4 h-4" />
+              Simulate Overtime
+            </button>
+
+            {isSimulateOpen && (
+              <div className="absolute top-[calc(100%+8px)] left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-4 z-50">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Extra hours this week
+                </label>
+                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-500 mb-3">
+                  This is a simulation — changes are not saved.
+                </p>
+                <input
+                  type="number"
+                  min="0"
+                  max="20"
+                  value={overtimeHours}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val)) setOvertimeHours(Math.max(0, Math.min(20, val)));
+                    else setOvertimeHours(0);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 text-slate-900 dark:text-slate-100 mb-4"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setOvertimeHours(0);
+                      setIsSimulateOpen(false);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    Clear & Close
+                  </button>
+                  <button
+                    onClick={() => setIsSimulateOpen(false)}
+                    className="px-3 py-1.5 text-xs font-medium bg-brand text-white hover:bg-brand/90 rounded-lg transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col gap-1 w-full md:w-auto self-end md:mb-[1px]">
             <label className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 h-[38px] hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
               <input 
@@ -378,6 +435,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
           viewMode={ganttViewMode}
           canDrag={canDrag}
           onDateChange={handleDateChange}
+          overtimeHours={isSimulateOpen ? overtimeHours : (overtimeHours > 0 ? overtimeHours : 0)}
         />
       ) : (
         <div className="space-y-4">

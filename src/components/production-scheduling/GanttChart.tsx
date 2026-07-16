@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Gantt from "frappe-gantt";
 import "./gantt-overrides.css";
 import { ProjectSchedulingData, resetScheduledStart } from "@/app/actions/production-scheduling";
@@ -19,6 +20,7 @@ interface GanttChartProps {
   canDrag?: boolean;
   onDateChange?: (projectId: string, start: Date) => void;
   onClick?: (task: any) => void;
+  overtimeHours?: number;
 }
 
 const DIMMED_STATUSES = ["On Hold", "2.5 - Tested Passed", "Tested Passed"];
@@ -42,12 +44,19 @@ const getBadgeColor = (status: string | null) => {
   return "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
 };
 
-export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, onClick }: GanttChartProps) {
+export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, onClick, overtimeHours = 0 }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    project: GanttProject | null;
+  }>({ visible: false, x: 0, y: 0, project: null });
 
   // Sync scroll positions between Gantt and left panel
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -127,6 +136,51 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     }
   }, [projects, canDrag, router]);
 
+  // Effect 0.5: Custom Tooltip
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | SVGElement;
+      
+      // Don't show tooltip while dragging
+      if (document.body.classList.contains('dragging') || (ganttRef.current as any)?.is_dragging) {
+        setTooltip(prev => prev.visible ? { ...prev, visible: false } : prev);
+        return;
+      }
+      
+      const barWrapper = target.closest?.('.bar-wrapper') || (target.classList?.contains('bar-wrapper') ? target : null);
+      if (barWrapper) {
+        const taskIdStr = barWrapper.getAttribute('data-id');
+        if (taskIdStr) {
+          const project = projects.find(p => p.id.toString() === taskIdStr);
+          if (project) {
+            setTooltip({
+              visible: true,
+              x: e.clientX,
+              y: e.clientY,
+              project
+            });
+            return;
+          }
+        }
+      }
+      setTooltip(prev => prev.visible ? { ...prev, visible: false } : prev);
+    };
+
+    const handleMouseLeave = () => {
+      setTooltip(prev => prev.visible ? { ...prev, visible: false } : prev);
+    };
+
+    const container = document.querySelector('.frappe-gantt-container');
+    if (container) {
+      container.addEventListener('mousemove', handleMouseMove as any, true);
+      container.addEventListener('mouseleave', handleMouseLeave);
+      return () => {
+        container.removeEventListener('mousemove', handleMouseMove as any, true);
+        container.removeEventListener('mouseleave', handleMouseLeave);
+      };
+    }
+  }, [projects]);
+
   // Effect 1: Inject Dependency Indicators (runs for all users)
   useEffect(() => {
     if (!ganttWrapperRef.current) return;
@@ -198,95 +252,6 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     setTimeout(injectDependencyIndicators, 100);
 
     return () => observer.disconnect();
-  }, [projects, viewMode]);
-
-  // Effect 1.5: Inject Delivery Markers (runs for all users, once per render using setTimeout to avoid MutationObserver loops)
-  useEffect(() => {
-    if (!ganttWrapperRef.current) return;
-    
-    const injectDeliveryMarkers = () => {
-      const wrappers = ganttWrapperRef.current?.querySelectorAll('.bar-wrapper');
-      
-      wrappers?.forEach(wrapper => {
-        const taskIdStr = wrapper.getAttribute('data-id');
-        if (!taskIdStr) return;
-        const project = projects.find(p => p.id.toString() === taskIdStr);
-        if (!project) return;
-        
-        const deliveryDateStr = project.sheetmetalDeliveredDate || project.switchgearDeliveredDate;
-        const bar = wrapper.querySelector('.bar');
-        
-        // Clean up any existing marker first (prevents duplicates and ensures fresh state)
-        const existingMarker = wrapper.querySelector('.delivery-marker-group');
-        if (existingMarker) existingMarker.remove();
-        // Also remove the old rect marker just in case
-        const oldRectMarker = wrapper.querySelector('.delivery-marker');
-        if (oldRectMarker) oldRectMarker.remove();
-        
-        if (deliveryDateStr && bar) {
-          const marker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          marker.setAttribute('class', 'delivery-marker-group ignore-mutate');
-          
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          line.setAttribute('class', 'delivery-marker-line');
-          
-          const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-          arrow.setAttribute('class', 'delivery-marker-arrow');
-          
-          const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-          tooltipGroup.setAttribute('width', '200');
-          tooltipGroup.setAttribute('height', '50');
-          tooltipGroup.setAttribute('class', 'lock-tooltip-container delivery-tooltip');
-          
-          const tooltipDiv = document.createElement('div');
-          tooltipDiv.className = 'lock-tooltip';
-          
-          const deliveryDate = new Date(deliveryDateStr);
-          const isSM = !!project.sheetmetalDeliveredDate;
-          tooltipDiv.textContent = `${isSM ? "SM" : "SG"} Delivered: ${format(deliveryDate, "dd MMM yyyy")}`;
-          
-          tooltipGroup.appendChild(tooltipDiv);
-          
-          marker.appendChild(line);
-          marker.appendChild(arrow);
-          marker.appendChild(tooltipGroup);
-          
-          const start = project.effectiveStart ? new Date(project.effectiveStart) : new Date();
-          const remainingDays = Math.max(5, Math.ceil((project.remainingHours || 0) / 8));
-          const end = addDays(start, remainingDays - 1);
-          
-          const startMs = startOfDay(start).getTime();
-          const endMs = startOfDay(end).getTime();
-          const deliveryMs = startOfDay(deliveryDate).getTime();
-          
-          const totalDurationMs = (endMs - startMs) + 86400000;
-          const barX = parseFloat(bar.getAttribute('x') || '0');
-          const barY = parseFloat(bar.getAttribute('y') || '0');
-          const barWidth = parseFloat(bar.getAttribute('width') || '0');
-          const barHeight = parseFloat(bar.getAttribute('height') || '0');
-          
-          const offsetX = ((deliveryMs - startMs) / totalDurationMs) * barWidth;
-          const markerX = barX + offsetX;
-          
-          line.setAttribute('x', markerX.toString());
-          line.setAttribute('y', barY.toString());
-          line.setAttribute('width', '3');
-          line.setAttribute('height', barHeight.toString());
-          line.setAttribute('fill', '#0f172a');
-          
-          arrow.setAttribute('points', `${markerX - 4},${barY} ${markerX + 7},${barY} ${markerX + 1.5},${barY + 6}`);
-          arrow.setAttribute('fill', '#0f172a');
-          
-          tooltipGroup.setAttribute('x', (markerX + 10).toString());
-          tooltipGroup.setAttribute('y', (barY - 20).toString());
-          
-          wrapper.appendChild(marker);
-        }
-      });
-    };
-
-    const timeoutId = setTimeout(injectDeliveryMarkers, 250);
-    return () => clearTimeout(timeoutId);
   }, [projects, viewMode]);
 
   // Effect 2: Inject Reset Buttons (runs only when canDrag is true)
@@ -459,8 +424,10 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     const tasks = projects.map((p) => {
       const start = p.effectiveStart ? new Date(p.effectiveStart) : new Date();
       
-      // Fix 1: Minimum duration of 5 days
-      const remainingDays = Math.max(5, Math.ceil((p.remainingHours || 0) / 8));
+      // Fix 1: Minimum duration of 5 days, calculating based on custom daily hours including overtime
+      const dailyHours = (38 + overtimeHours) / 5;
+      const durationInDays = (p.remainingHours || 0) / dailyHours;
+      const remainingDays = Math.max(5, Math.ceil(durationInDays));
       const end = addDays(start, remainingDays - 1);
 
       const isDimmed = p.rawStatus && DIMMED_STATUSES.includes(p.rawStatus);
@@ -536,7 +503,7 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     } else {
       ganttRef.current.refresh(tasks);
     }
-  }, [projects, onDateChange, onClick]); // only on init/data changes
+  }, [projects, onDateChange, onClick, overtimeHours]); // only on init/data/overtime changes
 
   useEffect(() => {
     if (ganttRef.current && viewMode) {
@@ -611,6 +578,87 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
           Drag a bar to set its start date (saved automatically). Resize to preview duration (not saved).
         </p>
       </div>
+
+      {tooltip.visible && tooltip.project && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed z-[9999] pointer-events-none transform -translate-x-1/2 -translate-y-[calc(100%+16px)] bg-white dark:bg-slate-900 p-4 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 w-[320px]"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          <div className="flex flex-col gap-3">
+            <div>
+              <h4 className="font-bold text-slate-900 dark:text-white leading-tight">
+                {tooltip.project.projectNumber}
+              </h4>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2">
+                {tooltip.project.name}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${getBadgeColor(tooltip.project.rawStatus)}`}>
+                {formatStatusLabel(tooltip.project.rawStatus)}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 text-xs mt-1">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Client Due</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  {tooltip.project.deliveryDate ? format(new Date(tooltip.project.deliveryDate), "dd MMM yyyy") : "-"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Remaining Hours</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  {tooltip.project.remainingHours?.toFixed(1) || "0.0"} hrs
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">
+                {tooltip.project.scheduledStart ? "Scheduled Start" : "Auto-start (SM/SG delivered)"}
+              </span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {tooltip.project.effectiveStart ? format(new Date(tooltip.project.effectiveStart), "dd MMM yyyy") : "Unknown"}
+              </span>
+            </div>
+
+            {(tooltip.project.sheetmetalDeliveredDate || tooltip.project.switchgearDeliveredDate) && (
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3">
+                {tooltip.project.sheetmetalDeliveredDate && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">SM Delivered</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                      {format(new Date(tooltip.project.sheetmetalDeliveredDate), "dd MMM yyyy")}
+                    </span>
+                  </div>
+                )}
+                {tooltip.project.switchgearDeliveredDate && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">SG Delivered</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                      {format(new Date(tooltip.project.switchgearDeliveredDate), "dd MMM yyyy")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tooltip.project.isBlocked && tooltip.project.blockReasons && tooltip.project.blockReasons.length > 0 && (
+              <div className="mt-1 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg">
+                <span className="text-red-600 dark:text-red-400 block text-[10px] uppercase font-bold tracking-wider mb-1">Blocked</span>
+                <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-300 space-y-1">
+                  {tooltip.project.blockReasons.map((reason, i) => (
+                    <li key={i}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
