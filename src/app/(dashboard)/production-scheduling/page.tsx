@@ -8,6 +8,7 @@ export default async function ProductionSchedulingPage() {
   const result = await getProductionSchedulingData();
   const session = await validateSession();
   const hasSchedulerOrAdminRole = session ? (hasRole(session, "scheduler") || hasRole(session, "admin")) : false;
+  const isAdmin = session ? hasRole(session, "admin") : false;
   
   if (!result.success || !result.data) {
     return (
@@ -19,5 +20,5 @@ export default async function ProductionSchedulingPage() {
     );
   }
   
-  return <ProductionSchedulingClient initialData={result.data} canDrag={hasSchedulerOrAdminRole} />;
+  return <ProductionSchedulingClient initialData={result.data} canDrag={hasSchedulerOrAdminRole} isAdmin={isAdmin} />;
 }

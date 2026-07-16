@@ -2,13 +2,14 @@
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle } from "lucide-react";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings } from "lucide-react";
 import { ProjectSchedulingData, updateScheduledStart } from "@/app/actions/production-scheduling";
 import { StageCapacity } from "@/lib/stage-capacity";
 import { cn } from "@/lib/utils";
 import { GanttChart } from "./GanttChart";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Link from "next/link";
 
 interface Props {
   initialData: {
@@ -16,11 +17,12 @@ interface Props {
     stageCapacity: StageCapacity;
   };
   canDrag?: boolean;
+  isAdmin?: boolean;
 }
 
 const DIMMED_STATUSES = ["On Hold", "Tested Passed", "Ready for Invoicing"];
 
-export function ProductionSchedulingClient({ initialData, canDrag = false }: Props) {
+export function ProductionSchedulingClient({ initialData, canDrag = false, isAdmin = false }: Props) {
   const { projects } = initialData;
   const router = useRouter();
   
@@ -164,7 +166,18 @@ export function ProductionSchedulingClient({ initialData, canDrag = false }: Pro
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Production Scheduling</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Production Scheduling</h1>
+            {isAdmin && (
+              <Link
+                href="/settings"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </Link>
+            )}
+          </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
             Showing {filteredProjects.length} of {projects.length} projects
           </p>
