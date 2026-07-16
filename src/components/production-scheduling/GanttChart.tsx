@@ -580,7 +580,10 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
                     <span className="text-[10px] text-slate-500 truncate leading-tight mt-0.5 block">{p.name}</span>
                   </a>
                 </div>
-                <div className="mt-1 flex items-center">
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${p.projectType?.toUpperCase().includes("IFM") ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
+                    {p.projectType?.toUpperCase().includes("IFM") ? "IFM" : "IFC"}
+                  </span>
                   <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${getBadgeColor(p.rawStatus)} truncate`}>
                     {formatStatusLabel(p.rawStatus)}
                   </span>
