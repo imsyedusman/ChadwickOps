@@ -166,6 +166,9 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
             lockGroup.appendChild(tooltipGroup);
             wrapper.appendChild(lockGroup);
           }
+        } else {
+          const lockGroup = wrapper.querySelector('.lock-indicator');
+          if (lockGroup) lockGroup.remove();
         }
       });
     };
@@ -195,6 +198,95 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     setTimeout(injectDependencyIndicators, 100);
 
     return () => observer.disconnect();
+  }, [projects, viewMode]);
+
+  // Effect 1.5: Inject Delivery Markers (runs for all users, once per render using setTimeout to avoid MutationObserver loops)
+  useEffect(() => {
+    if (!ganttWrapperRef.current) return;
+    
+    const injectDeliveryMarkers = () => {
+      const wrappers = ganttWrapperRef.current?.querySelectorAll('.bar-wrapper');
+      
+      wrappers?.forEach(wrapper => {
+        const taskIdStr = wrapper.getAttribute('data-id');
+        if (!taskIdStr) return;
+        const project = projects.find(p => p.id.toString() === taskIdStr);
+        if (!project) return;
+        
+        const deliveryDateStr = project.sheetmetalDeliveredDate || project.switchgearDeliveredDate;
+        const bar = wrapper.querySelector('.bar');
+        
+        // Clean up any existing marker first (prevents duplicates and ensures fresh state)
+        const existingMarker = wrapper.querySelector('.delivery-marker-group');
+        if (existingMarker) existingMarker.remove();
+        // Also remove the old rect marker just in case
+        const oldRectMarker = wrapper.querySelector('.delivery-marker');
+        if (oldRectMarker) oldRectMarker.remove();
+        
+        if (deliveryDateStr && bar) {
+          const marker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          marker.setAttribute('class', 'delivery-marker-group ignore-mutate');
+          
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          line.setAttribute('class', 'delivery-marker-line');
+          
+          const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          arrow.setAttribute('class', 'delivery-marker-arrow');
+          
+          const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+          tooltipGroup.setAttribute('width', '200');
+          tooltipGroup.setAttribute('height', '50');
+          tooltipGroup.setAttribute('class', 'lock-tooltip-container delivery-tooltip');
+          
+          const tooltipDiv = document.createElement('div');
+          tooltipDiv.className = 'lock-tooltip';
+          
+          const deliveryDate = new Date(deliveryDateStr);
+          const isSM = !!project.sheetmetalDeliveredDate;
+          tooltipDiv.textContent = `${isSM ? "SM" : "SG"} Delivered: ${format(deliveryDate, "dd MMM yyyy")}`;
+          
+          tooltipGroup.appendChild(tooltipDiv);
+          
+          marker.appendChild(line);
+          marker.appendChild(arrow);
+          marker.appendChild(tooltipGroup);
+          
+          const start = project.effectiveStart ? new Date(project.effectiveStart) : new Date();
+          const remainingDays = Math.max(5, Math.ceil((project.remainingHours || 0) / 8));
+          const end = addDays(start, remainingDays - 1);
+          
+          const startMs = startOfDay(start).getTime();
+          const endMs = startOfDay(end).getTime();
+          const deliveryMs = startOfDay(deliveryDate).getTime();
+          
+          const totalDurationMs = (endMs - startMs) + 86400000;
+          const barX = parseFloat(bar.getAttribute('x') || '0');
+          const barY = parseFloat(bar.getAttribute('y') || '0');
+          const barWidth = parseFloat(bar.getAttribute('width') || '0');
+          const barHeight = parseFloat(bar.getAttribute('height') || '0');
+          
+          const offsetX = ((deliveryMs - startMs) / totalDurationMs) * barWidth;
+          const markerX = barX + offsetX;
+          
+          line.setAttribute('x', markerX.toString());
+          line.setAttribute('y', barY.toString());
+          line.setAttribute('width', '3');
+          line.setAttribute('height', barHeight.toString());
+          line.setAttribute('fill', '#0f172a');
+          
+          arrow.setAttribute('points', `${markerX - 4},${barY} ${markerX + 7},${barY} ${markerX + 1.5},${barY + 6}`);
+          arrow.setAttribute('fill', '#0f172a');
+          
+          tooltipGroup.setAttribute('x', (markerX + 10).toString());
+          tooltipGroup.setAttribute('y', (barY - 20).toString());
+          
+          wrapper.appendChild(marker);
+        }
+      });
+    };
+
+    const timeoutId = setTimeout(injectDeliveryMarkers, 250);
+    return () => clearTimeout(timeoutId);
   }, [projects, viewMode]);
 
   // Effect 2: Inject Reset Buttons (runs only when canDrag is true)
