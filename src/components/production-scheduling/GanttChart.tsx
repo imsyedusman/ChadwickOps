@@ -8,8 +8,13 @@ import { format, addDays, startOfDay } from "date-fns";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+export interface GanttProject extends ProjectSchedulingData {
+  isBlocked?: boolean;
+  blockReasons?: string[];
+}
+
 interface GanttChartProps {
-  projects: ProjectSchedulingData[];
+  projects: GanttProject[];
   viewMode: "Day" | "Week" | "Month" | "Year";
   canDrag?: boolean;
   onDateChange?: (projectId: string, start: Date) => void;
@@ -133,8 +138,11 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
         const width = parseFloat(bar.getAttribute('width') || '0');
         const height = parseFloat(bar.getAttribute('height') || '0');
         
+        const taskIdStr = wrapper.getAttribute('data-id');
+        const project = projects.find(p => p.id.toString() === taskIdStr);
+
         let btn = wrapper.querySelector('.reset-btn');
-        if (!btn) {
+        if (!btn && canDrag) {
           // Create SVG button
           btn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           btn.setAttribute('class', 'reset-btn ignore-mutate');
@@ -162,13 +170,47 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
         }
         
         // Update positions
-        const bg = btn.querySelector('.reset-bg');
-        const text = btn.querySelector('.reset-text');
-        if (bg && text) {
-          bg.setAttribute('x', (width - 28).toString());
-          bg.setAttribute('y', ((height - 24) / 2).toString());
-          text.setAttribute('x', (width - 16).toString());
-          text.setAttribute('y', (height / 2).toString());
+        if (btn) {
+          const bg = btn.querySelector('.reset-bg');
+          const text = btn.querySelector('.reset-text');
+          if (bg && text) {
+            bg.setAttribute('x', (width - 28).toString());
+            bg.setAttribute('y', ((height - 24) / 2).toString());
+            text.setAttribute('x', (width - 16).toString());
+            text.setAttribute('y', (height / 2).toString());
+          }
+        }
+
+        // Inject Dependency Indicators (Padlock)
+        if (project?.isBlocked) {
+          let lockGroup = wrapper.querySelector('.lock-indicator');
+          if (!lockGroup) {
+            lockGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            lockGroup.setAttribute('class', 'lock-indicator ignore-mutate');
+            
+            const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            lockSvg.setAttribute('d', 'M10 8V6c0-1.66-1.34-3-3-3S4 4.34 4 6v2H2.5v7h11V8H10zM5.5 6c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v2h-3V6z');
+            lockSvg.setAttribute('fill', '#ffffff');
+            lockSvg.setAttribute('class', 'lock-icon');
+            // Scale and center it vertically
+            lockSvg.setAttribute('transform', 'translate(6, 3) scale(0.9)');
+
+            const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+            tooltipGroup.setAttribute('width', '250');
+            tooltipGroup.setAttribute('height', '100');
+            tooltipGroup.setAttribute('class', 'lock-tooltip-container');
+            tooltipGroup.setAttribute('x', '0');
+            tooltipGroup.setAttribute('y', '20');
+
+            const tooltipDiv = document.createElement('div');
+            tooltipDiv.className = 'lock-tooltip';
+            tooltipDiv.innerHTML = project.blockReasons?.join('<br/>') || '';
+            
+            tooltipGroup.appendChild(tooltipDiv);
+            lockGroup.appendChild(lockSvg);
+            lockGroup.appendChild(tooltipGroup);
+            wrapper.appendChild(lockGroup);
+          }
         }
       });
     };

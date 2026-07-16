@@ -256,3 +256,38 @@
 .dark .gantt .bar-wrapper .reset-btn:hover .reset-bg {
   fill: #450a0a !important; /* red-950 */
 }
+/* Dependency Indicator Tooltip */
+.lock-tooltip-container {
+  display: none;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 100;
+}
+
+.lock-indicator {
+  cursor: help;
+}
+
+.lock-indicator:hover .lock-tooltip-container {
+  display: block;
+}
+
+.lock-tooltip {
+  background-color: #1e293b;
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  width: max-content;
+  max-width: 230px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  white-space: normal;
+  line-height: 1.4;
+  border: 1px solid #334155;
+  pointer-events: none;
+}
+.dark .lock-tooltip {
+  background-color: #0f172a;
+  border-color: #1e293b;
+}

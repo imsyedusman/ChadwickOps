@@ -66,6 +66,31 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
       else if (activeSummaryFilter === "active") matchSummaryFilter = !!isActiveStatus;
 
       return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter;
+    }).map(p => {
+      let isBlocked = false;
+      const blockReasons: string[] = [];
+      const now = new Date().setHours(0,0,0,0);
+
+      // Rule 1
+      if (!p.drawingApprovalDate) {
+        isBlocked = true;
+        blockReasons.push("Awaiting drawing approval before work can begin");
+      } else if (new Date(p.drawingApprovalDate).getTime() > now) {
+        isBlocked = true;
+        blockReasons.push(`Drawing approval due ${format(new Date(p.drawingApprovalDate), "dd MMM yy")}`);
+      }
+
+      // Rule 2
+      if (!p.sheetmetalDeliveredDate) {
+        isBlocked = true;
+        blockReasons.push("Awaiting sheetmetal delivery before Switchgear, Busbar and Wiring can start");
+      }
+
+      return {
+        ...p,
+        isBlocked,
+        blockReasons
+      };
     });
 
     result.sort((a, b) => {
