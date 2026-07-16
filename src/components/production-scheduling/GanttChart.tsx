@@ -365,7 +365,7 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
 
     // Transform projects into frappe-gantt tasks
     const tasks = projects.map((p) => {
-      const start = p.scheduledStart ? new Date(p.scheduledStart) : new Date();
+      const start = p.effectiveStart ? new Date(p.effectiveStart) : new Date();
       
       // Fix 1: Minimum duration of 5 days
       const remainingDays = Math.max(5, Math.ceil((p.remainingHours || 0) / 8));

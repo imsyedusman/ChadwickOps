@@ -43,6 +43,7 @@ export type ProjectSchedulingData = {
   rawStatus: string | null;
   displayStageName: string | null;
   scheduledStart: string | null;
+  effectiveStart: string | null;
   stages: {
     frameAssembly: StageInfo;
     switchgearMount: StageInfo;
@@ -213,6 +214,10 @@ export async function getProductionSchedulingData() {
         rawStatus: p.rawStatus,
         displayStageName: p.displayStage?.name || null,
         scheduledStart: scheduleMap.get(p.id) || null,
+        effectiveStart: scheduleMap.get(p.id) || 
+                       (p.sheetmetalDeliveredDate ? format(p.sheetmetalDeliveredDate, "yyyy-MM-dd") : null) || 
+                       (p.switchgearDeliveredDate ? format(p.switchgearDeliveredDate, "yyyy-MM-dd") : null) || 
+                       format(new Date(), "yyyy-MM-dd"),
         stages,
         suppliers: suppliersData
       };
