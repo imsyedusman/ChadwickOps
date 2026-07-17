@@ -293,3 +293,89 @@ export async function resetScheduledStart(projectId: number) {
     return { success: false, error: error.message || "Failed to reset scheduled start" };
   }
 }
+
+export async function getProjectStageHours(projectId: number) {
+  await checkAuth();
+
+  try {
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      columns: { projectType: true }
+    });
+    const isIfm = project?.projectType?.toUpperCase().includes("IFM") || false;
+
+    const projectTasks = await db.query.tasks.findMany({
+      where: eq(tasks.projectId, projectId)
+    });
+
+    const manualHours = await db.query.projectStageHours.findFirst({
+      where: eq(projectStageHours.projectId, projectId)
+    });
+
+    const taskMap = new Map(projectTasks.map(t => [t.name, t.budgetHours]));
+
+    const helper = (taskName: string, manualVal: string | null | undefined): { value: number | null, source: "wg" | "manual" | "none" } => {
+      const wgHours = taskMap.get(taskName) || 0;
+      if (wgHours > 0) return { value: wgHours, source: "wg" };
+      
+      if (manualVal !== null && manualVal !== undefined) {
+        const val = parseFloat(manualVal);
+        if (!isNaN(val) && val > 0) return { value: val, source: "manual" };
+      }
+      return { value: null, source: "none" };
+    };
+
+    const manualFrameAssembly = isIfm ? manualHours?.frameAssemblyIfm : manualHours?.frameAssemblyIfc;
+    const manualBusbar = isIfm ? manualHours?.busbarIfm : manualHours?.busbarIfc;
+
+    const stages = {
+      frame_assembly: helper("04 - Frame Assembling", manualFrameAssembly),
+      switchgear_mount: helper("05 - Switchgear & Component Mounting", manualHours?.switchgearMount),
+      busbar: helper("06 - Busbar Assembling", manualBusbar),
+      wiring: helper("07 - Wiring", manualHours?.wiring),
+      labels: helper("08 - Fixing Labels", manualHours?.labels),
+      testing: helper("09 - Inspection & Testing", manualHours?.testing),
+      packaging_freight: helper("10 - Packaging and Freight", manualHours?.packagingFreight),
+    };
+
+    return { success: true, data: stages };
+  } catch (error: any) {
+    console.error("[getProjectStageHours] Error:", error);
+    return { success: false, error: error.message || "Failed to load project stage hours." };
+  }
+}
+
+export async function saveProjectStageHours(projectId: number, stageHours: Record<string, any>) {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const existingRecord = await db.query.projectStageHours.findFirst({
+      where: eq(projectStageHours.projectId, projectId)
+    });
+
+    const updateData = {
+      ...stageHours,
+      updatedAt: new Date(),
+      updatedBy: Number(session.user.id)
+    };
+
+    if (existingRecord) {
+      await db.update(projectStageHours)
+        .set(updateData)
+        .where(eq(projectStageHours.projectId, projectId));
+    } else {
+      await db.insert(projectStageHours).values({
+        projectId,
+        ...updateData
+      } as any);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("[saveProjectStageHours] Error:", error);
+    return { success: false, error: error.message || "Failed to save project stage hours" };
+  }
+}

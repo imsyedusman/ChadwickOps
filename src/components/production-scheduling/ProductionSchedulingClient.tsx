@@ -10,6 +10,7 @@ import { GanttChart } from "./GanttChart";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
+import { StageHoursPanel } from "./StageHoursPanel";
 
 interface Props {
   initialData: {
@@ -36,6 +37,17 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
   const [sortBy, setSortBy] = useState("Due Date");
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
+
+  const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+
+  const handleProjectClick = (projectId: number) => {
+    const project = filteredProjects.find(p => p.id === projectId) || null;
+    if (project) {
+      setSelectedProject(project);
+      setIsPanelOpen(true);
+    }
+  };
 
   const uniqueManagers = useMemo(() => {
     const managers = new Set<string>();
@@ -435,6 +447,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
           viewMode={ganttViewMode}
           canDrag={canDrag}
           onDateChange={handleDateChange}
+          onProjectClick={handleProjectClick}
           overtimeHours={isSimulateOpen ? overtimeHours : (overtimeHours > 0 ? overtimeHours : 0)}
         />
       ) : (
@@ -532,6 +545,16 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         )}
       </div>
       )}
+
+      <StageHoursPanel
+        project={selectedProject}
+        isOpen={isPanelOpen}
+        onClose={() => {
+          setIsPanelOpen(false);
+          router.refresh();
+        }}
+        canEdit={isAdmin}
+      />
     </div>
   );
 }

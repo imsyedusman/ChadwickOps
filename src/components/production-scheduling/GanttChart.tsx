@@ -19,7 +19,7 @@ interface GanttChartProps {
   viewMode: "Day" | "Week" | "Month" | "Year";
   canDrag?: boolean;
   onDateChange?: (projectId: string, start: Date) => void;
-  onClick?: (task: any) => void;
+  onProjectClick?: (projectId: number) => void;
   overtimeHours?: number;
 }
 
@@ -44,7 +44,7 @@ const getBadgeColor = (status: string | null) => {
   return "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
 };
 
-export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, onClick, overtimeHours = 0 }: GanttChartProps) {
+export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, onProjectClick, overtimeHours = 0 }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
@@ -497,13 +497,13 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
           onDateChange?.(task.id, start);
         },
         on_click: (task: any) => {
-          onClick?.(task);
+          onProjectClick?.(parseInt(task.id, 10));
         },
       } as any);
     } else {
       ganttRef.current.refresh(tasks);
     }
-  }, [projects, onDateChange, onClick, overtimeHours]); // only on init/data/overtime changes
+  }, [projects, onDateChange, onProjectClick, overtimeHours]); // only on init/data/overtime changes
 
   useEffect(() => {
     if (ganttRef.current && viewMode) {
