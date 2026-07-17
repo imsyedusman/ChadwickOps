@@ -298,3 +298,14 @@
   background-color: #0f172a;
   border-color: #1e293b;
 }
+
+.gantt-container .grid-header {
+  position: relative;
+  z-index: 10;
+  background: white;
+  will-change: transform;
+}
+
+.dark .gantt-container .grid-header {
+  background: #0f172a;
+}

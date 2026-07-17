@@ -64,11 +64,15 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
     if (leftPanelRef.current) {
       leftPanelRef.current.scrollTop = scrollTop;
     }
+
+    console.log('Scroll fired, scrollTop:', ganttWrapperRef.current?.scrollTop);
+    const header = ganttWrapperRef.current?.querySelector('.grid-header') as HTMLElement;
+    console.log('Grid header found:', header);
     
-    // Fake sticky for the SVG grid header
-    const svgHeader = ganttWrapperRef.current?.querySelector('.gantt .grid-header') as SVGGElement | null;
-    if (svgHeader) {
-      svgHeader.style.transform = `translateY(${scrollTop}px)`;
+    if (header) {
+      header.style.transform = `translateY(${ganttWrapperRef.current!.scrollTop}px)`;
+      console.log('Transform set to:', header.style.transform);
+      console.log('Header position:', header.getBoundingClientRect().top);
     }
   };
 
