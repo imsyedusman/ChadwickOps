@@ -1,11 +1,11 @@
 "use server";
 
 import { db } from "@/db";
-import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency } from "@/db/schema";
+import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency, workerAssignments, systemConfig } from "@/db/schema";
 import { eq, and, inArray, notInArray, not, like, isNotNull, sql } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { getStageCapacityPerWeek } from "@/lib/stage-capacity";
-import { format } from "date-fns";
+import { format, parseISO, addDays } from "date-fns";
 
 async function checkAuth() {
   if (process.env.BYPASS_AUTH_FOR_TEST === "true") {
@@ -509,6 +509,7 @@ export async function getWorkerSuggestionsForProject(projectId: number) {
           const score = impliedRate / (eff || 1); // fallback to 1 to avoid div by zero, though shouldn't happen if eff > 0
 
           return {
+            staff_id: person.id,
             full_name: person.fullName,
             efficiency_rating: eff,
             implied_hourly_rate: impliedRate,
@@ -542,6 +543,153 @@ export async function getWorkerSuggestionsForProject(projectId: number) {
   } catch (error: any) {
     console.error("[getWorkerSuggestionsForProject] Error:", error);
     return { success: false, error: error.message || "Failed to fetch worker suggestions." };
+  }
+}
+
+export async function assignWorkerToStage(projectId: number, stage: string, staffId: number, assignedHours: number) {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  if (assignedHours <= 0) {
+    return { success: false, error: "Assigned hours must be greater than 0" };
+  }
+
+  const stageHoursRes = await getProjectStageHours(projectId);
+  if (!stageHoursRes.success || !stageHoursRes.data) {
+    return { success: false, error: "Failed to get project stage hours" };
+  }
+
+  let generalStageKey = stage.replace('_ifc', '').replace('_ifm', '');
+  const stageHours = stageHoursRes.data[generalStageKey as keyof typeof stageHoursRes.data]?.value || 0;
+  
+  if (assignedHours > stageHours) {
+    return { success: false, error: "Assigned hours cannot exceed total stage hours" };
+  }
+
+  const existingStageAssignments = await db.query.workerAssignments.findMany({
+    where: and(
+      eq(workerAssignments.projectId, projectId),
+      eq(workerAssignments.stage, stage),
+      eq(workerAssignments.status, 'active')
+    )
+  });
+  
+  const assignedSoFar = existingStageAssignments.reduce((sum, a) => sum + parseFloat(a.assignedHours as string), 0);
+  if (assignedSoFar + assignedHours > stageHours) {
+    return { 
+      success: false, 
+      error: `Cannot assign more hours than the stage total of ${stageHours} hours. ${assignedSoFar} hours already assigned.` 
+    };
+  }
+
+  const projSched = await db.query.productionSchedule.findFirst({
+    where: eq(productionSchedule.projectId, projectId)
+  });
+  
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, projectId)
+  });
+
+  let startDate = new Date();
+  if (projSched?.scheduledStart) {
+    startDate = parseISO(projSched.scheduledStart);
+  } else if (project?.deliveryDate) {
+    startDate = new Date(project.deliveryDate);
+  }
+
+  const durationDays = Math.ceil(assignedHours / 8);
+  const endDate = addDays(startDate, durationDays);
+
+  try {
+    const [inserted] = await db.insert(workerAssignments).values({
+      projectId,
+      stage,
+      staffId,
+      assignedHours: assignedHours.toString(),
+      projectedStart: format(startDate, 'yyyy-MM-dd'),
+      projectedEnd: format(endDate, 'yyyy-MM-dd'),
+      createdBy: Number(session.user.id),
+    }).returning({ id: workerAssignments.id });
+
+    return { success: true, data: { assignmentId: inserted.id } };
+  } catch (error: any) {
+    console.error("[assignWorkerToStage] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getWorkerAssignmentsForProject(projectId: number) {
+  await checkAuth();
+  
+  try {
+    const records = await db.select({
+      assignment: workerAssignments,
+      staff: staffEfficiency
+    })
+    .from(workerAssignments)
+    .innerJoin(staffEfficiency, eq(workerAssignments.staffId, staffEfficiency.id))
+    .where(and(
+      eq(workerAssignments.projectId, projectId),
+      eq(workerAssignments.status, 'active')
+    ));
+    
+    const grouped: Record<string, any[]> = {};
+    for (const row of records) {
+      const a = row.assignment;
+      const s = row.staff;
+      
+      if (!grouped[a.stage]) grouped[a.stage] = [];
+      
+      const staffColMap: Record<string, keyof typeof staffEfficiency> = {
+        'frame_assembly_ifc': 'frameAssembly',
+        'frame_assembly_ifm': 'frameAssembly',
+        'switchgear_mount': 'switchgearMount',
+        'busbar_ifc': 'busbar',
+        'busbar_ifm': 'busbar',
+        'wiring': 'wiring',
+        'labels': 'labels',
+        'testing': 'testing',
+        'packaging_freight': 'packagingFreight'
+      };
+      
+      const col = staffColMap[a.stage];
+      const val = s[col as keyof typeof s];
+      const eff = val ? parseFloat(val as string) : 1;
+      
+      grouped[a.stage].push({
+        id: a.id,
+        stage: a.stage,
+        assignedHours: parseFloat(a.assignedHours as string),
+        projectedStart: a.projectedStart,
+        projectedEnd: a.projectedEnd,
+        status: a.status,
+        staffId: s.id,
+        staffName: s.fullName,
+        efficiency: eff
+      });
+    }
+
+    return { success: true, data: grouped };
+  } catch (error: any) {
+    console.error("[getWorkerAssignmentsForProject] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteWorkerAssignment(assignmentId: number) {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    await db.delete(workerAssignments).where(eq(workerAssignments.id, assignmentId));
+    return { success: true };
+  } catch (error: any) {
+    console.error("[deleteWorkerAssignment] Error:", error);
+    return { success: false, error: error.message };
   }
 }
 

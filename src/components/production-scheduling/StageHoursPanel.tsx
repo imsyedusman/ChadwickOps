@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject } from "@/app/actions/production-scheduling";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject, getWorkerAssignmentsForProject, assignWorkerToStage, deleteWorkerAssignment } from "@/app/actions/production-scheduling";
+import { ChevronDown, ChevronRight, X, X as XIcon, Loader2, AlertTriangle } from "lucide-react";
+import { format, differenceInWeeks, parseISO } from "date-fns";
 
 interface StageHoursPanelProps {
   project: any;
@@ -19,9 +19,13 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
   const [costData, setCostData] = useState<any>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [workerSuggestions, setWorkerSuggestions] = useState<Record<string, any[]> | null>(null);
+  const [assignments, setAssignments] = useState<Record<string, any[]> | null>(null);
   const [expandedSuggestions, setExpandedSuggestions] = useState<Record<string, boolean>>({});
   const [expandedFullList, setExpandedFullList] = useState<Record<string, boolean>>({});
+  const [assignForms, setAssignForms] = useState<Record<string, boolean>>({});
+  const [assignInputs, setAssignInputs] = useState<Record<string, { staffId: string, hours: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCostBreakdownOpen, setIsCostBreakdownOpen] = useState(false);
 
@@ -32,10 +36,11 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
       const fetchData = async () => {
         setIsLoading(true);
         try {
-          const [hoursRes, costRes, suggestionsRes] = await Promise.all([
+          const [hoursRes, costRes, suggestionsRes, assignmentsRes] = await Promise.all([
             getProjectStageHours(project.id),
             getProjectedLabourCost(project.id),
-            getWorkerSuggestionsForProject(project.id)
+            getWorkerSuggestionsForProject(project.id),
+            getWorkerAssignmentsForProject(project.id)
           ]);
           
           if (hoursRes.success && hoursRes.data) {
@@ -63,6 +68,12 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
             setWorkerSuggestions(suggestionsRes.data);
           } else {
             toast.error(suggestionsRes.error || "Failed to load worker suggestions");
+          }
+
+          if (assignmentsRes.success && assignmentsRes.data) {
+            setAssignments(assignmentsRes.data);
+          } else {
+            toast.error(assignmentsRes.error || "Failed to load assignments");
           }
         } catch (error: any) {
           toast.error(error.message || "Failed to load stage hours");
@@ -122,6 +133,70 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
 
   const toggleFullList = (key: string) => {
     setExpandedFullList(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const getDbStageKey = (key: string) => {
+    if (key === 'frame_assembly') return isIfm ? 'frame_assembly_ifm' : 'frame_assembly_ifc';
+    if (key === 'busbar') return isIfm ? 'busbar_ifm' : 'busbar_ifc';
+    return key;
+  };
+
+  const reloadAssignments = async () => {
+    const res = await getWorkerAssignmentsForProject(project.id);
+    if (res.success && res.data) {
+      setAssignments(res.data);
+    }
+  };
+
+  const handleAssignWorker = async (key: string) => {
+    const input = assignInputs[key];
+    if (!input || !input.staffId || !input.hours) {
+      toast.error("Please select a worker and enter hours.");
+      return;
+    }
+    
+    setIsAssigning(true);
+    const dbKey = getDbStageKey(key);
+    
+    try {
+      const res = await assignWorkerToStage(project.id, dbKey, parseInt(input.staffId), parseFloat(input.hours));
+      if (res.success) {
+        toast.success("Worker assigned");
+        setAssignForms(prev => ({ ...prev, [key]: false }));
+        setAssignInputs(prev => ({ ...prev, [key]: { staffId: "", hours: "" } }));
+        await reloadAssignments();
+      } else {
+        toast.error(res.error || "Failed to assign worker");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to assign worker");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleRemoveAssignment = async (assignmentId: number) => {
+    try {
+      const res = await deleteWorkerAssignment(assignmentId);
+      if (res.success) {
+        toast.success("Assignment removed");
+        await reloadAssignments();
+      } else {
+        toast.error(res.error || "Failed to remove assignment");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove assignment");
+    }
+  };
+
+  const handleAssignInputChange = (key: string, field: 'staffId' | 'hours', value: string) => {
+    setAssignInputs(prev => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || { staffId: "", hours: "" }),
+        [field]: value
+      }
+    }));
   };
 
   const calculateTotal = () => {
@@ -249,8 +324,176 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
             )}
           </div>
         )}
+
+        {hasHours && (
+          <div className="mt-4">
+            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Assigned Workers</h4>
+            
+            {(!assignments || !assignments[getDbStageKey(key)] || assignments[getDbStageKey(key)].length === 0) ? (
+              <p className="text-[11px] text-slate-400 italic mb-2">No workers assigned</p>
+            ) : (
+              <div className="space-y-1 mb-2">
+                {assignments[getDbStageKey(key)].map((a: any) => {
+                  let weeks = 1;
+                  if (a.projectedStart && a.projectedEnd) {
+                    const diff = differenceInWeeks(parseISO(a.projectedEnd), parseISO(a.projectedStart));
+                    weeks = diff > 0 ? diff : 1; // At least 1 week to avoid div by zero
+                  }
+                  const hrsPerWeek = (a.assignedHours / weeks).toFixed(1);
+                  
+                  return (
+                    <div key={a.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/40 p-2 rounded border border-slate-100 dark:border-slate-800 text-[11px]">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{a.staffName}</span>
+                        <span className="text-[10px] text-slate-500">{hrsPerWeek} hrs/week this project</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono font-medium text-slate-600 dark:text-slate-400">{a.assignedHours} hrs</span>
+                          <span className="text-[10px] text-slate-400">
+                            {a.projectedStart && a.projectedEnd 
+                              ? `${format(parseISO(a.projectedStart), 'dd MMM')} - ${format(parseISO(a.projectedEnd), 'dd MMM')}` 
+                              : '-'}
+                          </span>
+                        </div>
+                        {canEdit && (
+                          <button 
+                            onClick={() => handleRemoveAssignment(a.id)}
+                            className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                            title="Remove assignment"
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {canEdit && !assignForms[key] && (
+              <button
+                onClick={() => {
+                  const dbKey = getDbStageKey(key);
+                  const assignedSoFar = assignments?.[dbKey]?.reduce((sum, a) => sum + parseFloat(a.assignedHours), 0) || 0;
+                  const remaining = Math.max(0, hoursVal - assignedSoFar);
+                  
+                  setAssignForms(prev => ({ ...prev, [key]: true }));
+                  setAssignInputs(prev => ({ 
+                    ...prev, 
+                    [key]: { staffId: "", hours: remaining > 0 ? remaining.toFixed(2) : "" } 
+                  }));
+                }}
+                className="text-[11px] font-medium text-brand hover:text-brand/80 border border-brand/20 hover:border-brand/40 bg-brand/5 px-3 py-1 rounded transition-colors"
+              >
+                + Assign Worker
+              </button>
+            )}
+
+            {assignForms[key] && (
+              <div className="mt-2 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="grid grid-cols-[1fr_80px] gap-2">
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-500 mb-1 block">Select Worker</label>
+                    <select
+                      value={assignInputs[key]?.staffId || ""}
+                      onChange={(e) => handleAssignInputChange(key, 'staffId', e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-brand"
+                    >
+                      <option value="" disabled>Select...</option>
+                      {suggestions.map((w, idx) => {
+                        // Find matching staff id from full staff list or pass it via suggestions
+                        // Wait, suggestions only have full_name currently!
+                        // Let's assume we can match by name for now or we need staffId in suggestions.
+                        // I will add staff_id to suggestions in the next step, but for now I'll use index or try to find it.
+                        // Actually I can just match staffId if it exists in suggestions... wait!
+                        return (
+                          <option key={idx} value={w.staff_id || w.full_name}>
+                            {w.full_name} ({(w.efficiency_rating * 100).toFixed(0)}%)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-slate-500 mb-1 block">Hours</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={(() => {
+                        const dbKey = getDbStageKey(key);
+                        const assignedSoFar = assignments?.[dbKey]?.reduce((sum, a) => sum + parseFloat(a.assignedHours), 0) || 0;
+                        return Math.max(0, hoursVal - assignedSoFar);
+                      })()}
+                      value={assignInputs[key]?.hours || ""}
+                      onChange={(e) => handleAssignInputChange(key, 'hours', e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-brand font-mono"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setAssignForms(prev => ({ ...prev, [key]: false }));
+                    }}
+                    className="text-[10px] font-medium px-3 py-1.5 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      // We need staffId. Since select option value is staff_id || full_name, we can look up staff ID
+                      const input = assignInputs[key];
+                      const matched = suggestions.find(w => w.staff_id == input.staffId || w.full_name === input.staffId);
+                      if (matched && matched.staff_id) {
+                         handleAssignInputChange(key, 'staffId', matched.staff_id.toString());
+                         // We have to wait for state to update, so better to pass directly
+                         handleAssignWorkerDirect(key, matched.staff_id.toString(), input.hours);
+                      } else if (matched && !matched.staff_id) {
+                        toast.error("Error: Worker ID missing from suggestions.");
+                      }
+                    }}
+                    disabled={isAssigning}
+                    className="text-[10px] font-bold bg-brand text-white px-3 py-1.5 rounded hover:bg-brand/90 transition-colors disabled:opacity-50"
+                  >
+                    {isAssigning ? "Saving..." : "Confirm"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
+  };
+
+  const handleAssignWorkerDirect = async (key: string, staffId: string, hours: string) => {
+    if (!staffId || !hours) {
+      toast.error("Please select a worker and enter hours.");
+      return;
+    }
+    setIsAssigning(true);
+    const dbKey = getDbStageKey(key);
+    
+    try {
+      const res = await assignWorkerToStage(project.id, dbKey, parseInt(staffId), parseFloat(hours));
+      if (res.success) {
+        toast.success("Worker assigned");
+        setAssignForms(prev => ({ ...prev, [key]: false }));
+        setAssignInputs(prev => ({ ...prev, [key]: { staffId: "", hours: "" } }));
+        await reloadAssignments();
+      } else {
+        toast.error(res.error || "Failed to assign worker");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to assign worker");
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   const formatCurrency = (val: number | null | undefined) => {
