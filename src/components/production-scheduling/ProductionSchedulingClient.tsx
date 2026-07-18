@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings } from "lucide-react";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight } from "lucide-react";
 import { ProjectSchedulingData, updateScheduledStart } from "@/app/actions/production-scheduling";
 import { StageCapacity } from "@/lib/stage-capacity";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
 
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isBottleneckPanelOpen, setIsBottleneckPanelOpen] = useState(false);
 
   const handleProjectClick = (projectId: number) => {
     const project = filteredProjects.find(p => p.id === projectId) || null;
@@ -199,6 +200,101 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
     testing: "Testing",
     packagingFreight: "Pack",
   };
+
+  const bottleneckData = useMemo(() => {
+    const demand = {
+      frameAssembly: 0,
+      switchgearMount: 0,
+      busbar: 0,
+      wiring: 0,
+      labels: 0,
+      testing: 0,
+      packagingFreight: 0,
+    };
+
+    filteredProjects.forEach(p => {
+      if (p.stages.frameAssembly?.value) demand.frameAssembly += p.stages.frameAssembly.value;
+      if (p.stages.switchgearMount?.value) demand.switchgearMount += p.stages.switchgearMount.value;
+      if (p.stages.busbar?.value) demand.busbar += p.stages.busbar.value;
+      if (p.stages.wiring?.value) demand.wiring += p.stages.wiring.value;
+      if (p.stages.labels?.value) demand.labels += p.stages.labels.value;
+      if (p.stages.testing?.value) demand.testing += p.stages.testing.value;
+      if (p.stages.packagingFreight?.value) demand.packagingFreight += p.stages.packagingFreight.value;
+    });
+
+    const rows = [
+      {
+        id: "frameAssembly",
+        name: "Frame Assembly",
+        available: initialData.stageCapacity.frameAssemblyIfc + initialData.stageCapacity.frameAssemblyIfm,
+        demand: demand.frameAssembly,
+      },
+      {
+        id: "switchgearMount",
+        name: "Switchgear Mount",
+        available: initialData.stageCapacity.switchgearMount,
+        demand: demand.switchgearMount,
+      },
+      {
+        id: "busbar",
+        name: "Busbar",
+        available: initialData.stageCapacity.busbarIfc + initialData.stageCapacity.busbarIfm,
+        demand: demand.busbar,
+      },
+      {
+        id: "wiring",
+        name: "Wiring",
+        available: initialData.stageCapacity.wiring,
+        demand: demand.wiring,
+      },
+      {
+        id: "labels",
+        name: "Labels",
+        available: initialData.stageCapacity.labels,
+        demand: demand.labels,
+      },
+      {
+        id: "testing",
+        name: "Testing",
+        available: initialData.stageCapacity.testing,
+        demand: demand.testing,
+      },
+      {
+        id: "packagingFreight",
+        name: "Packaging and Freight",
+        available: initialData.stageCapacity.packagingFreight,
+        demand: demand.packagingFreight,
+      },
+    ];
+
+    return rows.map(row => {
+      let utilisationDisplay = "N/A";
+      let statusText = "N/A";
+      let statusClass = "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:border-slate-700";
+      
+      if (row.available > 0) {
+        const utilisation = (row.demand / row.available) * 100;
+        utilisationDisplay = `${utilisation.toFixed(1)}%`;
+        if (utilisation < 80) {
+          statusText = "OK";
+          statusClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50";
+        } else if (utilisation <= 100) {
+          statusText = "Busy";
+          statusClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50";
+        } else {
+          statusText = "Overloaded";
+          statusClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50";
+        }
+      }
+
+      return {
+        ...row,
+        utilisationDisplay,
+        statusText,
+        statusClass
+      };
+    });
+  }, [filteredProjects, initialData.stageCapacity]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -439,6 +535,55 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         >
           Overdue: {summaryCounts.overdue}
         </button>
+      </div>
+
+      {/* Bottleneck Panel */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden mb-4">
+        <button
+          onClick={() => setIsBottleneckPanelOpen(!isBottleneckPanelOpen)}
+          className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-slate-900 dark:text-white">Capacity &amp; Bottlenecks</h2>
+          </div>
+          {isBottleneckPanelOpen ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+        </button>
+
+        {isBottleneckPanelOpen && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-t-lg">
+                  <tr>
+                    <th className="px-4 py-3 font-bold rounded-tl-lg">Stage</th>
+                    <th className="px-4 py-3 font-bold text-right">Available hrs/week</th>
+                    <th className="px-4 py-3 font-bold text-right">Total demand</th>
+                    <th className="px-4 py-3 font-bold text-right">Utilisation %</th>
+                    <th className="px-4 py-3 font-bold text-center rounded-tr-lg">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {bottleneckData.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.available > 0 ? row.available.toFixed(1) : "0.0"}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.demand.toFixed(1)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">{row.utilisationDisplay}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn("px-2 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border", row.statusClass)}>
+                          {row.statusText}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-4 text-xs text-slate-500 italic">
+              Based on {initialData.stageCapacity.activeStaffCount || 0} active workshop staff across 7 stages with efficiency ratings entered.
+            </p>
+          </div>
+        )}
       </div>
 
       {viewMode === "Gantt" ? (

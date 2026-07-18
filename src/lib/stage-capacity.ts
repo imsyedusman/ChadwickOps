@@ -13,6 +13,7 @@ export type StageCapacity = {
   labels: number;
   testing: number;
   packagingFreight: number;
+  activeStaffCount: number;
 };
 
 export type WeeklyCapacity = {
@@ -54,6 +55,7 @@ export async function getStageCapacities(): Promise<StageCapacity> {
     labels: 0,
     testing: 0,
     packagingFreight: 0,
+    activeStaffCount: staff.length,
   };
 
   for (const person of staff) {
@@ -74,7 +76,9 @@ export async function getStageCapacities(): Promise<StageCapacity> {
 
   // Round to 2 decimal places for cleaner output
   for (const key of Object.keys(capacities) as Array<keyof StageCapacity>) {
-    capacities[key] = Math.round(capacities[key] * 100) / 100;
+    if (key !== 'activeStaffCount') {
+      capacities[key] = Math.round(capacities[key] * 100) / 100;
+    }
   }
 
   return capacities;
