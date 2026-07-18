@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 import { WorkshopStaffSection } from "@/components/admin/WorkshopStaffSection";
+import { StaffAbsencesSection } from "@/components/admin/StaffAbsencesSection";
+import { SettingsLayout } from "./SettingsLayout";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
 import { Settings } from "lucide-react";
@@ -22,16 +24,18 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <WorkshopStaffSection isFinance={hasRole(session, "finance")} />
-
-      <hr className="my-10 border-slate-200 dark:border-slate-800" />
-
-      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden p-8">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight mb-2">Capacity Settings</h2>
-        <p className="text-sm text-slate-500">
-          Manage capacity settings from the Capacity and Risk page. These will be consolidated here in a future update.
-        </p>
-      </section>
+      <SettingsLayout 
+        workshopStaff={<WorkshopStaffSection isFinance={hasRole(session, "finance")} />}
+        staffAbsences={<StaffAbsencesSection />}
+        capacitySettings={
+          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden p-8">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight mb-2">Capacity Settings</h2>
+            <p className="text-sm text-slate-500">
+              Manage capacity settings from the Capacity and Risk page. These will be consolidated here in a future update.
+            </p>
+          </section>
+        }
+      />
     </div>
   );
 }

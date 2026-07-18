@@ -5,7 +5,7 @@ import { format, setMonth, setYear } from "date-fns";
 import { Calendar as CalendarIcon, X, ChevronDown } from "lucide-react";
 import { DayPicker, DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
-import "react-day-picker/dist/style.css";
+import "react-day-picker/style.css";
 
 interface DateRangePickerProps {
   label: string;

@@ -360,6 +360,17 @@ export const workerAssignments = pgTable('worker_assignments', {
   ];
 });
 
+// This table must never be modified by any sync process.
+export const staffAbsences = pgTable('staff_absences', {
+  id: serial('id').primaryKey(),
+  staffId: integer('staff_id').notNull().references(() => staffEfficiency.id),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  reason: varchar('reason', { length: 255 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+});
+
 
 // Relations
 export const clientsRelations = relations(clients, ({ many }) => ({

@@ -3,8 +3,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject, getWorkerAssignmentsForProject, assignWorkerToStage, deleteWorkerAssignment } from "@/app/actions/production-scheduling";
-import { ChevronDown, ChevronRight, X, X as XIcon, Loader2, AlertTriangle } from "lucide-react";
-import { format, differenceInWeeks, parseISO } from "date-fns";
+import { ChevronDown, ChevronRight, X, X as XIcon, Loader2, AlertTriangle, Check, ChevronsUpDown } from "lucide-react";
+import { format, differenceInWeeks, parseISO, addDays } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface StageHoursPanelProps {
   project: any;
@@ -24,6 +28,7 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
   const [expandedFullList, setExpandedFullList] = useState<Record<string, boolean>>({});
   const [assignForms, setAssignForms] = useState<Record<string, boolean>>({});
   const [assignInputs, setAssignInputs] = useState<Record<string, { staffId: string, hours: string }>>({});
+  const [comboboxOpen, setComboboxOpen] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,10 +41,26 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
       const fetchData = async () => {
         setIsLoading(true);
         try {
-          const [hoursRes, costRes, suggestionsRes, assignmentsRes] = await Promise.all([
-            getProjectStageHours(project.id),
+          const hoursRes = await getProjectStageHours(project.id);
+          let stageWindows: Record<string, { start: string, end: string }> = {};
+
+          if (hoursRes.success && hoursRes.data) {
+             const startDate = project.scheduledStart ? parseISO(project.scheduledStart) : project.deliveryDate ? new Date(project.deliveryDate) : new Date();
+             
+             Object.entries(hoursRes.data).forEach(([key, stage]: [string, any]) => {
+                if (stage.value) {
+                   const durationDays = Math.ceil(stage.value / 8);
+                   stageWindows[key] = {
+                      start: format(startDate, 'yyyy-MM-dd'),
+                      end: format(addDays(startDate, durationDays), 'yyyy-MM-dd')
+                   };
+                }
+             });
+          }
+
+          const [costRes, suggestionsRes, assignmentsRes] = await Promise.all([
             getProjectedLabourCost(project.id),
-            getWorkerSuggestionsForProject(project.id),
+            getWorkerSuggestionsForProject(project.id, stageWindows),
             getWorkerAssignmentsForProject(project.id)
           ]);
           
@@ -396,25 +417,75 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                 <div className="grid grid-cols-[1fr_80px] gap-2">
                   <div>
                     <label className="text-[10px] font-medium text-slate-500 mb-1 block">Select Worker</label>
-                    <select
-                      value={assignInputs[key]?.staffId || ""}
-                      onChange={(e) => handleAssignInputChange(key, 'staffId', e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-brand"
+                    <Popover 
+                      open={comboboxOpen[key]} 
+                      onOpenChange={(open) => setComboboxOpen(prev => ({ ...prev, [key]: open }))}
+                      modal={true}
                     >
-                      <option value="" disabled>Select...</option>
-                      {suggestions.map((w, idx) => {
-                        // Find matching staff id from full staff list or pass it via suggestions
-                        // Wait, suggestions only have full_name currently!
-                        // Let's assume we can match by name for now or we need staffId in suggestions.
-                        // I will add staff_id to suggestions in the next step, but for now I'll use index or try to find it.
-                        // Actually I can just match staffId if it exists in suggestions... wait!
-                        return (
-                          <option key={idx} value={w.staff_id || w.full_name}>
-                            {w.full_name} ({(w.efficiency_rating * 100).toFixed(0)}%)
-                          </option>
-                        );
-                      })}
-                    </select>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={comboboxOpen[key]}
+                          className="w-full justify-between bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 h-[28px] text-[11px] font-normal px-2"
+                        >
+                          {assignInputs[key]?.staffId
+                            ? suggestions.find((s) => s.staff_id.toString() === assignInputs[key].staffId)?.full_name
+                            : "Select Worker..."}
+                          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 z-[110]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search worker..." className="text-[11px]" />
+                          <CommandList>
+                            <CommandEmpty className="text-[11px] p-4 text-center">No worker found.</CommandEmpty>
+                            <CommandGroup>
+                              {suggestions.map((w) => (
+                                <CommandItem
+                                  key={w.staff_id}
+                                  value={w.full_name}
+                                  onSelect={() => {
+                                    handleAssignInputChange(key, 'staffId', w.staff_id.toString());
+                                    setComboboxOpen(prev => ({ ...prev, [key]: false }));
+                                  }}
+                                  className={cn("text-[11px]", w.isAbsent ? "opacity-50" : "")}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-3 w-3",
+                                      assignInputs[key]?.staffId === w.staff_id.toString() ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <div className="flex flex-col flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`h-1.5 w-1.5 rounded-full ${
+                                        w.tier === "Recommended" ? "bg-emerald-500" :
+                                        w.tier === "Good" ? "bg-blue-500" :
+                                        "bg-slate-400"
+                                      }`}></span>
+                                      <span className="font-medium text-slate-700 dark:text-slate-300">{w.full_name}</span>
+                                      <span className="text-slate-500 ml-auto">{(w.efficiency_rating * 100).toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-0.5 ml-3.5">
+                                      {w.isAbsent ? (
+                                        <span className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-1 py-0.5 rounded-[2px] font-bold text-[8px] uppercase tracking-widest">
+                                          On Leave
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 text-[10px]">
+                                          {w.weeklyCommitted > 0 ? `${w.weeklyCommitted} hrs committed this week` : "Available"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div>
                     <label className="text-[10px] font-medium text-slate-500 mb-1 block">Hours</label>
@@ -446,15 +517,12 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                   </button>
                   <button
                     onClick={() => {
-                      // We need staffId. Since select option value is staff_id || full_name, we can look up staff ID
                       const input = assignInputs[key];
-                      const matched = suggestions.find(w => w.staff_id == input.staffId || w.full_name === input.staffId);
+                      const matched = suggestions.find(w => w.staff_id.toString() === input.staffId);
                       if (matched && matched.staff_id) {
-                         handleAssignInputChange(key, 'staffId', matched.staff_id.toString());
-                         // We have to wait for state to update, so better to pass directly
                          handleAssignWorkerDirect(key, matched.staff_id.toString(), input.hours);
-                      } else if (matched && !matched.staff_id) {
-                        toast.error("Error: Worker ID missing from suggestions.");
+                      } else {
+                        toast.error("Please select a valid worker.");
                       }
                     }}
                     disabled={isAssigning}

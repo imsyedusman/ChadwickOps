@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency, workerAssignments, systemConfig } from "@/db/schema";
-import { eq, and, inArray, notInArray, not, like, isNotNull, sql } from "drizzle-orm";
+import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency, workerAssignments, systemConfig, staffAbsences } from "@/db/schema";
+import { eq, and, inArray, notInArray, not, like, isNotNull, sql, lte, gte } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { format, parseISO, addDays } from "date-fns";
@@ -461,7 +461,7 @@ export async function getProjectedLabourCost(projectId: number) {
   }
 }
 
-export async function getWorkerSuggestionsForProject(projectId: number) {
+export async function getWorkerSuggestionsForProject(projectId: number, stageWindows?: Record<string, { start: string, end: string }>) {
   await checkAuth();
 
   try {
@@ -477,6 +477,14 @@ export async function getWorkerSuggestionsForProject(projectId: number) {
     const ratesMap = new Map<string, number>();
     userRatesRaw.forEach(r => {
       ratesMap.set(r.user, Number(r.avgRate));
+    });
+
+    // Pre-fetch all staff absences
+    const allAbsences = await db.query.staffAbsences.findMany();
+    
+    // Pre-fetch active worker assignments to compute weekly committed hours
+    const allAssignments = await db.query.workerAssignments.findMany({
+      where: eq(workerAssignments.status, 'active')
     });
 
     const stagesKeys = [
@@ -508,13 +516,44 @@ export async function getWorkerSuggestionsForProject(projectId: number) {
 
           const score = impliedRate / (eff || 1); // fallback to 1 to avoid div by zero, though shouldn't happen if eff > 0
 
+          let isAbsent = false;
+          let weeklyCommitted = 0;
+
+          if (stageWindows && stageWindows[stage.name]) {
+            const window = stageWindows[stage.name];
+            
+            // Check absence
+            isAbsent = allAbsences.some(a => 
+              a.staffId === person.id && 
+              a.startDate <= window.end && 
+              a.endDate >= window.start
+            );
+
+            // Compute weekly committed from assignments that overlap this window
+            const overlappingAssignments = allAssignments.filter(a => 
+              a.staffId === person.id && 
+              a.projectedStart && a.projectedEnd &&
+              a.projectedStart <= window.end && 
+              a.projectedEnd >= window.start
+            );
+            
+            weeklyCommitted = overlappingAssignments.reduce((sum, a) => {
+              const diffTime = new Date(a.projectedEnd!).getTime() - new Date(a.projectedStart!).getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+              const weeks = Math.max(1, Math.ceil(diffDays / 7));
+              return sum + (parseFloat(a.assignedHours as string) / weeks);
+            }, 0);
+          }
+
           return {
             staff_id: person.id,
             full_name: person.fullName,
             efficiency_rating: eff,
             implied_hourly_rate: impliedRate,
             cost_effectiveness_score: score,
-            tier: "" // will be set after sort
+            tier: "", // will be set after sort
+            isAbsent,
+            weeklyCommitted: Math.round(weeklyCommitted)
           };
         })
         .filter(w => !isNaN(w.efficiency_rating) && w.efficiency_rating > 0);
@@ -601,6 +640,26 @@ export async function assignWorkerToStage(projectId: number, stage: string, staf
 
   const durationDays = Math.ceil(assignedHours / 8);
   const endDate = addDays(startDate, durationDays);
+  
+  const projStartStr = format(startDate, 'yyyy-MM-dd');
+  const projEndStr = format(endDate, 'yyyy-MM-dd');
+
+  // Check absence
+  const overlappingAbsence = await db.query.staffAbsences.findFirst({
+    where: and(
+      eq(staffAbsences.staffId, staffId),
+      lte(staffAbsences.startDate, projEndStr),
+      gte(staffAbsences.endDate, projStartStr)
+    )
+  });
+
+  if (overlappingAbsence) {
+    const staffRec = await db.query.staffEfficiency.findFirst({ where: eq(staffEfficiency.id, staffId) });
+    const name = staffRec?.fullName || "worker";
+    const sStr = format(new Date(overlappingAbsence.startDate), "dd MMM");
+    const eStr = format(new Date(overlappingAbsence.endDate), "dd MMM");
+    return { success: false, error: `Cannot assign ${name} — recorded absence from ${sStr} to ${eStr} overlaps with this stage window.` };
+  }
 
   try {
     const [inserted] = await db.insert(workerAssignments).values({

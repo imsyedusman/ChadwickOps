@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { staffEfficiency, systemConfig, workerAssignments } from "@/db/schema";
+import { staffEfficiency, systemConfig, workerAssignments, staffAbsences } from "@/db/schema";
 import { and, eq, lte, gte } from "drizzle-orm";
 import { addDays, parseISO, differenceInDays } from "date-fns";
 
@@ -27,6 +27,7 @@ export type WorkerUtilisation = {
   name: string;
   committedHours: number;
   freeHours: number;
+  isAbsent?: boolean;
 };
 
 export type WeeklyCapacityBreakdown = {
@@ -157,28 +158,13 @@ export async function getWeeklyCapacityBreakdown(weeksAhead: number): Promise<We
     ),
   });
 
+  const allAbsences = await db.query.staffAbsences.findMany();
+
   const emptyStageCapacity = (): StageCapacity => ({
     frameAssemblyIfc: 0, frameAssemblyIfm: 0, switchgearMount: 0,
     busbarIfc: 0, busbarIfm: 0, wiring: 0, labels: 0,
     testing: 0, packagingFreight: 0, activeStaffCount: staff.length
   });
-
-  const baseCapacity = emptyStageCapacity();
-  for (const person of staff) {
-    if (person.frameAssembly !== null) {
-      baseCapacity.frameAssemblyIfc += parseFloat(person.frameAssembly as string) * stdHours;
-      baseCapacity.frameAssemblyIfm += parseFloat(person.frameAssembly as string) * stdHours;
-    }
-    if (person.switchgearMount !== null) baseCapacity.switchgearMount += parseFloat(person.switchgearMount as string) * stdHours;
-    if (person.busbar !== null) {
-      baseCapacity.busbarIfc += parseFloat(person.busbar as string) * stdHours;
-      baseCapacity.busbarIfm += parseFloat(person.busbar as string) * stdHours;
-    }
-    if (person.wiring !== null) baseCapacity.wiring += parseFloat(person.wiring as string) * stdHours;
-    if (person.labels !== null) baseCapacity.labels += parseFloat(person.labels as string) * stdHours;
-    if (person.testing !== null) baseCapacity.testing += parseFloat(person.testing as string) * stdHours;
-    if (person.packagingFreight !== null) baseCapacity.packagingFreight += parseFloat(person.packagingFreight as string) * stdHours;
-  }
 
   const breakdown: WeeklyCapacityBreakdown[] = [];
   const today = new Date();
@@ -203,12 +189,43 @@ export async function getWeeklyCapacityBreakdown(weeksAhead: number): Promise<We
     });
 
     const committedHours = emptyStageCapacity();
-    const workerUtilisation: Record<number, { committed: number; free: number }> = {};
+    const weekBaseCapacity = emptyStageCapacity();
+    const workerUtilisation: Record<number, { committed: number; free: number, isAbsent: boolean }> = {};
     
-    // Initialize worker utilisation
+    const absentStaffIds = new Set(
+      allAbsences
+        .filter(a => {
+          const s = new Date(a.startDate);
+          const e = new Date(a.endDate);
+          s.setHours(0,0,0,0);
+          e.setHours(23,59,59,999);
+          return s <= weekEnd && e >= weekStart;
+        })
+        .map(a => a.staffId)
+    );
+
+    // Initialize worker utilisation and week base capacity
     for (const person of staff) {
-      workerUtilisation[person.id] = { committed: 0, free: stdHours }; 
-      // Note: free hours is based on standard hours, we subtract committed next
+      const isAbsent = absentStaffIds.has(person.id);
+      workerUtilisation[person.id] = { committed: 0, free: isAbsent ? 0 : stdHours, isAbsent }; 
+
+      if (!isAbsent) {
+        if (person.frameAssembly !== null) {
+          weekBaseCapacity.frameAssemblyIfc += parseFloat(person.frameAssembly as string) * stdHours;
+          weekBaseCapacity.frameAssemblyIfm += parseFloat(person.frameAssembly as string) * stdHours;
+        }
+        if (person.switchgearMount !== null) weekBaseCapacity.switchgearMount += parseFloat(person.switchgearMount as string) * stdHours;
+        if (person.busbar !== null) {
+          weekBaseCapacity.busbarIfc += parseFloat(person.busbar as string) * stdHours;
+          weekBaseCapacity.busbarIfm += parseFloat(person.busbar as string) * stdHours;
+        }
+        if (person.wiring !== null) weekBaseCapacity.wiring += parseFloat(person.wiring as string) * stdHours;
+        if (person.labels !== null) weekBaseCapacity.labels += parseFloat(person.labels as string) * stdHours;
+        if (person.testing !== null) weekBaseCapacity.testing += parseFloat(person.testing as string) * stdHours;
+        if (person.packagingFreight !== null) weekBaseCapacity.packagingFreight += parseFloat(person.packagingFreight as string) * stdHours;
+      } else {
+        weekBaseCapacity.activeStaffCount = Math.max(0, weekBaseCapacity.activeStaffCount - 1);
+      }
     }
 
     for (const assignment of activeAssignments) {
@@ -240,10 +257,13 @@ export async function getWeeklyCapacityBreakdown(weeksAhead: number): Promise<We
 
     const availableCapacity = emptyStageCapacity();
     const freeHours = emptyStageCapacity();
-    for (const key of Object.keys(baseCapacity) as Array<keyof StageCapacity>) {
+    for (const key of Object.keys(weekBaseCapacity) as Array<keyof StageCapacity>) {
       if (key !== 'activeStaffCount') {
-        availableCapacity[key] = Math.max(0, baseCapacity[key] - committedHours[key]);
-        freeHours[key] = Math.max(0, baseCapacity[key] - committedHours[key]);
+        availableCapacity[key] = Math.max(0, weekBaseCapacity[key] - committedHours[key]);
+        freeHours[key] = Math.max(0, weekBaseCapacity[key] - committedHours[key]);
+      } else {
+        availableCapacity.activeStaffCount = weekBaseCapacity.activeStaffCount;
+        freeHours.activeStaffCount = weekBaseCapacity.activeStaffCount;
       }
     }
 
@@ -252,6 +272,7 @@ export async function getWeeklyCapacityBreakdown(weeksAhead: number): Promise<We
       name: s.fullName,
       committedHours: Math.round(workerUtilisation[s.id].committed * 100) / 100,
       freeHours: Math.round(workerUtilisation[s.id].free * 100) / 100,
+      isAbsent: workerUtilisation[s.id].isAbsent
     }));
 
     breakdown.push({

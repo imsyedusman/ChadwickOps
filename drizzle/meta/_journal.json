@@ -162,6 +162,13 @@
       "when": 1784351762961,
       "tag": "0022_cloudy_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784356323632,
+      "tag": "0023_bitter_iron_monger",
+      "breakpoints": true
     }
   ]
 }

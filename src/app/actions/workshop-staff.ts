@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { staffEfficiency, systemConfig } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { staffEfficiency, systemConfig, staffAbsences } from "@/db/schema";
+import { eq, asc, desc } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
 import axios from "axios";
@@ -182,5 +182,72 @@ export async function addStaffMemberManually(data: { fullName: string; isApprent
   } catch (error: any) {
     console.error("[addStaffMemberManually] Error:", error);
     throw new Error(error.message || "Failed to add staff member.");
+  }
+}
+
+export async function getStaffAbsences() {
+  await checkAuth();
+
+  try {
+    const list = await db
+      .select({
+        id: staffAbsences.id,
+        staffId: staffAbsences.staffId,
+        startDate: staffAbsences.startDate,
+        endDate: staffAbsences.endDate,
+        reason: staffAbsences.reason,
+        staffName: staffEfficiency.fullName,
+      })
+      .from(staffAbsences)
+      .innerJoin(staffEfficiency, eq(staffAbsences.staffId, staffEfficiency.id))
+      .orderBy(desc(staffAbsences.startDate));
+      
+    return { success: true, data: list };
+  } catch (error: any) {
+    console.error("[getStaffAbsences] Error:", error);
+    throw new Error(error.message || "Failed to load staff absences.");
+  }
+}
+
+export async function addStaffAbsence(staffId: number, startDate: Date, endDate: Date, reason?: string) {
+  const session = await checkAuth();
+  if (!hasRole(session, "admin") && !hasRole(session, "scheduler")) {
+    throw new Error("Unauthorized. Admin or Scheduler role required.");
+  }
+
+  if (new Date(endDate) < new Date(startDate)) {
+    throw new Error("End date cannot be before start date.");
+  }
+
+  try {
+    await db.insert(staffAbsences).values({
+      staffId,
+      startDate: new Date(startDate).toISOString().split('T')[0],
+      endDate: new Date(endDate).toISOString().split('T')[0],
+      reason,
+      createdBy: Number(session.user.id)
+    });
+
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (error: any) {
+    console.error("[addStaffAbsence] Error:", error);
+    throw new Error(error.message || "Failed to add staff absence.");
+  }
+}
+
+export async function deleteStaffAbsence(absenceId: number) {
+  const session = await checkAuth();
+  if (!hasRole(session, "admin") && !hasRole(session, "scheduler")) {
+    throw new Error("Unauthorized. Admin or Scheduler role required.");
+  }
+
+  try {
+    await db.delete(staffAbsences).where(eq(staffAbsences.id, absenceId));
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (error: any) {
+    console.error("[deleteStaffAbsence] Error:", error);
+    throw new Error(error.message || "Failed to delete staff absence.");
   }
 }
