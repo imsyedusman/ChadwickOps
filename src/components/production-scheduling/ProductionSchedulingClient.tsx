@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { format } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
-import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown } from "@/app/actions/production-scheduling";
+import { format, addDays } from "date-fns";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2 } from "lucide-react";
+import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem } from "@/app/actions/production-scheduling";
+import { InsightsPanel } from "./InsightsPanel";
 import { StageCapacity, WeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { cn } from "@/lib/utils";
 import { GanttChart } from "./GanttChart";
@@ -17,6 +18,7 @@ interface Props {
     projects: ProjectSchedulingData[];
     stageCapacity: StageCapacity;
   };
+  insights: InsightItem[];
   canDrag?: boolean;
   isAdmin?: boolean;
   isFinance?: boolean;
@@ -24,7 +26,7 @@ interface Props {
 
 const DIMMED_STATUSES = ["On Hold", "Tested Passed"];
 
-export function ProductionSchedulingClient({ initialData, canDrag = false, isAdmin = false, isFinance = false }: Props) {
+export function ProductionSchedulingClient({ initialData, insights, canDrag = false, isAdmin = false, isFinance = false }: Props) {
   const { projects } = initialData;
   const router = useRouter();
   
@@ -38,13 +40,16 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
   const [sortBy, setSortBy] = useState("Due Date");
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
+  const [showOnlyAtRisk, setShowOnlyAtRisk] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCapacityDrawerOpen, setIsCapacityDrawerOpen] = useState(false);
+  const [isViewPopoverOpen, setIsViewPopoverOpen] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isBottleneckPanelOpen, setIsBottleneckPanelOpen] = useState(false);
   const [weeklyBreakdown, setWeeklyBreakdown] = useState<WeeklyCapacityBreakdown[]>([]);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
-  const [isWorkerUtilOpen, setIsWorkerUtilOpen] = useState(false);
 
   useEffect(() => {
     async function loadCapacity() {
@@ -55,6 +60,21 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
     }
     loadCapacity();
   }, []);
+
+  const handleInsightFilterApply = (actionFilter: string) => {
+    if (actionFilter === "overdue-unscheduled") {
+      setActiveSummaryFilter("overdue");
+    } else if (actionFilter === "at-risk") {
+      setShowOnlyAtRisk(true);
+    } else if (actionFilter === "recently-unblocked") {
+      setActiveSummaryFilter(null);
+      setShowOnlyAtRisk(false);
+      setSearchQuery("");
+      setSelectedManager("All");
+      setSelectedType("All");
+      setHideDimmed(false);
+    }
+  };
 
   const handleProjectClick = (projectId: number) => {
     const project = filteredProjects.find(p => p.id === projectId) || null;
@@ -94,7 +114,15 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
       else if (activeSummaryFilter === "onHold") matchSummaryFilter = !!isOnHold;
       else if (activeSummaryFilter === "active") matchSummaryFilter = !!isActiveStatus;
 
-      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter;
+      const matchAtRisk = !showOnlyAtRisk || (() => {
+        if (!p.effectiveStart || p.remainingHours <= 0 || !p.deliveryDate) return false;
+        const pStart = new Date(p.effectiveStart);
+        const daysNeeded = p.remainingHours / 7.6;
+        const pFinish = addDays(pStart, daysNeeded);
+        return pFinish > new Date(p.deliveryDate);
+      })();
+
+      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter && matchAtRisk;
     }).map(p => {
       let isBlocked = false;
       const blockReasons: string[] = [];
@@ -404,75 +432,113 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 w-full md:w-auto relative">
+          <div className="relative flex flex-col justify-end">
             <button
-              onClick={() => setIsSimulateOpen(!isSimulateOpen)}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium mt-auto md:mb-[1px]",
-                isSimulateOpen || overtimeHours > 0
-                  ? "bg-brand text-white border-brand hover:bg-brand/90 shadow-sm"
-                  : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/80"
-              )}
+              onClick={() => setIsViewPopoverOpen(!isViewPopoverOpen)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/80"
             >
-              <Clock className="w-4 h-4" />
-              Simulate Overtime
+              <Settings className="w-4 h-4" />
+              View
             </button>
+            {isViewPopoverOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsViewPopoverOpen(false)} />
+                <div className="absolute top-[calc(100%+8px)] right-0 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-4 z-50 flex flex-col gap-5">
+                  
+                  {viewMode === "Gantt" && (
+                    <div className="flex flex-col gap-1 w-full">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Scale</label>
+                      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 w-full">
+                        {(["Day", "Week", "Month", "Year"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setGanttViewMode(mode)}
+                            className={cn(
+                              "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex-1",
+                              ganttViewMode === mode ? "bg-white dark:bg-slate-900 text-brand shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                            )}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-            {isSimulateOpen && (
-              <div className="absolute top-[calc(100%+8px)] left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-4 z-50">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Extra hours this week
-                </label>
-                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-500 mb-3">
-                  This is a simulation — changes are not saved.
-                </p>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={overtimeHours}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val)) setOvertimeHours(Math.max(0, Math.min(20, val)));
-                    else setOvertimeHours(0);
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 text-slate-900 dark:text-slate-100 mb-4"
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setOvertimeHours(0);
-                      setIsSimulateOpen(false);
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    Clear & Close
-                  </button>
-                  <button
-                    onClick={() => setIsSimulateOpen(false)}
-                    className="px-3 py-1.5 text-xs font-medium bg-brand text-white hover:bg-brand/90 rounded-lg transition-colors"
-                  >
-                    Apply
-                  </button>
+                  <div className="flex flex-col gap-1 w-full">
+                    <label className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 h-[38px] hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors w-full">
+                      <input 
+                        type="checkbox" 
+                        checked={hideDimmed} 
+                        onChange={(e) => setHideDimmed(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand/20"
+                      />
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Hide completed/on hold</span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-1 w-full relative">
+                    <button
+                      onClick={() => setIsSimulateOpen(!isSimulateOpen)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium w-full",
+                        isSimulateOpen || overtimeHours > 0
+                          ? "bg-brand text-white border-brand hover:bg-brand/90 shadow-sm"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                      )}
+                    >
+                      <Clock className="w-4 h-4" />
+                      Simulate Overtime
+                    </button>
+
+                    {isSimulateOpen && (
+                      <div className="absolute top-[calc(100%+8px)] right-0 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-4 z-[60]">
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Extra hours this week
+                        </label>
+                        <p className="text-[10px] font-medium text-amber-600 dark:text-amber-500 mb-3">
+                          This is a simulation — changes are not saved.
+                        </p>
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          value={overtimeHours}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val)) setOvertimeHours(Math.max(0, Math.min(20, val)));
+                            else setOvertimeHours(0);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 text-slate-900 dark:text-slate-100 mb-4"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setOvertimeHours(0);
+                              setIsSimulateOpen(false);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                          >
+                            Clear & Close
+                          </button>
+                          <button
+                            onClick={() => setIsSimulateOpen(false)}
+                            className="px-3 py-1.5 text-xs font-medium bg-brand text-white hover:bg-brand/90 rounded-lg transition-colors"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
-              </div>
+              </>
             )}
           </div>
 
-          <div className="flex flex-col gap-1 w-full md:w-auto self-end md:mb-[1px]">
-            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 h-[38px] hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
-              <input 
-                type="checkbox" 
-                checked={hideDimmed} 
-                onChange={(e) => setHideDimmed(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand/20"
-              />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Hide completed/on hold</span>
-            </label>
-          </div>
-
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">View</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Layout</label>
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setViewMode("Gantt")}
@@ -495,29 +561,42 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
             </div>
           </div>
 
-          {viewMode === "Gantt" && (
-            <div className="flex flex-col gap-1 hidden sm:flex">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Scale</label>
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                {(["Day", "Week", "Month", "Year"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setGanttViewMode(mode)}
-                    className={cn(
-                      "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                      ganttViewMode === mode ? "bg-white dark:bg-slate-900 text-brand shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                    )}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tools</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <Lightbulb className={cn("w-4 h-4", insights.some(i => i.severity === 'critical') ? "text-amber-500" : "text-slate-400")} />
+                Insights
+                {insights.length > 0 && (
+                  <span className={cn(
+                    "ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
+                    insights.some(i => i.severity === 'critical')
+                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  )}>
+                    {insights.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setIsCapacityDrawerOpen(!isCapacityDrawerOpen)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <BarChart2 className="w-4 h-4 text-slate-400" />
+                Capacity
+              </button>
             </div>
-          )}
+          </div>
+
         </div>
       </div>
 
-      {/* View Content */}
+      {/* View Content Wrapper */}
+      <div className="flex flex-col xl:flex-row gap-6 mt-6">
+        <div className="flex-1 min-w-0">
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mr-2">Summary</div>
         <button 
@@ -564,128 +643,6 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         >
           Overdue: {summaryCounts.overdue}
         </button>
-      </div>
-
-      {/* Bottleneck Panel */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden mb-4">
-        <button
-          onClick={() => setIsBottleneckPanelOpen(!isBottleneckPanelOpen)}
-          className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors focus:outline-none"
-        >
-          <div className="flex items-center gap-2">
-            <h2 className="font-bold text-slate-900 dark:text-white">Capacity &amp; Bottlenecks</h2>
-          </div>
-          {isBottleneckPanelOpen ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
-        </button>
-
-        {isBottleneckPanelOpen && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-            {weeklyBreakdown.length > 0 && (
-              <div className="flex items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                <button
-                  onClick={() => setSelectedWeekIndex(Math.max(0, selectedWeekIndex - 1))}
-                  disabled={selectedWeekIndex === 0}
-                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                  <span className="sr-only">Prev Week</span>
-                </button>
-                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  {format(new Date(weeklyBreakdown[selectedWeekIndex].weekStart), "dd MMM")} - {format(new Date(weeklyBreakdown[selectedWeekIndex].weekEnd), "dd MMM")}
-                </div>
-                <button
-                  onClick={() => setSelectedWeekIndex(Math.min(weeklyBreakdown.length - 1, selectedWeekIndex + 1))}
-                  disabled={selectedWeekIndex === weeklyBreakdown.length - 1}
-                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                  <span className="sr-only">Next Week</span>
-                </button>
-              </div>
-            )}
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-t-lg">
-                  <tr>
-                    <th className="px-4 py-3 font-bold rounded-tl-lg">Stage</th>
-                    <th className="px-4 py-3 font-bold text-right">Available hrs/week</th>
-                    <th className="px-4 py-3 font-bold text-right text-brand">Committed</th>
-                    <th className="px-4 py-3 font-bold text-right">Total demand</th>
-                    <th className="px-4 py-3 font-bold text-right">Utilisation %</th>
-                    <th className="px-4 py-3 font-bold text-center rounded-tr-lg">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {bottleneckData.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
-                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.available > 0 ? row.available.toFixed(1) : "0.0"}</td>
-                      <td className="px-4 py-3 text-right font-medium text-brand">{row.committed > 0 ? row.committed.toFixed(1) : "-"}</td>
-                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.demand.toFixed(1)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">{row.utilisationDisplay}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn("px-2 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border", row.statusClass)}>
-                          {row.statusText}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {weeklyBreakdown.length > 0 && (
-              <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setIsWorkerUtilOpen(!isWorkerUtilOpen)}
-                  className="w-full flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Worker Utilisation</span>
-                  {isWorkerUtilOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                </button>
-                {isWorkerUtilOpen && (
-                  <div className="p-0 border-t border-slate-200 dark:border-slate-700">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-                        <tr>
-                          <th className="px-4 py-2 font-bold">Worker</th>
-                          <th className="px-4 py-2 font-bold text-right">Committed</th>
-                          <th className="px-4 py-2 font-bold text-right">Free</th>
-                          <th className="px-4 py-2 font-bold w-1/3">Utilisation</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                        {weeklyBreakdown[selectedWeekIndex].workerUtilisation.map(w => {
-                          const total = w.committedHours + w.freeHours;
-                          const pct = total > 0 ? (w.committedHours / total) * 100 : 0;
-                          return (
-                            <tr key={w.staffId}>
-                              <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{w.name}</td>
-                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.committedHours.toFixed(1)}</td>
-                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.freeHours.toFixed(1)}</td>
-                              <td className="px-4 py-2">
-                                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                                  <div 
-                                    className={cn("h-full", pct > 100 ? "bg-red-500" : pct > 80 ? "bg-amber-500" : "bg-emerald-500")} 
-                                    style={{ width: `${Math.min(100, pct)}%` }} 
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-            <p className="mt-4 text-xs text-slate-500 italic">
-              Based on {initialData.stageCapacity.activeStaffCount || 0} active workshop staff across 7 stages with efficiency ratings entered.
-            </p>
-          </div>
-        )}
       </div>
 
       {viewMode === "Gantt" ? (
@@ -792,6 +749,27 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         )}
       </div>
       )}
+        </div>
+
+        {isSidebarOpen && (
+          <div className="w-full xl:w-[380px] shrink-0 space-y-4">
+            <div className="flex items-center justify-between pb-2">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Insights & Alerts</h2>
+              <button onClick={() => setIsSidebarOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(100vh-200px)] space-y-4 pr-1">
+      <InsightsPanel insights={insights} onFilterApply={handleInsightFilterApply} />
+
+
+
+
+
+            </div>
+          </div>
+        )}
+      </div>
 
       <StageHoursPanel
         project={selectedProject}
@@ -803,6 +781,128 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         canEdit={isAdmin}
         isFinance={isFinance}
       />
+    
+      {/* Capacity & Bottlenecks Drawer */}
+      {isCapacityDrawerOpen && (
+        <>
+          <div 
+            className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity"
+            onClick={() => setIsCapacityDrawerOpen(false)}
+          />
+          <div className="fixed top-0 right-0 h-full w-[85vw] min-w-[700px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex-none p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-brand" />
+                Capacity & Bottlenecks
+              </h2>
+              <button onClick={() => setIsCapacityDrawerOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left Column - Stage Capacity */}
+              <div className="w-[60%] overflow-y-auto p-4 border-r border-slate-200 dark:border-slate-800">
+                {weeklyBreakdown.length > 0 && (
+              <div className="flex items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setSelectedWeekIndex(Math.max(0, selectedWeekIndex - 1))}
+                  disabled={selectedWeekIndex === 0}
+                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                  <span className="sr-only">Prev Week</span>
+                </button>
+                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {format(new Date(weeklyBreakdown[selectedWeekIndex].weekStart), "dd MMM")} - {format(new Date(weeklyBreakdown[selectedWeekIndex].weekEnd), "dd MMM")}
+                </div>
+                <button
+                  onClick={() => setSelectedWeekIndex(Math.min(weeklyBreakdown.length - 1, selectedWeekIndex + 1))}
+                  disabled={selectedWeekIndex === weeklyBreakdown.length - 1}
+                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                  <span className="sr-only">Next Week</span>
+                </button>
+              </div>
+            )}
+                <div className="mt-4">
+                  <table className="w-full text-sm text-left">
+                <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-t-lg">
+                  <tr>
+                    <th className="px-4 py-3 font-bold rounded-tl-lg">Stage</th>
+                    <th className="px-4 py-3 font-bold text-right">Available hrs/week</th>
+                    <th className="px-4 py-3 font-bold text-right text-brand">Committed</th>
+                    <th className="px-4 py-3 font-bold text-right">Total demand</th>
+                    <th className="px-4 py-3 font-bold text-right">Utilisation %</th>
+                    <th className="px-4 py-3 font-bold text-center rounded-tr-lg">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {bottleneckData.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.available > 0 ? row.available.toFixed(1) : "0.0"}</td>
+                      <td className="px-4 py-3 text-right font-medium text-brand">{row.committed > 0 ? row.committed.toFixed(1) : "-"}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.demand.toFixed(1)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">{row.utilisationDisplay}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn("px-2 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border", row.statusClass)}>
+                          {row.statusText}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+                </div>
+              </div>
+
+              {/* Right Column - Worker Utilisation */}
+              <div className="w-[40%] overflow-y-auto p-4 bg-slate-50/30 dark:bg-slate-900/50">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Worker Utilisation</h3>
+                {weeklyBreakdown.length > 0 ? (
+                  <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-transparent border-b border-slate-100 dark:border-slate-800">
+                        <tr>
+                          <th className="px-4 py-2 font-bold">Worker</th>
+                          <th className="px-4 py-2 font-bold text-right">Committed</th>
+                          <th className="px-4 py-2 font-bold text-right">Free</th>
+                          <th className="px-4 py-2 font-bold w-1/3">Utilisation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                        {weeklyBreakdown[selectedWeekIndex].workerUtilisation.map(w => {
+                          const total = w.committedHours + w.freeHours;
+                          const pct = total > 0 ? (w.committedHours / total) * 100 : 0;
+                          return (
+                            <tr key={w.staffId}>
+                              <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{w.name}</td>
+                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.committedHours.toFixed(1)}</td>
+                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.freeHours.toFixed(1)}</td>
+                              <td className="px-4 py-2">
+                                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                  <div 
+                                    className={cn("h-full", pct > 100 ? "bg-red-500" : pct > 80 ? "bg-amber-500" : "bg-emerald-500")} 
+                                    style={{ width: `${Math.min(100, pct)}%` }} 
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No worker data available.</p>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

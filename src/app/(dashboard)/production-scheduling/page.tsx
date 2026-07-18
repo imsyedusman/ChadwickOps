@@ -1,4 +1,4 @@
-import { getProductionSchedulingData } from "@/app/actions/production-scheduling";
+import { getProductionSchedulingData, getSchedulingInsights } from "@/app/actions/production-scheduling";
 import { ProductionSchedulingClient } from "@/components/production-scheduling/ProductionSchedulingClient";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 
@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ProductionSchedulingPage() {
   const result = await getProductionSchedulingData();
+  const insightsResult = await getSchedulingInsights();
+  const insights = insightsResult.success && insightsResult.data ? insightsResult.data : [];
+  
   const session = await validateSession();
   const hasSchedulerOrAdminRole = session ? (hasRole(session, "scheduler") || hasRole(session, "admin")) : false;
   const isAdmin = session ? hasRole(session, "admin") : false;
@@ -21,5 +24,5 @@ export default async function ProductionSchedulingPage() {
     );
   }
   
-  return <ProductionSchedulingClient initialData={result.data} canDrag={hasSchedulerOrAdminRole} isAdmin={isAdmin} isFinance={isFinance} />;
+  return <ProductionSchedulingClient initialData={result.data} insights={insights} canDrag={hasSchedulerOrAdminRole} isAdmin={isAdmin} isFinance={isFinance} />;
 }

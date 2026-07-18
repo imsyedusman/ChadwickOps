@@ -7,6 +7,16 @@ import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { format, parseISO, addDays } from "date-fns";
 
+export type InsightItem = {
+  type: string
+  severity: 'critical' | 'warning' | 'info'
+  title: string
+  description: string
+  affectedCount: number
+  actionLabel?: string
+  actionFilter?: string
+}
+
 async function checkAuth() {
   if (process.env.BYPASS_AUTH_FOR_TEST === "true") {
     return { user: { id: "1", role: "admin", roles: ["admin"] } };
@@ -762,3 +772,223 @@ export async function fetchWeeklyCapacityBreakdown(weeksAhead: number) {
     return { success: false, error: error.message };
   }
 }
+
+export async function getSchedulingInsights(): Promise<{ success: true, data: InsightItem[] } | { success: false, error: string }> {
+  await checkAuth();
+
+  try {
+    const insights: InsightItem[] = [];
+
+    const activeStatuses = [
+      "1.3 - Drawings Approved",
+      "2.1 - Sheetmetal and switchgear ordrered",
+      "2.2 - In Progress",
+      "In Progress",
+      "Waiting to Start",
+      "2.3 - Ready for Testing",
+      "2.4 - Tested Defective",
+      "On Hold",
+      "2.5 - Tested Passed",
+      "Tested Passed"
+    ];
+
+    const rawProjects = await db.query.projects.findMany({
+      where: and(
+        eq(projects.isArchived, false),
+        inArray(projects.rawStatus, activeStatuses),
+        notInArray(projects.rawStatus, ["Delivered", "Completed", "Cancelled", "2.6 - Ready for Invoicing", "3.1 - Invoiced"]),
+        not(like(projects.projectNumber, "99%")),
+        isNotNull(projects.projectType)
+      )
+    });
+
+    const projectIds = rawProjects.map(p => p.id);
+
+    const allSchedules = projectIds.length > 0 ? await db.query.productionSchedule.findMany({
+      where: inArray(productionSchedule.projectId, projectIds)
+    }) : [];
+    const scheduleMap = new Map<number, typeof allSchedules[0]>();
+    allSchedules.forEach(s => scheduleMap.set(s.projectId, s));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Critical — Overdue and unscheduled
+    let overdueUnscheduledCount = 0;
+    for (const p of rawProjects) {
+      if (p.deliveryDate && new Date(p.deliveryDate) < today && !scheduleMap.has(p.id)) {
+        overdueUnscheduledCount++;
+      }
+    }
+    if (overdueUnscheduledCount > 0) {
+      insights.push({
+        type: 'overdue_unscheduled',
+        severity: 'critical',
+        title: 'Overdue and unscheduled',
+        description: `${overdueUnscheduledCount} projects are past their due date with no scheduled start.`,
+        affectedCount: overdueUnscheduledCount,
+        actionLabel: 'View projects',
+        actionFilter: 'overdue-unscheduled'
+      });
+    }
+
+    // 2. Critical — Worker absent with active assignments
+    const allAssignments = await db.query.workerAssignments.findMany({
+      where: eq(workerAssignments.status, 'active')
+    });
+    const allAbsences = await db.query.staffAbsences.findMany();
+    const staffEff = await db.query.staffEfficiency.findMany();
+    const staffMap = new Map(staffEff.map(s => [s.id, s.fullName]));
+
+    for (const absence of allAbsences) {
+      const absStart = new Date(absence.startDate);
+      const absEnd = new Date(absence.endDate);
+      const overlapping = allAssignments.filter(a => {
+        if (a.staffId !== absence.staffId || !a.projectedStart || !a.projectedEnd) return false;
+        const aStart = new Date(a.projectedStart);
+        const aEnd = new Date(a.projectedEnd);
+        return aStart <= absEnd && aEnd >= absStart;
+      });
+      if (overlapping.length > 0) {
+        const staffName = staffMap.get(absence.staffId) || "worker";
+        const dFormat = (d: Date) => format(d, "dd MMM");
+        insights.push({
+          type: `conflict_${absence.id}`,
+          severity: 'critical',
+          title: 'Assignment conflict',
+          description: `Worker ${staffName} has an active assignment during recorded absence ${dFormat(absStart)} to ${dFormat(absEnd)}.`,
+          affectedCount: overlapping.length
+        });
+      }
+    }
+
+    // 3. Warning — Projects at risk of missing deadline
+    let atRiskCount = 0;
+    for (const p of rawProjects) {
+      const schedule = scheduleMap.get(p.id);
+      if (schedule && schedule.scheduledStart && p.deliveryDate && Number(p.remainingHours) > 0) {
+        const remaining = Number(p.remainingHours);
+        const sStart = new Date(schedule.scheduledStart);
+        const daysNeeded = remaining / 7.6;
+        const projFinish = addDays(sStart, daysNeeded);
+        if (projFinish > new Date(p.deliveryDate)) {
+          atRiskCount++;
+        }
+      }
+    }
+    if (atRiskCount > 0) {
+      insights.push({
+        type: 'at_risk',
+        severity: 'warning',
+        title: 'At risk of missing deadline',
+        description: `${atRiskCount} projects are projected to finish after their due date.`,
+        affectedCount: atRiskCount,
+        actionLabel: 'View at risk',
+        actionFilter: 'at-risk'
+      });
+    }
+
+    // 4. Warning — Stages with demand but no rated staff
+    const psdRes = await getProductionSchedulingData();
+    const psData = psdRes.data?.projects || [];
+    const stageCapacity = psdRes.data?.stageCapacity || {} as any;
+
+    const stageDemand = {
+      frameAssembly: 0,
+      switchgearMount: 0,
+      busbar: 0,
+      wiring: 0,
+      labels: 0,
+      testing: 0,
+      packagingFreight: 0
+    };
+    psData.forEach(p => {
+      if (p.stages.frameAssembly?.value) stageDemand.frameAssembly += p.stages.frameAssembly.value;
+      if (p.stages.switchgearMount?.value) stageDemand.switchgearMount += p.stages.switchgearMount.value;
+      if (p.stages.busbar?.value) stageDemand.busbar += p.stages.busbar.value;
+      if (p.stages.wiring?.value) stageDemand.wiring += p.stages.wiring.value;
+      if (p.stages.labels?.value) stageDemand.labels += p.stages.labels.value;
+      if (p.stages.testing?.value) stageDemand.testing += p.stages.testing.value;
+      if (p.stages.packagingFreight?.value) stageDemand.packagingFreight += p.stages.packagingFreight.value;
+    });
+
+    const stageChecks = [
+      { key: 'frameAssembly', name: 'Frame Assembly', cap: (stageCapacity.frameAssemblyIfc || 0) + (stageCapacity.frameAssemblyIfm || 0) },
+      { key: 'switchgearMount', name: 'Switchgear Mount', cap: (stageCapacity.switchgearMount || 0) },
+      { key: 'busbar', name: 'Busbar', cap: (stageCapacity.busbarIfc || 0) + (stageCapacity.busbarIfm || 0) },
+      { key: 'wiring', name: 'Wiring', cap: (stageCapacity.wiring || 0) },
+      { key: 'labels', name: 'Labels', cap: (stageCapacity.labels || 0) },
+      { key: 'testing', name: 'Testing', cap: (stageCapacity.testing || 0) },
+      { key: 'packagingFreight', name: 'Packaging and Freight', cap: (stageCapacity.packagingFreight || 0) }
+    ];
+
+    stageChecks.forEach(st => {
+      if (st.cap === 0 && stageDemand[st.key as keyof typeof stageDemand] > 0) {
+        insights.push({
+          type: `no_staff_${st.key}`,
+          severity: 'warning',
+          title: 'No rated staff for stage',
+          description: `${st.name} has demand but no efficiency ratings entered for any staff.`,
+          affectedCount: 1
+        });
+      }
+    });
+
+    // 5. Info — Recently unblocked projects
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    let recentlyUnblockedCount = 0;
+    for (const p of rawProjects) {
+      if (scheduleMap.has(p.id)) continue;
+      let unblocked = false;
+      if (p.sheetmetalDeliveredDate && new Date(p.sheetmetalDeliveredDate) >= sevenDaysAgo) {
+        unblocked = true;
+      }
+      if (p.switchgearDeliveredDate && new Date(p.switchgearDeliveredDate) >= sevenDaysAgo) {
+        unblocked = true;
+      }
+      if (unblocked) {
+        recentlyUnblockedCount++;
+      }
+    }
+    if (recentlyUnblockedCount > 0) {
+      insights.push({
+        type: 'recently_unblocked',
+        severity: 'info',
+        title: 'Ready to schedule',
+        description: `${recentlyUnblockedCount} projects had materials delivered in the last 7 days and are ready to be scheduled.`,
+        affectedCount: recentlyUnblockedCount,
+        actionLabel: 'View projects',
+        actionFilter: 'recently-unblocked'
+      });
+    }
+
+    // 6. Info — Unscheduled active projects
+    let unscheduledCount = 0;
+    for (const p of rawProjects) {
+      if (!scheduleMap.has(p.id)) {
+        unscheduledCount++;
+      }
+    }
+    if (unscheduledCount > 0) {
+      insights.push({
+        type: 'unscheduled',
+        severity: 'info',
+        title: 'Unscheduled projects',
+        description: `${unscheduledCount} active projects have no scheduled start date yet.`,
+        affectedCount: unscheduledCount
+      });
+    }
+
+    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    insights.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+    return { success: true, data: insights };
+  } catch (error: any) {
+    console.error("[getSchedulingInsights] Error:", error);
+    return { success: false, error: error.message || "Failed to load scheduling insights." };
+  }
+}
+
