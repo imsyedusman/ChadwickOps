@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers } from "@/db/schema";
-import { eq, and, inArray, notInArray, not, like, isNotNull } from "drizzle-orm";
+import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency } from "@/db/schema";
+import { eq, and, inArray, notInArray, not, like, isNotNull, sql } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { getStageCapacityPerWeek } from "@/lib/stage-capacity";
 import { format } from "date-fns";
@@ -379,3 +379,85 @@ export async function saveProjectStageHours(projectId: number, stageHours: Recor
     return { success: false, error: error.message || "Failed to save project stage hours" };
   }
 }
+
+export async function getProjectedLabourCost(projectId: number) {
+  await checkAuth();
+
+  try {
+    const stageHoursRes = await getProjectStageHours(projectId);
+    if (!stageHoursRes.success || !stageHoursRes.data) {
+      throw new Error("Failed to get stage hours");
+    }
+    const stages = stageHoursRes.data;
+
+    const staff = await db.query.staffEfficiency.findMany({
+      where: and(eq(staffEfficiency.isActive, true), eq(staffEfficiency.isWorkshopStaff, true))
+    });
+
+    const userRatesRaw = await db.select({
+      user: timeEntries.user,
+      avgRate: sql<number>`avg(${timeEntries.cost} / ${timeEntries.hours})`
+    }).from(timeEntries).where(sql`${timeEntries.hours} > 0`).groupBy(timeEntries.user);
+
+    const ratesMap = new Map<string, number>();
+    userRatesRaw.forEach(r => {
+      ratesMap.set(r.user, Number(r.avgRate));
+    });
+
+    const calcStageCost = (dbKey: keyof typeof staff[0], stageHours: number | null) => {
+      if (!stageHours || stageHours === 0) return null;
+      let totalRate = 0;
+      let totalEff = 0;
+      let count = 0;
+      for (const person of staff) {
+        const eff = person[dbKey];
+        if (eff !== null && eff !== undefined) {
+          const parsedEff = parseFloat(eff as string);
+          const rate = ratesMap.get(person.fullName);
+          if (rate !== undefined && !isNaN(parsedEff)) {
+            totalRate += rate;
+            totalEff += parsedEff;
+            count++;
+          }
+        }
+      }
+      if (count === 0) return null;
+      const avgRate = totalRate / count;
+      const avgEff = totalEff / count;
+      return stageHours * avgRate * avgEff;
+    };
+
+    const costs = {
+      frameAssembly: calcStageCost("frameAssembly", stages.frame_assembly.value),
+      switchgearMount: calcStageCost("switchgearMount", stages.switchgear_mount.value),
+      busbar: calcStageCost("busbar", stages.busbar.value),
+      wiring: calcStageCost("wiring", stages.wiring.value),
+      labels: calcStageCost("labels", stages.labels.value),
+      testing: calcStageCost("testing", stages.testing.value),
+      packagingFreight: calcStageCost("packagingFreight", stages.packaging_freight.value),
+    };
+
+    let totalProjectedCost = 0;
+    Object.values(costs).forEach(c => {
+      if (c !== null) totalProjectedCost += c;
+    });
+
+    const actualRes = await db.select({
+      totalCost: sql<number>`sum(${timeEntries.cost})`
+    }).from(timeEntries).where(eq(timeEntries.projectId, projectId));
+    const actualCost = Number(actualRes[0]?.totalCost) || 0;
+
+    return {
+      success: true,
+      data: {
+        costs,
+        totalProjectedCost,
+        actualCost
+      }
+    };
+  } catch (error: any) {
+    console.error("[getProjectedLabourCost] Error:", error);
+    return { success: false, error: error.message || "Failed to calculate projected labour cost." };
+  }
+}
+

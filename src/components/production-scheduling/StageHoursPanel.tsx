@@ -3,20 +3,25 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { getProjectStageHours, saveProjectStageHours } from "@/app/actions/production-scheduling";
+import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost } from "@/app/actions/production-scheduling";
+import { BlurredValue } from "@/components/ui/BlurredValue";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface StageHoursPanelProps {
   project: any;
   isOpen: boolean;
   onClose: () => void;
   canEdit: boolean;
+  isFinance?: boolean;
 }
 
-export function StageHoursPanel({ project, isOpen, onClose, canEdit }: StageHoursPanelProps) {
+export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance = false }: StageHoursPanelProps) {
   const [stages, setStages] = useState<Record<string, { value: number | null; source: "wg" | "manual" | "none" }> | null>(null);
+  const [costData, setCostData] = useState<any>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCostBreakdownOpen, setIsCostBreakdownOpen] = useState(false);
 
   const isIfm = useMemo(() => project?.projectType?.toUpperCase().includes("IFM") || false, [project?.projectType]);
 
@@ -25,20 +30,30 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit }: StageHour
       const fetchData = async () => {
         setIsLoading(true);
         try {
-          const res = await getProjectStageHours(project.id);
-          if (res.success && res.data) {
-            setStages(res.data);
+          const [hoursRes, costRes] = await Promise.all([
+            getProjectStageHours(project.id),
+            getProjectedLabourCost(project.id)
+          ]);
+          
+          if (hoursRes.success && hoursRes.data) {
+            setStages(hoursRes.data);
             setInputs({
-              frame_assembly: res.data.frame_assembly.value?.toString() || "",
-              switchgear_mount: res.data.switchgear_mount.value?.toString() || "",
-              busbar: res.data.busbar.value?.toString() || "",
-              wiring: res.data.wiring.value?.toString() || "",
-              labels: res.data.labels.value?.toString() || "",
-              testing: res.data.testing.value?.toString() || "",
-              packaging_freight: res.data.packaging_freight.value?.toString() || "",
+              frame_assembly: hoursRes.data.frame_assembly.value?.toString() || "",
+              switchgear_mount: hoursRes.data.switchgear_mount.value?.toString() || "",
+              busbar: hoursRes.data.busbar.value?.toString() || "",
+              wiring: hoursRes.data.wiring.value?.toString() || "",
+              labels: hoursRes.data.labels.value?.toString() || "",
+              testing: hoursRes.data.testing.value?.toString() || "",
+              packaging_freight: hoursRes.data.packaging_freight.value?.toString() || "",
             });
           } else {
-            toast.error(res.error || "Failed to load stage hours");
+            toast.error(hoursRes.error || "Failed to load stage hours");
+          }
+
+          if (costRes.success && costRes.data) {
+            setCostData(costRes.data);
+          } else {
+            toast.error(costRes.error || "Failed to load projected costs");
           }
         } catch (error: any) {
           toast.error(error.message || "Failed to load stage hours");
@@ -148,6 +163,11 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit }: StageHour
     );
   };
 
+  const formatCurrency = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return "-";
+    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(val);
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -205,6 +225,65 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit }: StageHour
                   {calculateTotal().toFixed(2)}
                 </span>
               </div>
+              
+              {costData && (
+                <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-4">Labour Cost Estimate</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Actual cost to date</span>
+                      <BlurredValue 
+                        isBlurred={!isFinance} 
+                        value={formatCurrency(costData.actualCost)} 
+                        className="font-mono font-medium text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-brand/5 dark:bg-brand/10 rounded-lg border border-brand/10 dark:border-brand/20">
+                      <span className="text-xs font-bold text-brand uppercase tracking-widest">Projected remaining cost</span>
+                      <BlurredValue 
+                        isBlurred={!isFinance} 
+                        value={formatCurrency(costData.totalProjectedCost)} 
+                        className="font-mono font-bold text-brand"
+                      />
+                    </div>
+                  </div>
+
+                  {isFinance && (
+                    <div className="mt-4 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setIsCostBreakdownOpen(!isCostBreakdownOpen)}
+                        className="w-full flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none"
+                      >
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">Cost by stage</span>
+                        {isCostBreakdownOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                      </button>
+                      
+                      {isCostBreakdownOpen && (
+                        <div className="p-3 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
+                          {[
+                            { key: 'frameAssembly', label: isIfm ? 'Frame Assembly IFM' : 'Frame Assembly IFC' },
+                            { key: 'switchgearMount', label: 'Switchgear Mount' },
+                            { key: 'busbar', label: isIfm ? 'Busbar IFM' : 'Busbar IFC' },
+                            { key: 'wiring', label: 'Wiring' },
+                            { key: 'labels', label: 'Labels' },
+                            { key: 'testing', label: 'Testing' },
+                            { key: 'packagingFreight', label: 'Packaging and Freight' }
+                          ].map((stage) => (
+                            <div key={stage.key} className="flex justify-between py-2 items-center text-xs">
+                              <span className="text-slate-500 dark:text-slate-400">{stage.label}</span>
+                              <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                                {formatCurrency(costData.costs[stage.key])}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

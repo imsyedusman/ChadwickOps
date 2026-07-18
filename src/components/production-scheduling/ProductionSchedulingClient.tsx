@@ -19,11 +19,12 @@ interface Props {
   };
   canDrag?: boolean;
   isAdmin?: boolean;
+  isFinance?: boolean;
 }
 
 const DIMMED_STATUSES = ["On Hold", "Tested Passed"];
 
-export function ProductionSchedulingClient({ initialData, canDrag = false, isAdmin = false }: Props) {
+export function ProductionSchedulingClient({ initialData, canDrag = false, isAdmin = false, isFinance = false }: Props) {
   const { projects } = initialData;
   const router = useRouter();
   
@@ -699,6 +700,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
           router.refresh();
         }}
         canEdit={isAdmin}
+        isFinance={isFinance}
       />
     </div>
   );
