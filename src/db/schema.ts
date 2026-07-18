@@ -335,6 +335,7 @@ export const productionSchedule = pgTable('production_schedule', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().unique().references(() => projects.id),
   scheduledStart: date('scheduled_start'),
+  scheduledByAuto: boolean('scheduled_by_auto').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   updatedBy: integer('updated_by').references(() => users.id),

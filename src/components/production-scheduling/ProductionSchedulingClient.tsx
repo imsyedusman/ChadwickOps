@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2 } from "lucide-react";
-import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem } from "@/app/actions/production-scheduling";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2, Wand2, Undo2 } from "lucide-react";
+import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem, undoAutoSchedule } from "@/app/actions/production-scheduling";
+import { AutoSchedulePanel } from "./AutoSchedulePanel";
 import { InsightsPanel } from "./InsightsPanel";
 import { StageCapacity, WeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ interface Props {
   initialData: {
     projects: ProjectSchedulingData[];
     stageCapacity: StageCapacity;
+    autoScheduledCount: number;
   };
   insights: InsightItem[];
   canDrag?: boolean;
@@ -45,6 +47,7 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCapacityDrawerOpen, setIsCapacityDrawerOpen] = useState(false);
   const [isViewPopoverOpen, setIsViewPopoverOpen] = useState(false);
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -221,6 +224,23 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       }
     } catch (error) {
       toast.error("Failed to save", { id: toastId });
+    }
+  };
+
+  const handleUndoAutoSchedule = async () => {
+    if (confirm("This will clear all auto-scheduled start dates. Manually set dates will not be affected. Continue?")) {
+      const toastId = toast.loading("Undoing auto-schedule...");
+      try {
+        const res = await undoAutoSchedule();
+        if (res.success) {
+          toast.success(`${res.data.cleared} auto-scheduled projects have been cleared.`, { id: toastId });
+          router.refresh();
+        } else {
+          toast.error(res.error || "Failed to undo auto-schedule", { id: toastId });
+        }
+      } catch (error: any) {
+        toast.error(error.message || "An unexpected error occurred", { id: toastId });
+      }
     }
   };
 
@@ -610,6 +630,24 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                 <BarChart2 className="w-4 h-4 text-slate-400" />
                 Capacity
               </button>
+              {canDrag && (
+                <button
+                  onClick={() => setIsAutoScheduleOpen(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <Wand2 className="w-4 h-4 text-slate-400" />
+                  Auto-Schedule
+                </button>
+              )}
+              {canDrag && initialData.autoScheduledCount > 0 && (
+                <button
+                  onClick={handleUndoAutoSchedule}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <Undo2 className="w-4 h-4 text-slate-400" />
+                  Undo
+                </button>
+              )}
             </div>
           </div>
 
@@ -943,6 +981,13 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
             </div>
           </div>
         </>
+      )}
+      {canDrag && (
+        <AutoSchedulePanel
+          isOpen={isAutoScheduleOpen}
+          onClose={() => setIsAutoScheduleOpen(false)}
+          projects={projects}
+        />
       )}
     </div>
   );

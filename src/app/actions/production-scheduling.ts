@@ -6,6 +6,7 @@ import { eq, and, inArray, notInArray, not, like, isNotNull, sql, lte, gte } fro
 import { validateSession, hasRole } from "@/lib/auth-helpers";
 import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { format, parseISO, addDays } from "date-fns";
+import { generateAutoSchedule, getSchedulingSummary, type AutoScheduleResult, type SchedulingSummary } from "@/lib/auto-scheduler";
 
 export type InsightItem = {
   type: string
@@ -103,15 +104,16 @@ export async function getProductionSchedulingData() {
     });
 
     if (rawProjects.length === 0) {
-      const stageCapacity = await getStageCapacityPerWeek();
-      return {
-        success: true,
-        data: {
-          projects: [],
-          stageCapacity
-        }
-      };
-    }
+       const stageCapacity = await getStageCapacityPerWeek();
+       return {
+         success: true,
+         data: {
+           projects: [],
+           stageCapacity,
+           autoScheduledCount: 0
+         }
+       };
+     }
 
     const projectIds = rawProjects.map(p => p.id);
 
@@ -234,12 +236,14 @@ export async function getProductionSchedulingData() {
     });
 
     const stageCapacity = await getStageCapacityPerWeek();
+    const autoScheduledCount = allSchedules.filter(s => s.scheduledByAuto === true).length;
 
     return {
       success: true,
       data: {
         projects: projectsData,
-        stageCapacity
+        stageCapacity,
+        autoScheduledCount
       }
     };
 
@@ -1004,4 +1008,134 @@ export async function getSchedulingInsights(): Promise<{ success: true, data: In
     return { success: false, error: error.message || "Failed to load scheduling insights." };
   }
 }
+
+export async function previewAutoSchedule(projectIds?: number[]): Promise<{ success: true; data: { schedule: AutoScheduleResult[]; summary: SchedulingSummary } } | { success: false; error: string }> {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const schedule = await generateAutoSchedule(projectIds);
+    const summary = await getSchedulingSummary(schedule);
+    return { success: true, data: { schedule, summary } };
+  } catch (error: any) {
+    console.error("[previewAutoSchedule] Error:", error);
+    return { success: false, error: error.message || "Failed to preview auto-schedule." };
+  }
+}
+
+export async function applyAutoSchedule(projectIds?: number[]): Promise<{ success: true; data: { applied: number; skipped: number } } | { success: false; error: string }> {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    // Only auto-schedules projects without an existing manual scheduled start.
+    // Joe's manual drag decisions are always preserved.
+    const activeStatuses = [
+      "1.3 - Drawings Approved",
+      "2.1 - Sheetmetal and switchgear ordrered",
+      "2.2 - In Progress",
+      "In Progress",
+      "Waiting to Start",
+      "2.3 - Ready for Testing",
+      "2.4 - Tested Defective",
+      "On Hold",
+      "2.5 - Tested Passed",
+      "Tested Passed"
+    ];
+
+    let targetProjects;
+    if (projectIds && projectIds.length > 0) {
+      targetProjects = await db.query.projects.findMany({
+        where: inArray(projects.id, projectIds)
+      });
+    } else {
+      targetProjects = await db.query.projects.findMany({
+        where: and(
+          eq(projects.isArchived, false),
+          inArray(projects.rawStatus, activeStatuses),
+          notInArray(projects.rawStatus, ["Delivered", "Completed", "Cancelled", "2.6 - Ready for Invoicing", "3.1 - Invoiced"]),
+          not(like(projects.projectNumber, "99%")),
+          isNotNull(projects.projectType)
+        )
+      });
+    }
+
+    const targetProjectIds = targetProjects.map(p => p.id);
+    if (targetProjectIds.length === 0) {
+      return { success: true, data: { applied: 0, skipped: 0 } };
+    }
+
+    const allSchedules = await db.query.productionSchedule.findMany({
+      where: inArray(productionSchedule.projectId, targetProjectIds)
+    });
+    const scheduleMap = new Map(allSchedules.map(s => [s.projectId, s]));
+
+    const autoSchedule = await generateAutoSchedule(projectIds);
+    const autoScheduleMap = new Map(autoSchedule.map(s => [s.projectId, s]));
+
+    let applied = 0;
+    let skipped = 0;
+
+    for (const projectId of targetProjectIds) {
+      const existing = scheduleMap.get(projectId);
+      if (existing && existing.scheduledStart !== null) {
+        skipped++;
+        continue;
+      }
+
+      const suggested = autoScheduleMap.get(projectId);
+      if (suggested) {
+        if (existing) {
+          await db.update(productionSchedule)
+            .set({
+              scheduledStart: suggested.suggestedStart,
+              scheduledByAuto: true,
+              updatedAt: new Date(),
+              updatedBy: Number(session.user.id)
+            })
+            .where(eq(productionSchedule.projectId, projectId));
+        } else {
+          await db.insert(productionSchedule)
+            .values({
+              projectId,
+              scheduledStart: suggested.suggestedStart,
+              scheduledByAuto: true,
+              updatedBy: Number(session.user.id)
+            });
+        }
+        applied++;
+      }
+    }
+
+    return { success: true, data: { applied, skipped } };
+  } catch (error: any) {
+    console.error("[applyAutoSchedule] Error:", error);
+    return { success: false, error: error.message || "Failed to apply auto-schedule." };
+  }
+}
+
+export async function undoAutoSchedule(): Promise<{ success: true; data: { cleared: number } } | { success: false; error: string }> {
+  const session = await validateSession();
+  if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  try {
+    const deleted = await db.delete(productionSchedule)
+      .where(eq(productionSchedule.scheduledByAuto, true))
+      .returning({ id: productionSchedule.id });
+    
+    console.log(`User ${session.user.id} undid auto-schedule, clearing ${deleted.length} records.`);
+    return { success: true, data: { cleared: deleted.length } };
+  } catch (error: any) {
+    console.error("[undoAutoSchedule] Error:", error);
+    return { success: false, error: error.message || "Failed to undo auto-schedule." };
+  }
+}
+
+
 

@@ -1,0 +1,1 @@
+ALTER TABLE "production_schedule" ADD COLUMN "scheduled_by_auto" boolean DEFAULT false NOT NULL;
