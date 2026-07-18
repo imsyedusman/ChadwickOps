@@ -340,6 +340,26 @@ export const productionSchedule = pgTable('production_schedule', {
   updatedBy: integer('updated_by').references(() => users.id),
 });
 
+// This table must never be modified by any sync process.
+export const workerAssignments = pgTable('worker_assignments', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => projects.id),
+  stage: varchar('stage', { length: 50 }).notNull(),
+  staffId: integer('staff_id').notNull().references(() => staffEfficiency.id),
+  assignedHours: decimal('assigned_hours', { precision: 8, scale: 2 }).notNull(),
+  projectedStart: date('projected_start'),
+  projectedEnd: date('projected_end'),
+  status: varchar('status', { length: 20 }).default('active').notNull(),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    unique('worker_assignment_unique_idx').on(table.projectId, table.stage, table.staffId),
+  ];
+});
+
 
 // Relations
 export const clientsRelations = relations(clients, ({ many }) => ({
