@@ -79,6 +79,7 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
     weekEnd: Date;
     weekStartStr: string;
     capacity: Record<CapacityKeys, number>;
+    baseCapacity: Record<CapacityKeys, number>;
   }[] = [];
 
   let tempStart = new Date(currentWeekStart);
@@ -177,7 +178,8 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
       weekStart,
       weekEnd,
       weekStartStr,
-      capacity
+      capacity,
+      baseCapacity: weekBaseCapacity
     });
 
     tempStart = addDays(tempStart, 7);
@@ -331,7 +333,20 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
     }
 
     // Determine min start date based on materials delivered
-    let minStartDate = today;
+    const currentDay = today.getDay();
+    const diffToMonday = today.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+    let minStartDate = new Date(today.getTime());
+    minStartDate.setDate(diffToMonday);
+    minStartDate.setHours(0, 0, 0, 0);
+
+    if (currentDay === 0 || currentDay > 3) {
+      minStartDate = addDays(minStartDate, 7);
+    }
+    if (minStartDate < today) {
+      minStartDate = new Date(today.getTime());
+      minStartDate.setHours(0, 0, 0, 0);
+    }
+
     let matReason = "";
 
     if (p.sheetmetalDeliveredDate) {
@@ -384,6 +399,7 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
 
     let selectedWeek = minWeekIdx;
     let chosenReason = "";
+    let finalWeeksInWindow = 1;
 
     if (mostConstrainedStage && item.totalStageHours > 0) {
       const demand = item.stageHours[mostConstrainedStage.projectKey];
@@ -392,28 +408,50 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
         : mostConstrainedStage.projectKey as CapacityKeys;
 
       const durationDays = Math.ceil(demand / 8);
-      const weeksInWindow = Math.max(1, Math.ceil(durationDays / 7));
+      let weeksInWindow = Math.max(1, Math.ceil(durationDays / 7));
 
       let found = false;
       for (let w = minWeekIdx; w < 26; w++) {
-        let fits = true;
-        for (let i = 0; i < weeksInWindow; i++) {
-          const targetWeek = w + i;
-          if (targetWeek >= 26) continue;
-          if (capacityBuckets[targetWeek].capacity[capKey] < demand / weeksInWindow) {
-            fits = false;
-            break;
-          }
+        let currentWeeksInWindow = weeksInWindow;
+        
+        // Bug 3: Max 30% of stage weekly capacity
+        const baseCap = capacityBuckets[w].baseCapacity[capKey];
+        const maxAllowed = baseCap * 0.3;
+        if (maxAllowed > 0 && (demand / currentWeeksInWindow) > maxAllowed) {
+          currentWeeksInWindow = Math.ceil(demand / maxAllowed);
         }
+
+        let fits = true;
+        for (let i = 0; i < currentWeeksInWindow; i++) {
+          const targetWeek = w + i;
+          if (targetWeek >= 26) { fits = false; break; }
+
+          // Bug 2: Check ALL required stages, not just most constrained
+          for (const stage of STAGE_CONFIGS) {
+            const stDemand = item.stageHours[stage.projectKey];
+            if (stDemand > 0) {
+              const stCapKey = (stage.projectKey === 'frameAssembly' || stage.projectKey === 'busbar')
+                ? `${stage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
+                : stage.projectKey as CapacityKeys;
+              const targetStDemand = stDemand / currentWeeksInWindow;
+              if (capacityBuckets[targetWeek].capacity[stCapKey] < targetStDemand) {
+                fits = false;
+                break;
+              }
+            }
+          }
+          if (!fits) break;
+        }
+
         if (fits) {
           selectedWeek = w;
+          finalWeeksInWindow = currentWeeksInWindow;
           found = true;
           break;
         }
       }
 
       if (!found) {
-        // If no week fits perfectly, pick the one with max capacity for this stage starting from minWeekIdx
         let maxCap = -1;
         for (let w = minWeekIdx; w < 26; w++) {
           if (capacityBuckets[w].capacity[capKey] > maxCap) {
@@ -424,21 +462,20 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
       }
 
       if (selectedWeek > minWeekIdx) {
-        chosenReason = `Earliest available week where ${mostConstrainedStage.name} capacity is sufficient`;
+        chosenReason = `Pushed to later week due to limited ${mostConstrainedStage.name} capacity`;
       } else if (matReason) {
         chosenReason = matReason;
       } else {
-        chosenReason = `Earliest available week where ${mostConstrainedStage.name} capacity is sufficient`;
+        chosenReason = `Earliest available week where all capacity requirements are met`;
       }
     } else {
-      // No stage hours data
       chosenReason = matReason || "Scheduled immediately based on priority and empty stage hours";
     }
 
     const scheduledDate = capacityBuckets[selectedWeek].weekStart;
     const suggestedStart = format(scheduledDate, "yyyy-MM-dd");
 
-    // Mark capacity as consumed
+    // Mark capacity as consumed using finalWeeksInWindow
     for (const stage of STAGE_CONFIGS) {
       const demand = item.stageHours[stage.projectKey];
       if (demand > 0) {
@@ -446,15 +483,12 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
           ? `${stage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
           : stage.projectKey as CapacityKeys;
 
-        const durationDays = Math.ceil(demand / 8);
-        const weeksInWindow = Math.max(1, Math.ceil(durationDays / 7));
-
-        for (let i = 0; i < weeksInWindow; i++) {
+        for (let i = 0; i < finalWeeksInWindow; i++) {
           const targetWeek = selectedWeek + i;
           if (targetWeek < 26) {
             capacityBuckets[targetWeek].capacity[capKey] = Math.max(
               0,
-              capacityBuckets[targetWeek].capacity[capKey] - (demand / weeksInWindow)
+              capacityBuckets[targetWeek].capacity[capKey] - (demand / finalWeeksInWindow)
             );
           }
         }
