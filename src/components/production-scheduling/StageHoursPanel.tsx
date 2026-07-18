@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject } from "@/app/actions/production-scheduling";
-import { BlurredValue } from "@/components/ui/BlurredValue";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface StageHoursPanelProps {
@@ -229,7 +228,7 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                             </td>
                             {isFinance && (
                               <td className="py-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                                <BlurredValue isBlurred={false} value={w.cost_effectiveness_score.toFixed(1)} className="font-mono text-[10px] text-slate-400" />
+                                <span className="font-mono text-[10px] text-slate-400">{w.cost_effectiveness_score.toFixed(1)}</span>
                               </td>
                             )}
                           </tr>
@@ -324,20 +323,16 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                   <div className="space-y-4">
                     <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Actual cost to date</span>
-                      <BlurredValue 
-                        isBlurred={!isFinance} 
-                        value={formatCurrency(costData.actualCost)} 
-                        className="font-mono font-medium text-slate-900 dark:text-white"
-                      />
+                      <span className={`font-mono font-medium text-slate-900 dark:text-white transition-all duration-300 ${!isFinance ? "filter blur-sm select-none" : ""}`}>
+                        {formatCurrency(costData.actualCost)}
+                      </span>
                     </div>
                     
                     <div className="flex justify-between items-center p-3 bg-brand/5 dark:bg-brand/10 rounded-lg border border-brand/10 dark:border-brand/20">
                       <span className="text-xs font-bold text-brand uppercase tracking-widest">Projected remaining cost</span>
-                      <BlurredValue 
-                        isBlurred={!isFinance} 
-                        value={formatCurrency(costData.totalProjectedCost)} 
-                        className="font-mono font-bold text-brand"
-                      />
+                      <span className={`font-mono font-bold text-brand transition-all duration-300 ${!isFinance ? "filter blur-sm select-none" : ""}`}>
+                        {formatCurrency(costData.totalProjectedCost)}
+                      </span>
                     </div>
                   </div>
 
