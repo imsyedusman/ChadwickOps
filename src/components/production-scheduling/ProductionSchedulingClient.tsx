@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight } from "lucide-react";
-import { ProjectSchedulingData, updateScheduledStart } from "@/app/actions/production-scheduling";
-import { StageCapacity } from "@/lib/stage-capacity";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
+import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown } from "@/app/actions/production-scheduling";
+import { StageCapacity, WeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { cn } from "@/lib/utils";
 import { GanttChart } from "./GanttChart";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,19 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isBottleneckPanelOpen, setIsBottleneckPanelOpen] = useState(false);
+  const [weeklyBreakdown, setWeeklyBreakdown] = useState<WeeklyCapacityBreakdown[]>([]);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
+  const [isWorkerUtilOpen, setIsWorkerUtilOpen] = useState(false);
+
+  useEffect(() => {
+    async function loadCapacity() {
+      const res = await fetchWeeklyCapacityBreakdown(12);
+      if (res.success && res.data) {
+        setWeeklyBreakdown(res.data);
+      }
+    }
+    loadCapacity();
+  }, []);
 
   const handleProjectClick = (projectId: number) => {
     const project = filteredProjects.find(p => p.id === projectId) || null;
@@ -223,47 +236,62 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
       if (p.stages.packagingFreight?.value) demand.packagingFreight += p.stages.packagingFreight.value;
     });
 
+    const capacityToUse = weeklyBreakdown.length > 0 
+      ? weeklyBreakdown[selectedWeekIndex].availableCapacity 
+      : initialData.stageCapacity;
+
+    const committedToUse = weeklyBreakdown.length > 0 
+      ? weeklyBreakdown[selectedWeekIndex].committedHours 
+      : { frameAssemblyIfc: 0, frameAssemblyIfm: 0, switchgearMount: 0, busbarIfc: 0, busbarIfm: 0, wiring: 0, labels: 0, testing: 0, packagingFreight: 0 };
+
     const rows = [
       {
         id: "frameAssembly",
         name: "Frame Assembly",
-        available: initialData.stageCapacity.frameAssemblyIfc + initialData.stageCapacity.frameAssemblyIfm,
+        available: capacityToUse.frameAssemblyIfc + capacityToUse.frameAssemblyIfm,
+        committed: committedToUse.frameAssemblyIfc + committedToUse.frameAssemblyIfm,
         demand: demand.frameAssembly,
       },
       {
         id: "switchgearMount",
         name: "Switchgear Mount",
-        available: initialData.stageCapacity.switchgearMount,
+        available: capacityToUse.switchgearMount,
+        committed: committedToUse.switchgearMount,
         demand: demand.switchgearMount,
       },
       {
         id: "busbar",
         name: "Busbar",
-        available: initialData.stageCapacity.busbarIfc + initialData.stageCapacity.busbarIfm,
+        available: capacityToUse.busbarIfc + capacityToUse.busbarIfm,
+        committed: committedToUse.busbarIfc + committedToUse.busbarIfm,
         demand: demand.busbar,
       },
       {
         id: "wiring",
         name: "Wiring",
-        available: initialData.stageCapacity.wiring,
+        available: capacityToUse.wiring,
+        committed: committedToUse.wiring,
         demand: demand.wiring,
       },
       {
         id: "labels",
         name: "Labels",
-        available: initialData.stageCapacity.labels,
+        available: capacityToUse.labels,
+        committed: committedToUse.labels,
         demand: demand.labels,
       },
       {
         id: "testing",
         name: "Testing",
-        available: initialData.stageCapacity.testing,
+        available: capacityToUse.testing,
+        committed: committedToUse.testing,
         demand: demand.testing,
       },
       {
         id: "packagingFreight",
         name: "Packaging and Freight",
-        available: initialData.stageCapacity.packagingFreight,
+        available: capacityToUse.packagingFreight,
+        committed: committedToUse.packagingFreight,
         demand: demand.packagingFreight,
       },
     ];
@@ -295,7 +323,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
         statusClass
       };
     });
-  }, [filteredProjects, initialData.stageCapacity]);
+  }, [filteredProjects, initialData.stageCapacity, weeklyBreakdown, selectedWeekIndex]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -552,12 +580,37 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
 
         {isBottleneckPanelOpen && (
           <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+            {weeklyBreakdown.length > 0 && (
+              <div className="flex items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setSelectedWeekIndex(Math.max(0, selectedWeekIndex - 1))}
+                  disabled={selectedWeekIndex === 0}
+                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                  <span className="sr-only">Prev Week</span>
+                </button>
+                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {format(new Date(weeklyBreakdown[selectedWeekIndex].weekStart), "dd MMM")} - {format(new Date(weeklyBreakdown[selectedWeekIndex].weekEnd), "dd MMM")}
+                </div>
+                <button
+                  onClick={() => setSelectedWeekIndex(Math.min(weeklyBreakdown.length - 1, selectedWeekIndex + 1))}
+                  disabled={selectedWeekIndex === weeklyBreakdown.length - 1}
+                  className="p-1 text-slate-500 hover:text-brand disabled:opacity-30 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                  <span className="sr-only">Next Week</span>
+                </button>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-t-lg">
                   <tr>
                     <th className="px-4 py-3 font-bold rounded-tl-lg">Stage</th>
                     <th className="px-4 py-3 font-bold text-right">Available hrs/week</th>
+                    <th className="px-4 py-3 font-bold text-right text-brand">Committed</th>
                     <th className="px-4 py-3 font-bold text-right">Total demand</th>
                     <th className="px-4 py-3 font-bold text-right">Utilisation %</th>
                     <th className="px-4 py-3 font-bold text-center rounded-tr-lg">Status</th>
@@ -568,6 +621,7 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
                     <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
                       <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.available > 0 ? row.available.toFixed(1) : "0.0"}</td>
+                      <td className="px-4 py-3 text-right font-medium text-brand">{row.committed > 0 ? row.committed.toFixed(1) : "-"}</td>
                       <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{row.demand.toFixed(1)}</td>
                       <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">{row.utilisationDisplay}</td>
                       <td className="px-4 py-3 text-center">
@@ -580,6 +634,53 @@ export function ProductionSchedulingClient({ initialData, canDrag = false, isAdm
                 </tbody>
               </table>
             </div>
+
+            {weeklyBreakdown.length > 0 && (
+              <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setIsWorkerUtilOpen(!isWorkerUtilOpen)}
+                  className="w-full flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Worker Utilisation</span>
+                  {isWorkerUtilOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                </button>
+                {isWorkerUtilOpen && (
+                  <div className="p-0 border-t border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                        <tr>
+                          <th className="px-4 py-2 font-bold">Worker</th>
+                          <th className="px-4 py-2 font-bold text-right">Committed</th>
+                          <th className="px-4 py-2 font-bold text-right">Free</th>
+                          <th className="px-4 py-2 font-bold w-1/3">Utilisation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                        {weeklyBreakdown[selectedWeekIndex].workerUtilisation.map(w => {
+                          const total = w.committedHours + w.freeHours;
+                          const pct = total > 0 ? (w.committedHours / total) * 100 : 0;
+                          return (
+                            <tr key={w.staffId}>
+                              <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{w.name}</td>
+                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.committedHours.toFixed(1)}</td>
+                              <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.freeHours.toFixed(1)}</td>
+                              <td className="px-4 py-2">
+                                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                  <div 
+                                    className={cn("h-full", pct > 100 ? "bg-red-500" : pct > 80 ? "bg-amber-500" : "bg-emerald-500")} 
+                                    style={{ width: `${Math.min(100, pct)}%` }} 
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
             <p className="mt-4 text-xs text-slate-500 italic">
               Based on {initialData.stageCapacity.activeStaffCount || 0} active workshop staff across 7 stages with efficiency ratings entered.
             </p>

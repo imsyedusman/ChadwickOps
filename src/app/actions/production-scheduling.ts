@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency, workerAssignments, systemConfig } from "@/db/schema";
 import { eq, and, inArray, notInArray, not, like, isNotNull, sql } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
-import { getStageCapacityPerWeek } from "@/lib/stage-capacity";
+import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { format, parseISO, addDays } from "date-fns";
 
 async function checkAuth() {
@@ -693,3 +693,13 @@ export async function deleteWorkerAssignment(assignmentId: number) {
   }
 }
 
+export async function fetchWeeklyCapacityBreakdown(weeksAhead: number) {
+  await checkAuth();
+  try {
+    const data = await getWeeklyCapacityBreakdown(weeksAhead);
+    return { success: true, data };
+  } catch (error: any) {
+    console.error("[fetchWeeklyCapacityBreakdown] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
