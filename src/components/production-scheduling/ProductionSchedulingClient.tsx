@@ -41,6 +41,7 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
   const [showOnlyAtRisk, setShowOnlyAtRisk] = useState(false);
+  const [materialsDelivered, setMaterialsDelivered] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCapacityDrawerOpen, setIsCapacityDrawerOpen] = useState(false);
   const [isViewPopoverOpen, setIsViewPopoverOpen] = useState(false);
@@ -122,7 +123,9 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
         return pFinish > new Date(p.deliveryDate);
       })();
 
-      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter && matchAtRisk;
+            const matchMaterials = !materialsDelivered || (p.sheetmetalDeliveredDate !== null || p.switchgearDeliveredDate !== null);
+
+      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter && matchAtRisk && matchMaterials;
     }).map(p => {
       let isBlocked = false;
       const blockReasons: string[] = [];
@@ -171,13 +174,14 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       return 0;
     });
     return result;
-  }, [projects, searchQuery, selectedManager, selectedType, hideDimmed, activeSummaryFilter, sortBy]);
+  }, [projects, searchQuery, selectedManager, selectedType, hideDimmed, activeSummaryFilter, sortBy, showOnlyAtRisk, materialsDelivered]);
 
   const summaryCounts = useMemo(() => {
     let active = 0;
     let testing = 0;
     let onHold = 0;
     let overdue = 0;
+    let atRisk = 0;
     const now = new Date().setHours(0,0,0,0);
     
     projects.forEach(p => {
@@ -189,9 +193,18 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       if (p.deliveryDate && new Date(p.deliveryDate).getTime() < now) {
         overdue++;
       }
+
+      if (p.effectiveStart && p.remainingHours > 0 && p.deliveryDate) {
+        const pStart = new Date(p.effectiveStart);
+        const daysNeeded = p.remainingHours / 7.6;
+        const pFinish = addDays(pStart, daysNeeded);
+        if (pFinish > new Date(p.deliveryDate)) {
+          atRisk++;
+        }
+      }
     });
     
-    return { active, testing, onHold, overdue };
+    return { active, testing, onHold, overdue, atRisk };
   }, [projects]);
 
   const handleDateChange = async (projectIdStr: string, start: Date) => {
@@ -475,6 +488,15 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                       />
                       <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Hide completed/on hold</span>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 h-[38px] hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors w-full mt-2">
+                      <input 
+                        type="checkbox" 
+                        checked={materialsDelivered} 
+                        onChange={(e) => setMaterialsDelivered(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand/20"
+                      />
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Materials delivered</span>
+                    </label>
                   </div>
 
                   <div className="flex flex-col gap-1 w-full relative">
@@ -642,6 +664,17 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
           )}
         >
           Overdue: {summaryCounts.overdue}
+        </button>
+        <button 
+          onClick={() => setShowOnlyAtRisk(!showOnlyAtRisk)}
+          className={cn(
+            "px-3 py-1 border rounded-lg text-xs font-bold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2",
+            showOnlyAtRisk
+              ? "bg-orange-500 text-white border-orange-600 hover:bg-orange-600" 
+              : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/50"
+          )}
+        >
+          At Risk: {summaryCounts.atRisk}
         </button>
       </div>
 
@@ -882,11 +915,19 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                               <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.committedHours.toFixed(1)}</td>
                               <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.freeHours.toFixed(1)}</td>
                               <td className="px-4 py-2">
-                                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                                  <div 
-                                    className={cn("h-full", pct > 100 ? "bg-red-500" : pct > 80 ? "bg-amber-500" : "bg-emerald-500")} 
-                                    style={{ width: `${Math.min(100, pct)}%` }} 
-                                  />
+                                <div className="flex items-center gap-3">
+                                  <div className="h-1.5 flex-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                    <div 
+                                      className={cn("h-full", pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500")} 
+                                      style={{ width: `${Math.min(100, pct)}%` }} 
+                                    />
+                                  </div>
+                                  <span className={cn(
+                                    "text-xs font-bold w-12 text-right",
+                                    pct >= 100 ? "text-red-600 dark:text-red-400" : pct >= 80 ? "text-amber-600 dark:text-amber-500" : "text-slate-500 dark:text-slate-400"
+                                  )}>
+                                    {pct.toFixed(1)}%
+                                  </span>
                                 </div>
                               </td>
                             </tr>

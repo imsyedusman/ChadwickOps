@@ -840,6 +840,12 @@ export async function getSchedulingInsights(): Promise<{ success: true, data: In
     const staffEff = await db.query.staffEfficiency.findMany();
     const staffMap = new Map(staffEff.map(s => [s.id, s.fullName]));
 
+    const assignedProjectIds = Array.from(new Set(allAssignments.map(a => a.projectId)));
+    const assignedProjects = assignedProjectIds.length > 0 ? await db.query.projects.findMany({
+      where: inArray(projects.id, assignedProjectIds)
+    }) : [];
+    const projectMap = new Map(assignedProjects.map(p => [p.id, p]));
+
     for (const absence of allAbsences) {
       const absStart = new Date(absence.startDate);
       const absEnd = new Date(absence.endDate);
@@ -849,16 +855,23 @@ export async function getSchedulingInsights(): Promise<{ success: true, data: In
         const aEnd = new Date(a.projectedEnd);
         return aStart <= absEnd && aEnd >= absStart;
       });
+      
       if (overlapping.length > 0) {
         const staffName = staffMap.get(absence.staffId) || "worker";
         const dFormat = (d: Date) => format(d, "dd MMM");
-        insights.push({
-          type: `conflict_${absence.id}`,
-          severity: 'critical',
-          title: 'Assignment conflict',
-          description: `Worker ${staffName} has an active assignment during recorded absence ${dFormat(absStart)} to ${dFormat(absEnd)}.`,
-          affectedCount: overlapping.length
-        });
+        
+        for (const a of overlapping) {
+          const proj = projectMap.get(a.projectId);
+          const pNum = proj?.projectNumber || "Unknown";
+          const pName = proj?.name || "Unknown Project";
+          insights.push({
+            type: `conflict_${absence.id}_${a.id}`,
+            severity: 'critical',
+            title: 'Assignment conflict',
+            description: `Worker ${staffName} is assigned to ${pNum} - ${pName} during recorded absence ${dFormat(absStart)} to ${dFormat(absEnd)}.`,
+            affectedCount: 1
+          });
+        }
       }
     }
 
