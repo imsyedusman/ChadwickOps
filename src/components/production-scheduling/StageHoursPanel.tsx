@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost } from "@/app/actions/production-scheduling";
+import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject } from "@/app/actions/production-scheduling";
 import { BlurredValue } from "@/components/ui/BlurredValue";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -19,6 +19,9 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
   const [stages, setStages] = useState<Record<string, { value: number | null; source: "wg" | "manual" | "none" }> | null>(null);
   const [costData, setCostData] = useState<any>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [workerSuggestions, setWorkerSuggestions] = useState<Record<string, any[]> | null>(null);
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Record<string, boolean>>({});
+  const [expandedFullList, setExpandedFullList] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCostBreakdownOpen, setIsCostBreakdownOpen] = useState(false);
@@ -30,9 +33,10 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
       const fetchData = async () => {
         setIsLoading(true);
         try {
-          const [hoursRes, costRes] = await Promise.all([
+          const [hoursRes, costRes, suggestionsRes] = await Promise.all([
             getProjectStageHours(project.id),
-            getProjectedLabourCost(project.id)
+            getProjectedLabourCost(project.id),
+            getWorkerSuggestionsForProject(project.id)
           ]);
           
           if (hoursRes.success && hoursRes.data) {
@@ -54,6 +58,12 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
             setCostData(costRes.data);
           } else {
             toast.error(costRes.error || "Failed to load projected costs");
+          }
+
+          if (suggestionsRes.success && suggestionsRes.data) {
+            setWorkerSuggestions(suggestionsRes.data);
+          } else {
+            toast.error(suggestionsRes.error || "Failed to load worker suggestions");
           }
         } catch (error: any) {
           toast.error(error.message || "Failed to load stage hours");
@@ -107,6 +117,14 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
     setInputs(prev => ({ ...prev, [key]: value }));
   };
 
+  const toggleSuggestions = (key: string) => {
+    setExpandedSuggestions(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleFullList = (key: string) => {
+    setExpandedFullList(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const calculateTotal = () => {
     return Object.values(inputs).reduce((acc, val) => {
       const num = parseFloat(val);
@@ -128,6 +146,11 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
   const renderRow = (key: string, label: string) => {
     const data = stages?.[key];
     const source = data?.source || "none";
+    const hoursVal = parseFloat(inputs[key] || "0");
+    const hasHours = !isNaN(hoursVal) && hoursVal > 0;
+    
+    const suggestions = workerSuggestions?.[key] || [];
+    const isExpanded = expandedSuggestions[key] || false;
     
     return (
       <div key={key} className="py-4 border-b border-slate-100 dark:border-slate-800/60 last:border-0">
@@ -155,8 +178,76 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
             )}
           </div>
         ) : (
-          <div className="text-sm font-mono font-medium text-slate-900 dark:text-slate-100">
+          <div className="text-sm font-mono font-medium text-slate-900 dark:text-slate-100 mb-2">
             {inputs[key] ? `${inputs[key]} hrs` : "-"}
+          </div>
+        )}
+        
+        {hasHours && (
+          <div className="mt-3">
+            <button
+              onClick={() => toggleSuggestions(key)}
+              className="text-[11px] font-medium text-brand hover:text-brand/80 flex items-center gap-1 focus:outline-none"
+            >
+              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {isExpanded ? "Hide suggested workers" : "Show suggested workers"}
+            </button>
+            
+            {isExpanded && (
+              <div className="mt-2 bg-slate-50 dark:bg-slate-800/30 rounded border border-slate-100 dark:border-slate-800/80 p-2">
+                {suggestions.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">No rated staff for this stage</p>
+                ) : (
+                  <div>
+                    <table className="w-full text-left text-[11px]">
+                      <thead>
+                        <tr className="text-slate-400 border-b border-slate-100 dark:border-slate-800/60">
+                          <th className="pb-1 font-medium">Name</th>
+                          <th className="pb-1 font-medium text-right">Efficiency</th>
+                          <th className="pb-1 font-medium pl-3">Tier</th>
+                          {isFinance && <th className="pb-1 font-medium text-right w-12"></th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {suggestions.slice(0, expandedFullList[key] ? suggestions.length : 5).map((w, idx) => (
+                          <tr key={idx} className="group">
+                            <td className="py-1.5 font-medium text-slate-700 dark:text-slate-300">
+                              {w.full_name}
+                            </td>
+                            <td className="py-1.5 text-right font-mono text-slate-500">
+                              {(w.efficiency_rating * 100).toFixed(0)}%
+                            </td>
+                            <td className="py-1.5 pl-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`h-1.5 w-1.5 rounded-full ${
+                                  w.tier === "Recommended" ? "bg-emerald-500" :
+                                  w.tier === "Good" ? "bg-blue-500" :
+                                  "bg-slate-400"
+                                }`}></span>
+                                <span className="text-slate-500">{w.tier}</span>
+                              </div>
+                            </td>
+                            {isFinance && (
+                              <td className="py-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                <BlurredValue isBlurred={false} value={w.cost_effectiveness_score.toFixed(1)} className="font-mono text-[10px] text-slate-400" />
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {suggestions.length > 5 && (
+                      <button
+                        onClick={() => toggleFullList(key)}
+                        className="w-full text-center py-1.5 mt-1 text-[10px] font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
+                      >
+                        {expandedFullList[key] ? "Show less" : `Show ${suggestions.length - 5} more`}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -461,3 +461,87 @@ export async function getProjectedLabourCost(projectId: number) {
   }
 }
 
+export async function getWorkerSuggestionsForProject(projectId: number) {
+  await checkAuth();
+
+  try {
+    const staff = await db.query.staffEfficiency.findMany({
+      where: and(eq(staffEfficiency.isActive, true), eq(staffEfficiency.isWorkshopStaff, true))
+    });
+
+    const userRatesRaw = await db.select({
+      user: timeEntries.user,
+      avgRate: sql<number>`avg(${timeEntries.cost} / ${timeEntries.hours})`
+    }).from(timeEntries).where(sql`${timeEntries.hours} > 0`).groupBy(timeEntries.user);
+
+    const ratesMap = new Map<string, number>();
+    userRatesRaw.forEach(r => {
+      ratesMap.set(r.user, Number(r.avgRate));
+    });
+
+    const stagesKeys = [
+      { key: "frameAssembly", name: "frame_assembly" },
+      { key: "switchgearMount", name: "switchgear_mount" },
+      { key: "busbar", name: "busbar" },
+      { key: "wiring", name: "wiring" },
+      { key: "labels", name: "labels" },
+      { key: "testing", name: "testing" },
+      { key: "packagingFreight", name: "packaging_freight" }
+    ] as const;
+
+    const result: Record<string, any[]> = {};
+
+    stagesKeys.forEach(stage => {
+      let stageWorkers = staff
+        .filter(person => {
+          const eff = person[stage.key];
+          return eff !== null && eff !== undefined;
+        })
+        .map(person => {
+          const effStr = person[stage.key];
+          const eff = parseFloat(effStr as string);
+          
+          let impliedRate = ratesMap.get(person.fullName);
+          if (impliedRate === undefined) {
+            impliedRate = parseFloat((person.hourlyRate as any) || "0");
+          }
+
+          const score = impliedRate / (eff || 1); // fallback to 1 to avoid div by zero, though shouldn't happen if eff > 0
+
+          return {
+            full_name: person.fullName,
+            efficiency_rating: eff,
+            implied_hourly_rate: impliedRate,
+            cost_effectiveness_score: score,
+            tier: "" // will be set after sort
+          };
+        })
+        .filter(w => !isNaN(w.efficiency_rating) && w.efficiency_rating > 0);
+
+      stageWorkers.sort((a, b) => a.cost_effectiveness_score - b.cost_effectiveness_score);
+
+      const n = stageWorkers.length;
+      if (n > 0) {
+        const topThird = Math.ceil(n / 3);
+        const middleThird = Math.ceil((2 * n) / 3);
+
+        stageWorkers.forEach((w, i) => {
+          if (i < topThird) w.tier = "Recommended";
+          else if (i < middleThird) w.tier = "Good";
+          else w.tier = "Available";
+        });
+      }
+
+      result[stage.name] = stageWorkers;
+    });
+
+    return {
+      success: true,
+      data: result
+    };
+  } catch (error: any) {
+    console.error("[getWorkerSuggestionsForProject] Error:", error);
+    return { success: false, error: error.message || "Failed to fetch worker suggestions." };
+  }
+}
+
