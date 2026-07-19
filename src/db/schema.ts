@@ -354,6 +354,7 @@ export const workerAssignments = pgTable('worker_assignments', {
   completedAt: timestamp('completed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   createdBy: integer('created_by').references(() => users.id),
+  createdByAuto: boolean('created_by_auto').default(false).notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => {
   return [

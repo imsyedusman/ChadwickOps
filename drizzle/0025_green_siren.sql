@@ -1,0 +1,1 @@
+ALTER TABLE "worker_assignments" ADD COLUMN "created_by_auto" boolean DEFAULT false NOT NULL;

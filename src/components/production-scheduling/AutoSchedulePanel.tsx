@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wand2, Loader2, CheckCircle2, X } from "lucide-react";
+import { Wand2, Loader2, CheckCircle2, X, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { previewAutoSchedule, applyAutoSchedule, undoAutoSchedule } from "@/app/actions/production-scheduling";
@@ -26,13 +26,15 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewData, setPreviewData] = useState<{ schedule: AutoScheduleResult[]; summary: SchedulingSummary } | null>(null);
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<number>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Stats for complete state
   const [appliedCount, setAppliedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [assignmentsCreated, setAssignmentsCreated] = useState(0);
 
   const [isUndoLoading, setIsUndoLoading] = useState(false);
-  const [undoResult, setUndoResult] = useState<{ cleared: number } | null>(null);
+  const [undoResult, setUndoResult] = useState<{ cleared: number, workerAssignmentsCleared: number } | null>(null);
 
   const handleGeneratePreview = async () => {
     setIsPreviewLoading(true);
@@ -51,13 +53,21 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
     }
   };
 
+  const filteredPreviewSchedule = previewData?.schedule.filter(s => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return s.projectNumber.toLowerCase().includes(q) || s.projectName.toLowerCase().includes(q);
+  }) || [];
+
   const handleToggleSelectAll = (checked: boolean) => {
     if (!previewData) return;
+    const next = new Set(selectedProjectIds);
     if (checked) {
-      setSelectedProjectIds(new Set(previewData.schedule.map(s => s.projectId)));
+      filteredPreviewSchedule.forEach(s => next.add(s.projectId));
     } else {
-      setSelectedProjectIds(new Set());
+      filteredPreviewSchedule.forEach(s => next.delete(s.projectId));
     }
+    setSelectedProjectIds(next);
   };
 
   const handleToggleSelectProject = (projectId: number, checked: boolean) => {
@@ -83,7 +93,9 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
       if (res.success) {
         setAppliedCount(res.data.applied);
         setSkippedCount(res.data.skipped);
+        setAssignmentsCreated(res.data.workerAssignmentsCreated);
         setModalState("COMPLETE");
+        router.refresh();
       } else {
         toast.error(res.error || "Failed to apply auto-schedule");
         setModalState("PREVIEW");
@@ -100,6 +112,7 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
       const res = await undoAutoSchedule();
       if (res.success) {
         setUndoResult(res.data);
+        router.refresh();
       } else {
         toast.error(res.error || "Failed to undo auto-schedule");
       }
@@ -135,7 +148,15 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => modalState !== "APPLYING" && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open && modalState !== "APPLYING") {
+        if (modalState === "COMPLETE") {
+          handleCloseComplete();
+        } else {
+          onClose();
+        }
+      }
+    }}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6 overflow-hidden">
         
         {/* Header */}
@@ -182,8 +203,20 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
               <div className="flex flex-col flex-1 overflow-hidden min-h-0 gap-4">
                 
                 {/* Summary Row */}
-                <div className="p-3 bg-brand/5 border border-brand/10 dark:bg-brand/20 dark:border-brand/30 rounded-xl text-sm text-slate-700 dark:text-slate-200 font-medium">
-                  {previewData.summary.totalScheduled} projects will be scheduled · {previewData.summary.overdueCount} overdue projects prioritised · Busiest week: {formatWeekString(previewData.summary.highestLoadWeek)}
+                <div className="p-3 bg-brand/5 border border-brand/10 dark:bg-brand/20 dark:border-brand/30 rounded-xl text-sm text-slate-700 dark:text-slate-200 font-medium flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    {previewData.summary.totalScheduled} projects will be scheduled · {previewData.summary.overdueCount} overdue projects prioritised · Busiest week: {formatWeekString(previewData.summary.highestLoadWeek)}
+                  </div>
+                  <div className="relative w-full md:w-64 shrink-0">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search projects..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                 </div>
 
                 {/* Table Container */}
@@ -193,7 +226,7 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
                       <tr>
                         <th className="p-3 w-10 text-center">
                           <Checkbox
-                            checked={selectedProjectIds.size === previewData.schedule.length}
+                            checked={filteredPreviewSchedule.length > 0 && filteredPreviewSchedule.every(s => selectedProjectIds.has(s.projectId))}
                             onChange={handleToggleSelectAll}
                           />
                         </th>
@@ -204,7 +237,7 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {previewData.schedule.map((row) => {
+                      {filteredPreviewSchedule.map((row) => {
                         const proj = projects.find(p => p.id === row.projectId);
                         const status = proj?.rawStatus || "";
                         const isChecked = selectedProjectIds.has(row.projectId);
@@ -306,8 +339,10 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-300 font-semibold">
                 {undoResult 
-                  ? `${undoResult.cleared} auto-scheduled projects have been cleared. Manually scheduled projects were not affected.`
-                  : `${appliedCount} projects scheduled successfully. ${skippedCount} projects skipped (already manually scheduled).`
+                  ? `${undoResult.cleared} auto-scheduled projects and ${undoResult.workerAssignmentsCleared} worker assignments have been cleared.`
+                  : skippedCount > 0 
+                    ? `${appliedCount} projects scheduled successfully, ${assignmentsCreated} worker assignments created. ${skippedCount} projects skipped (already manually scheduled).`
+                    : `${appliedCount} projects scheduled successfully, ${assignmentsCreated} worker assignments created.`
                 }
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-500">

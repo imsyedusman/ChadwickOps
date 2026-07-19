@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { projects, tasks, projectStageHours, productionSchedule, workerAssignments, staffEfficiency, staffAbsences, systemConfig } from "@/db/schema";
-import { eq, and, inArray, notInArray, not, like, isNotNull, lte, gte } from "drizzle-orm";
+import { projects, tasks, projectStageHours, productionSchedule, workerAssignments, staffEfficiency, staffAbsences, systemConfig, timeEntries } from "@/db/schema";
+import { eq, and, inArray, notInArray, not, like, isNotNull, lte, gte, sql } from "drizzle-orm";
 import { addDays, differenceInDays, format, parseISO } from "date-fns";
 
 export type AutoScheduleResult = {
@@ -10,6 +10,13 @@ export type AutoScheduleResult = {
   suggestedStart: string; // "yyyy-MM-dd"
   reason: string;
   stagesScheduled: { stage: string; hours: number }[];
+  workerAssignments: {
+    stage: string;
+    staffId: number;
+    staffName: string;
+    hours: number;
+    week: string; // "yyyy-MM-dd" week start
+  }[];
 };
 
 export type SchedulingSummary = {
@@ -17,16 +24,17 @@ export type SchedulingSummary = {
   overdueCount: number;
   averageDaysToStart: number;
   highestLoadWeek: string;
+  totalAssignmentsCreated: number;
 };
 
 const STAGE_CONFIGS = [
-  { projectKey: 'frameAssembly', capacityKey: 'frameAssembly', name: 'Frame Assembly' },
-  { projectKey: 'switchgearMount', capacityKey: 'switchgearMount', name: 'Switchgear Mount' },
-  { projectKey: 'busbar', capacityKey: 'busbar', name: 'Busbar' },
-  { projectKey: 'wiring', capacityKey: 'wiring', name: 'Wiring' },
-  { projectKey: 'labels', capacityKey: 'labels', name: 'Labels' },
-  { projectKey: 'testing', capacityKey: 'testing', name: 'Testing' },
-  { projectKey: 'packagingFreight', capacityKey: 'packagingFreight', name: 'Packaging and Freight' }
+  { projectKey: 'frameAssembly', capacityKey: 'frameAssembly', name: 'Frame Assembly', dbKey: 'frame_assembly' },
+  { projectKey: 'switchgearMount', capacityKey: 'switchgearMount', name: 'Switchgear Mount', dbKey: 'switchgear_mount' },
+  { projectKey: 'busbar', capacityKey: 'busbar', name: 'Busbar', dbKey: 'busbar' },
+  { projectKey: 'wiring', capacityKey: 'wiring', name: 'Wiring', dbKey: 'wiring' },
+  { projectKey: 'labels', capacityKey: 'labels', name: 'Labels', dbKey: 'labels' },
+  { projectKey: 'testing', capacityKey: 'testing', name: 'Testing', dbKey: 'testing' },
+  { projectKey: 'packagingFreight', capacityKey: 'packagingFreight', name: 'Packaging and Freight', dbKey: 'packaging_freight' }
 ] as const;
 
 export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoScheduleResult[]> {
@@ -42,7 +50,7 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
     stdHours = Number((config.value as any).hoursPerWeek) || 38;
   }
 
-  // 2. Fetch staff & absences
+  // 2. Fetch staff & absences & rates
   const staff = await db.query.staffEfficiency.findMany({
     where: and(
       eq(staffEfficiency.isActive, true),
@@ -51,8 +59,17 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
   });
   const allAbsences = await db.query.staffAbsences.findMany();
 
-  // 3. Fetch active worker assignments for the next 26 weeks
-  // We align start of this week to Monday
+  const userRatesRaw = await db.select({
+    user: timeEntries.user,
+    avgRate: sql<number>`avg(${timeEntries.cost} / ${timeEntries.hours})`
+  }).from(timeEntries).where(sql`${timeEntries.hours} > 0`).groupBy(timeEntries.user);
+
+  const ratesMap = new Map<string, number>();
+  userRatesRaw.forEach(r => {
+    ratesMap.set(r.user, Number(r.avgRate));
+  });
+
+  // Calculate base week array (26 weeks)
   const day = today.getDay();
   const diff = today.getDate() - day + (day === 0 ? -6 : 1);
   const currentWeekStart = new Date(today.getTime());
@@ -71,118 +88,78 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
     )
   });
 
-  // 4. Build 26 weekly capacity buckets
-  type CapacityKeys = 'frameAssemblyIfc' | 'frameAssemblyIfm' | 'switchgearMount' | 'busbarIfc' | 'busbarIfm' | 'wiring' | 'labels' | 'testing' | 'packagingFreight';
-  
-  const capacityBuckets: {
-    weekStart: Date;
-    weekEnd: Date;
-    weekStartStr: string;
-    capacity: Record<CapacityKeys, number>;
-    baseCapacity: Record<CapacityKeys, number>;
-  }[] = [];
-
+  const weekStarts: Date[] = [];
   let tempStart = new Date(currentWeekStart);
   for (let i = 0; i < 26; i++) {
-    const weekStart = new Date(tempStart);
-    const weekEnd = addDays(weekStart, 6);
-    const weekStartStr = weekStart.toISOString().split('T')[0];
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
-
-    const absentStaffIds = new Set(
-      allAbsences
-        .filter(a => {
-          const s = new Date(a.startDate);
-          const e = new Date(a.endDate);
-          s.setHours(0,0,0,0);
-          e.setHours(23,59,59,999);
-          return s <= weekEnd && e >= weekStart;
-        })
-        .map(a => a.staffId)
-    );
-
-    const weekBaseCapacity: Record<CapacityKeys, number> = {
-      frameAssemblyIfc: 0, frameAssemblyIfm: 0, switchgearMount: 0,
-      busbarIfc: 0, busbarIfm: 0, wiring: 0, labels: 0,
-      testing: 0, packagingFreight: 0
-    };
-
-    for (const person of staff) {
-      if (absentStaffIds.has(person.id)) continue;
-
-      if (person.frameAssembly !== null) {
-        const val = parseFloat(person.frameAssembly as string) * stdHours;
-        weekBaseCapacity.frameAssemblyIfc += val;
-        weekBaseCapacity.frameAssemblyIfm += val;
-      }
-      if (person.switchgearMount !== null) {
-        weekBaseCapacity.switchgearMount += parseFloat(person.switchgearMount as string) * stdHours;
-      }
-      if (person.busbar !== null) {
-        const val = parseFloat(person.busbar as string) * stdHours;
-        weekBaseCapacity.busbarIfc += val;
-        weekBaseCapacity.busbarIfm += val;
-      }
-      if (person.wiring !== null) {
-        weekBaseCapacity.wiring += parseFloat(person.wiring as string) * stdHours;
-      }
-      if (person.labels !== null) {
-        weekBaseCapacity.labels += parseFloat(person.labels as string) * stdHours;
-      }
-      if (person.testing !== null) {
-        weekBaseCapacity.testing += parseFloat(person.testing as string) * stdHours;
-      }
-      if (person.packagingFreight !== null) {
-        weekBaseCapacity.packagingFreight += parseFloat(person.packagingFreight as string) * stdHours;
-      }
-    }
-
-    const committedHours: Record<CapacityKeys, number> = {
-      frameAssemblyIfc: 0, frameAssemblyIfm: 0, switchgearMount: 0,
-      busbarIfc: 0, busbarIfm: 0, wiring: 0, labels: 0,
-      testing: 0, packagingFreight: 0
-    };
-
-    const weekAssignments = activeAssignments.filter(a => {
-      return a.projectedStart && a.projectedEnd &&
-             a.projectedStart <= weekEndStr && a.projectedEnd >= weekStartStr;
-    });
-
-    for (const assignment of weekAssignments) {
-      if (!assignment.projectedStart || !assignment.projectedEnd) continue;
-      const pStart = new Date(assignment.projectedStart);
-      const pEnd = new Date(assignment.projectedEnd);
-      const days = differenceInDays(pEnd, pStart) || 1;
-      const weeksInWindow = Math.max(1, Math.ceil(days / 7));
-      const weeklyCommitted = parseFloat(assignment.assignedHours as string) / weeksInWindow;
-
-      switch(assignment.stage) {
-        case 'frame_assembly_ifc': committedHours.frameAssemblyIfc += weeklyCommitted; break;
-        case 'frame_assembly_ifm': committedHours.frameAssemblyIfm += weeklyCommitted; break;
-        case 'switchgear_mount': committedHours.switchgearMount += weeklyCommitted; break;
-        case 'busbar_ifc': committedHours.busbarIfc += weeklyCommitted; break;
-        case 'busbar_ifm': committedHours.busbarIfm += weeklyCommitted; break;
-        case 'wiring': committedHours.wiring += weeklyCommitted; break;
-        case 'labels': committedHours.labels += weeklyCommitted; break;
-        case 'testing': committedHours.testing += weeklyCommitted; break;
-        case 'packaging_freight': committedHours.packagingFreight += weeklyCommitted; break;
-      }
-    }
-
-    const capacity: Record<CapacityKeys, number> = {} as any;
-    for (const key of Object.keys(weekBaseCapacity) as CapacityKeys[]) {
-      capacity[key] = Math.max(0, weekBaseCapacity[key] - committedHours[key]);
-    }
-
-    capacityBuckets.push({
-      weekStart,
-      weekEnd,
-      weekStartStr,
-      capacity,
-      baseCapacity: weekBaseCapacity
-    });
-
+    weekStarts.push(new Date(tempStart));
     tempStart = addDays(tempStart, 7);
+  }
+
+  // Step 1: Build worker availability map
+  // Map: staffId -> Map<weekStartStr, availableHours>
+  const workerAvailability = new Map<number, Map<string, number>>();
+
+  for (const person of staff) {
+    const weeklyAvail = new Map<string, number>();
+    for (let w = 0; w < 26; w++) {
+      const wStart = weekStarts[w];
+      const wEnd = addDays(wStart, 6);
+      const wStartStr = wStart.toISOString().split('T')[0];
+      const wEndStr = wEnd.toISOString().split('T')[0];
+
+      // Check absence (full or partial, but keeping it simple as per original logic: if absent during the week, zero it out)
+      const isAbsent = allAbsences.some(a => {
+        const s = new Date(a.startDate);
+        const e = new Date(a.endDate);
+        s.setHours(0,0,0,0);
+        e.setHours(23,59,59,999);
+        return s <= wEnd && e >= wStart;
+      });
+
+      if (isAbsent) {
+        weeklyAvail.set(wStartStr, 0);
+      } else {
+        // Calculate committed hours
+        const weekAssignments = activeAssignments.filter(a => 
+          a.staffId === person.id && 
+          a.projectedStart && a.projectedEnd &&
+          a.projectedStart <= wEndStr && 
+          a.projectedEnd >= wStartStr
+        );
+        let committed = 0;
+        for (const a of weekAssignments) {
+          const pS = new Date(a.projectedStart!);
+          const pE = new Date(a.projectedEnd!);
+          const diffDays = Math.ceil((pE.getTime() - pS.getTime()) / (1000 * 3600 * 24)) || 1;
+          const weeksInW = Math.max(1, Math.ceil(diffDays / 7));
+          committed += (parseFloat(a.assignedHours as string) || 0) / weeksInW;
+        }
+        
+        weeklyAvail.set(wStartStr, Math.max(0, stdHours - committed));
+      }
+    }
+    workerAvailability.set(person.id, weeklyAvail);
+  }
+
+  // Helper to find worker rank per stage
+  type RankedWorker = { staffId: number, name: string, eff: number, score: number };
+  const getRankedWorkers = (stageKey: string): RankedWorker[] => {
+    const colName = stageKey as keyof typeof staff[0];
+    const workers = staff.filter(s => s[colName] !== null && s[colName] !== undefined).map(s => {
+      const eff = parseFloat(s[colName] as string);
+      let impliedRate = ratesMap.get(s.fullName);
+      if (impliedRate === undefined) impliedRate = parseFloat((s.hourlyRate as any) || "0");
+      const score = impliedRate / (eff || 1);
+      return { staffId: s.id, name: s.fullName, eff, score };
+    }).filter(w => !isNaN(w.eff) && w.eff > 0);
+    
+    workers.sort((a, b) => a.score - b.score);
+    return workers;
+  };
+
+  const rankedWorkersPerStage: Record<string, RankedWorker[]> = {};
+  for (const st of STAGE_CONFIGS) {
+    rankedWorkersPerStage[st.projectKey] = getRankedWorkers(st.capacityKey);
   }
 
   // 5. Fetch all active projects (or filter by projectIds if provided)
@@ -322,7 +299,7 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
 
   const results: AutoScheduleResult[] = [];
 
-  // 7. Greedy scheduling
+  // Step 3: Per-project, per-stage worker assignment
   for (const item of scoredProjects) {
     const p = item.project;
     const existingStart = scheduleMap.get(p.id);
@@ -364,151 +341,162 @@ export async function generateAutoSchedule(projectIds?: number[]): Promise<AutoS
       }
     }
 
-    // Find minWeekIdx that can satisfy minStartDate
     let minWeekIdx = 0;
     for (let w = 0; w < 26; w++) {
-      if (minStartDate <= capacityBuckets[w].weekEnd) {
+      if (minStartDate <= addDays(weekStarts[w], 6)) {
         minWeekIdx = w;
         break;
       }
     }
 
-    // Identify most constrained stage
-    let mostConstrainedStage: typeof STAGE_CONFIGS[number] | null = null;
-    let highestRatio = -1;
+    const assignedWorkers: AutoScheduleResult["workerAssignments"] = [];
+    const stagesScheduled: { stage: string; hours: number }[] = [];
+    let currentEarliestWeekIdx = minWeekIdx;
+    let projectStartStr: string | null = null;
+    let missingStaffNotes: string[] = [];
+    let schedulingReason = "";
 
-    for (const stage of STAGE_CONFIGS) {
-      const demand = item.stageHours[stage.projectKey];
-      if (demand > 0) {
-        const capKey = (stage.projectKey === 'frameAssembly' || stage.projectKey === 'busbar')
-          ? `${stage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
-          : stage.projectKey as CapacityKeys;
+    if (item.totalStageHours === 0) {
+      schedulingReason = matReason || "Scheduled immediately based on priority and empty stage hours";
+      projectStartStr = weekStarts[currentEarliestWeekIdx].toISOString().split('T')[0];
+    } else {
+      // Go through sequence
+      for (const st of STAGE_CONFIGS) {
+        const demand = item.stageHours[st.projectKey];
+        if (demand <= 0) continue;
 
-        let totalCap = 0;
-        for (let w = 0; w < 26; w++) {
-          totalCap += capacityBuckets[w].capacity[capKey];
-        }
+        const dbStageKey = (st.projectKey === 'frameAssembly' || st.projectKey === 'busbar')
+          ? `${st.dbKey}_${item.isIfm ? 'ifm' : 'ifc'}`
+          : st.dbKey;
 
-        const ratio = totalCap > 0 ? demand / totalCap : Infinity;
-        if (ratio > highestRatio) {
-          highestRatio = ratio;
-          mostConstrainedStage = stage;
-        }
-      }
-    }
-
-    let selectedWeek = minWeekIdx;
-    let chosenReason = "";
-    let finalWeeksInWindow = 1;
-
-    if (mostConstrainedStage && item.totalStageHours > 0) {
-      const demand = item.stageHours[mostConstrainedStage.projectKey];
-      const capKey = (mostConstrainedStage.projectKey === 'frameAssembly' || mostConstrainedStage.projectKey === 'busbar')
-        ? `${mostConstrainedStage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
-        : mostConstrainedStage.projectKey as CapacityKeys;
-
-      const durationDays = Math.ceil(demand / 8);
-      let weeksInWindow = Math.max(1, Math.ceil(durationDays / 7));
-
-      let found = false;
-      for (let w = minWeekIdx; w < 26; w++) {
-        let currentWeeksInWindow = weeksInWindow;
+        const availableStaffRanked = rankedWorkersPerStage[st.projectKey];
         
-        // Bug 3: Max 30% of stage weekly capacity
-        const baseCap = capacityBuckets[w].baseCapacity[capKey];
-        const maxAllowed = baseCap * 0.3;
-        if (maxAllowed > 0 && (demand / currentWeeksInWindow) > maxAllowed) {
-          currentWeeksInWindow = Math.ceil(demand / maxAllowed);
+        if (availableStaffRanked.length === 0) {
+          missingStaffNotes.push(`No rated staff available for ${st.name} — schedule may need manual review.`);
+          stagesScheduled.push({ stage: st.name, hours: demand });
+          continue; // skip assignment, but move on
         }
 
-        let fits = true;
-        for (let i = 0; i < currentWeeksInWindow; i++) {
-          const targetWeek = w + i;
-          if (targetWeek >= 26) { fits = false; break; }
+        let assignedStaffId = -1;
+        let assignedStaffName = "";
+        let weekToStartAssignment = -1;
+        let finalWeeksInWindow = 1;
 
-          // Bug 2: Check ALL required stages, not just most constrained
-          for (const stage of STAGE_CONFIGS) {
-            const stDemand = item.stageHours[stage.projectKey];
-            if (stDemand > 0) {
-              const stCapKey = (stage.projectKey === 'frameAssembly' || stage.projectKey === 'busbar')
-                ? `${stage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
-                : stage.projectKey as CapacityKeys;
-              const targetStDemand = stDemand / currentWeeksInWindow;
-              if (capacityBuckets[targetWeek].capacity[stCapKey] < targetStDemand) {
-                fits = false;
+        // Find the earliest week where at least one worker has some availability
+        let found = false;
+        for (let w = currentEarliestWeekIdx; w < 26; w++) {
+          const wStartStr = weekStarts[w].toISOString().split('T')[0];
+          
+          for (const worker of availableStaffRanked) {
+            const availMap = workerAvailability.get(worker.staffId);
+            if (!availMap) continue;
+
+            let currentWeeksInWindow = 1;
+            let hourlyDemandLeft = demand;
+
+            // Does the worker have enough availability starting this week to cover the demand?
+            const availWeek = availMap.get(wStartStr) || 0;
+            if (availWeek > 0) {
+              // We've found a worker with SOME availability this week.
+              // We will just assign them, stretching over weeks if needed.
+              // How many weeks?
+              let tempW = w;
+              while (hourlyDemandLeft > 0 && tempW < 26) {
+                const twStartStr = weekStarts[tempW].toISOString().split('T')[0];
+                const tAvail = availMap.get(twStartStr) || 0;
+                if (tAvail > 0) {
+                  hourlyDemandLeft -= tAvail;
+                }
+                if (hourlyDemandLeft > 0) {
+                  tempW++;
+                  currentWeeksInWindow++;
+                }
+              }
+
+              if (hourlyDemandLeft <= 0 || tempW >= 26) {
+                // Either fully covered, or we hit horizon end. Assign them anyway.
+                found = true;
+                assignedStaffId = worker.staffId;
+                assignedStaffName = worker.name;
+                weekToStartAssignment = w;
+                finalWeeksInWindow = Math.min(currentWeeksInWindow, 26 - w);
                 break;
               }
             }
           }
-          if (!fits) break;
-        }
 
-        if (fits) {
-          selectedWeek = w;
-          finalWeeksInWindow = currentWeeksInWindow;
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) {
-        let maxCap = -1;
-        for (let w = minWeekIdx; w < 26; w++) {
-          if (capacityBuckets[w].capacity[capKey] > maxCap) {
-            maxCap = capacityBuckets[w].capacity[capKey];
-            selectedWeek = w;
+          if (found) {
+            break; // worker found for this week
           }
         }
-      }
 
-      if (selectedWeek > minWeekIdx) {
-        chosenReason = `Pushed to later week due to limited ${mostConstrainedStage.name} capacity`;
-      } else if (matReason) {
-        chosenReason = matReason;
-      } else {
-        chosenReason = `Earliest available week where all capacity requirements are met`;
-      }
-    } else {
-      chosenReason = matReason || "Scheduled immediately based on priority and empty stage hours";
-    }
-
-    const scheduledDate = capacityBuckets[selectedWeek].weekStart;
-    const suggestedStart = format(scheduledDate, "yyyy-MM-dd");
-
-    // Mark capacity as consumed using finalWeeksInWindow
-    for (const stage of STAGE_CONFIGS) {
-      const demand = item.stageHours[stage.projectKey];
-      if (demand > 0) {
-        const capKey = (stage.projectKey === 'frameAssembly' || stage.projectKey === 'busbar')
-          ? `${stage.projectKey}${item.isIfm ? 'Ifm' : 'Ifc'}` as CapacityKeys
-          : stage.projectKey as CapacityKeys;
-
-        for (let i = 0; i < finalWeeksInWindow; i++) {
-          const targetWeek = selectedWeek + i;
-          if (targetWeek < 26) {
-            capacityBuckets[targetWeek].capacity[capKey] = Math.max(
-              0,
-              capacityBuckets[targetWeek].capacity[capKey] - (demand / finalWeeksInWindow)
-            );
+        if (found && weekToStartAssignment !== -1) {
+          // Record the assignment and deduct availability
+          const availMap = workerAvailability.get(assignedStaffId)!;
+          let remainingDemandToAssign = demand;
+          
+          if (!projectStartStr) {
+            projectStartStr = weekStarts[weekToStartAssignment].toISOString().split('T')[0];
           }
+
+          for (let i = 0; i < finalWeeksInWindow; i++) {
+            if (remainingDemandToAssign <= 0) break;
+            
+            const wIdx = weekToStartAssignment + i;
+            if (wIdx >= 26) break;
+            
+            const wsStr = weekStarts[wIdx].toISOString().split('T')[0];
+            const wAvail = availMap.get(wsStr) || 0;
+            
+            const chunk = Math.min(wAvail, remainingDemandToAssign);
+            if (chunk > 0) {
+              assignedWorkers.push({
+                stage: dbStageKey,
+                staffId: assignedStaffId,
+                staffName: assignedStaffName,
+                hours: chunk,
+                week: wsStr
+              });
+              
+              availMap.set(wsStr, wAvail - chunk);
+              remainingDemandToAssign -= chunk;
+            }
+          }
+          
+          // Next stage can start the week after this stage finishes
+          currentEarliestWeekIdx = weekToStartAssignment + finalWeeksInWindow;
+          stagesScheduled.push({ stage: st.name, hours: demand });
+          
+          if (!schedulingReason && !matReason) {
+            schedulingReason = `Assigned ${assignedStaffName} to ${st.name} starting ${format(weekStarts[weekToStartAssignment], "d MMM")}`;
+          }
+        } else {
+          // Couldn't find any worker with any availability in the horizon
+          missingStaffNotes.push(`No available staff capacity in 26-week horizon for ${st.name}.`);
+          stagesScheduled.push({ stage: st.name, hours: demand });
         }
       }
-    }
 
-    const stagesScheduled = STAGE_CONFIGS
-      .filter(st => item.stageHours[st.projectKey] > 0)
-      .map(st => ({
-        stage: st.name,
-        hours: item.stageHours[st.projectKey]
-      }));
+      if (missingStaffNotes.length > 0) {
+        if (!schedulingReason) schedulingReason = missingStaffNotes.join(" ");
+        else schedulingReason += " | " + missingStaffNotes.join(" ");
+      } else if (!schedulingReason) {
+         schedulingReason = matReason || "Scheduled successfully";
+      }
+
+      if (!projectStartStr) {
+        projectStartStr = weekStarts[minWeekIdx].toISOString().split('T')[0];
+      }
+    }
 
     results.push({
       projectId: p.id,
       projectNumber: p.projectNumber,
       projectName: p.name,
-      suggestedStart,
-      reason: chosenReason,
-      stagesScheduled
+      suggestedStart: projectStartStr,
+      reason: schedulingReason,
+      stagesScheduled,
+      workerAssignments: assignedWorkers
     });
   }
 
@@ -525,7 +513,8 @@ export async function getSchedulingSummary(schedule: AutoScheduleResult[]): Prom
       totalScheduled: 0,
       overdueCount: 0,
       averageDaysToStart: 0,
-      highestLoadWeek: ""
+      highestLoadWeek: "",
+      totalAssignmentsCreated: 0
     };
   }
 
@@ -538,6 +527,7 @@ export async function getSchedulingSummary(schedule: AutoScheduleResult[]): Prom
 
   let overdueCount = 0;
   let totalDaysToStart = 0;
+  let totalAssignmentsCreated = 0;
 
   const weekLoads: Record<string, number> = {};
 
@@ -553,6 +543,10 @@ export async function getSchedulingSummary(schedule: AutoScheduleResult[]): Prom
     const start = parseISO(item.suggestedStart);
     const daysToStart = differenceInDays(start, today);
     totalDaysToStart += daysToStart;
+
+    if (item.workerAssignments) {
+      totalAssignmentsCreated += item.workerAssignments.length;
+    }
 
     // Distribute loads
     for (const stage of item.stagesScheduled) {
@@ -582,6 +576,7 @@ export async function getSchedulingSummary(schedule: AutoScheduleResult[]): Prom
     totalScheduled,
     overdueCount,
     averageDaysToStart,
-    highestLoadWeek
+    highestLoadWeek,
+    totalAssignmentsCreated
   };
 }

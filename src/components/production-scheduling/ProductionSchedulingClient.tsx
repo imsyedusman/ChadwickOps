@@ -233,7 +233,7 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       try {
         const res = await undoAutoSchedule();
         if (res.success) {
-          toast.success(`${res.data.cleared} auto-scheduled projects have been cleared.`, { id: toastId });
+          toast.success(`${res.data.cleared} auto-scheduled projects and ${res.data.workerAssignmentsCleared} worker assignments have been cleared.`, { id: toastId });
           router.refresh();
         } else {
           toast.error(res.error || "Failed to undo auto-schedule", { id: toastId });

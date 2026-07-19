@@ -1025,7 +1025,7 @@ export async function previewAutoSchedule(projectIds?: number[]): Promise<{ succ
   }
 }
 
-export async function applyAutoSchedule(projectIds?: number[]): Promise<{ success: true; data: { applied: number; skipped: number } } | { success: false; error: string }> {
+export async function applyAutoSchedule(projectIds?: number[]): Promise<{ success: true; data: { applied: number; skipped: number; workerAssignmentsCreated: number } } | { success: false; error: string }> {
   const session = await validateSession();
   if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
     return { success: false, error: "Unauthorized" };
@@ -1079,6 +1079,9 @@ export async function applyAutoSchedule(projectIds?: number[]): Promise<{ succes
 
     let applied = 0;
     let skipped = 0;
+    let workerAssignmentsCreated = 0;
+
+    const allAbsences = await db.query.staffAbsences.findMany();
 
     for (const projectId of targetProjectIds) {
       const existing = scheduleMap.get(projectId);
@@ -1108,17 +1111,111 @@ export async function applyAutoSchedule(projectIds?: number[]): Promise<{ succes
             });
         }
         applied++;
+
+        if (suggested.workerAssignments && suggested.workerAssignments.length > 0) {
+          const aggregatedAssignments = new Map<string, { stage: string, staffId: number, hours: number, minStart: Date, maxEnd: Date }>();
+          
+          for (const a of suggested.workerAssignments) {
+            const startDate = parseISO(a.week);
+            const durationDays = Math.ceil(a.hours / 8);
+            const endDate = addDays(startDate, durationDays);
+            
+            const key = `${a.stage}-${a.staffId}`;
+            if (aggregatedAssignments.has(key)) {
+              const existing = aggregatedAssignments.get(key)!;
+              existing.hours += a.hours;
+              if (startDate < existing.minStart) existing.minStart = startDate;
+              if (endDate > existing.maxEnd) existing.maxEnd = endDate;
+            } else {
+              aggregatedAssignments.set(key, { 
+                stage: a.stage, 
+                staffId: a.staffId, 
+                hours: a.hours,
+                minStart: startDate,
+                maxEnd: endDate
+              });
+            }
+          }
+
+          const stageHoursRes = await getProjectStageHours(projectId);
+          
+          for (const a of aggregatedAssignments.values()) {
+            const projStartStr = format(a.minStart, 'yyyy-MM-dd');
+            const projEndStr = format(a.maxEnd, 'yyyy-MM-dd');
+
+            // Check absence
+            const overlappingAbsence = allAbsences.find(ab => 
+              ab.staffId === a.staffId && 
+              ab.startDate <= projEndStr && 
+              ab.endDate >= projStartStr
+            );
+
+            if (overlappingAbsence) {
+              console.warn(`[applyAutoSchedule] Skipping assignment for staff ${a.staffId} on project ${projectId} stage ${a.stage} due to absence conflict.`);
+              continue;
+            }
+
+            if (!stageHoursRes.success || !stageHoursRes.data) {
+              console.warn(`[applyAutoSchedule] Skipping assignment for project ${projectId} - could not fetch stage hours.`);
+              continue;
+            }
+
+            const existingStageAssignments = await db.query.workerAssignments.findMany({
+              where: and(
+                eq(workerAssignments.projectId, projectId),
+                eq(workerAssignments.stage, a.stage),
+                eq(workerAssignments.status, 'active')
+              )
+            });
+            const assignedSoFar = existingStageAssignments.reduce((sum, wa) => sum + parseFloat(wa.assignedHours as string), 0);
+            
+            let generalStageKey = a.stage.replace('_ifc', '').replace('_ifm', '');
+            const totalStageHours = stageHoursRes.data[generalStageKey as keyof typeof stageHoursRes.data]?.value || 0;
+
+            // Using 0.01 tolerance for floating point additions
+            if (assignedSoFar + a.hours > totalStageHours + 0.01) {
+              console.warn(`[applyAutoSchedule] Skipping assignment for project ${projectId} stage ${a.stage} - hours exceed total (${assignedSoFar} + ${a.hours} > ${totalStageHours}).`);
+              continue;
+            }
+            
+            // Upsert the assignment to prevent duplicate key errors if there's already an existing record we want to aggregate onto
+            const existingWorkerAssignment = existingStageAssignments.find(wa => wa.staffId === a.staffId);
+            
+            if (existingWorkerAssignment) {
+               const newHours = parseFloat(existingWorkerAssignment.assignedHours as string) + a.hours;
+               await db.update(workerAssignments).set({
+                 assignedHours: newHours.toString(),
+                 projectedStart: projStartStr,
+                 projectedEnd: projEndStr
+               }).where(eq(workerAssignments.id, existingWorkerAssignment.id));
+               // Not strictly a new record created, but we can treat it as one for the counter
+               workerAssignmentsCreated++;
+            } else {
+               await db.insert(workerAssignments).values({
+                 projectId,
+                 stage: a.stage,
+                 staffId: a.staffId,
+                 assignedHours: a.hours.toString(),
+                 projectedStart: projStartStr,
+                 projectedEnd: projEndStr,
+                 createdBy: Number(session.user.id),
+                 createdByAuto: true,
+               });
+               workerAssignmentsCreated++;
+            }
+          }
+        }
       }
     }
 
-    return { success: true, data: { applied, skipped } };
+    return { success: true, data: { applied, skipped, workerAssignmentsCreated } };
   } catch (error: any) {
     console.error("[applyAutoSchedule] Error:", error);
     return { success: false, error: error.message || "Failed to apply auto-schedule." };
   }
 }
 
-export async function undoAutoSchedule(): Promise<{ success: true; data: { cleared: number } } | { success: false; error: string }> {
+export async function undoAutoSchedule(): Promise<{ success: true; data: { cleared: number, workerAssignmentsCleared: number } } | { success: false; error: string }> {
   const session = await validateSession();
   if (!session || (!hasRole(session, "scheduler") && !hasRole(session, "admin"))) {
     return { success: false, error: "Unauthorized" };
@@ -1128,9 +1225,13 @@ export async function undoAutoSchedule(): Promise<{ success: true; data: { clear
     const deleted = await db.delete(productionSchedule)
       .where(eq(productionSchedule.scheduledByAuto, true))
       .returning({ id: productionSchedule.id });
+      
+    const deletedAssignments = await db.delete(workerAssignments)
+      .where(eq(workerAssignments.createdByAuto, true))
+      .returning({ id: workerAssignments.id });
     
-    console.log(`User ${session.user.id} undid auto-schedule, clearing ${deleted.length} records.`);
-    return { success: true, data: { cleared: deleted.length } };
+    console.log(`User ${session.user.id} undid auto-schedule, clearing ${deleted.length} schedule records and ${deletedAssignments.length} assignments.`);
+    return { success: true, data: { cleared: deleted.length, workerAssignmentsCleared: deletedAssignments.length } };
   } catch (error: any) {
     console.error("[undoAutoSchedule] Error:", error);
     return { success: false, error: error.message || "Failed to undo auto-schedule." };
