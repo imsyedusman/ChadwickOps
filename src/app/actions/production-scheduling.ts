@@ -1066,7 +1066,7 @@ export async function applyAutoSchedule(projectIds?: number[]): Promise<{ succes
 
     const targetProjectIds = targetProjects.map(p => p.id);
     if (targetProjectIds.length === 0) {
-      return { success: true, data: { applied: 0, skipped: 0 } };
+      return { success: true, data: { applied: 0, skipped: 0, workerAssignmentsCreated: 0 } };
     }
 
     const allSchedules = await db.query.productionSchedule.findMany({
