@@ -134,15 +134,6 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       const blockReasons: string[] = [];
       const now = new Date().setHours(0,0,0,0);
 
-      // Rule 1
-      if (!p.drawingApprovalDate) {
-        isBlocked = true;
-        blockReasons.push("Awaiting drawing approval before work can begin");
-      } else if (new Date(p.drawingApprovalDate).getTime() > now) {
-        isBlocked = true;
-        blockReasons.push(`Drawing approval due ${format(new Date(p.drawingApprovalDate), "dd MMM yy")}`);
-      }
-
       // Rule 2
       if (!p.sheetmetalDeliveredDate) {
         isBlocked = true;
