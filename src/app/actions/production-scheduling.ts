@@ -475,6 +475,134 @@ export async function getProjectedLabourCost(projectId: number) {
   }
 }
 
+export async function getBulkLabourCosts(projectIds: number[]) {
+  const session = await checkAuth();
+  if (!hasRole(session, "finance") && !hasRole(session, "admin")) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  if (!projectIds || projectIds.length === 0) {
+    return { success: true, data: {} };
+  }
+
+  try {
+    const allProjects = await db.query.projects.findMany({
+      where: inArray(projects.id, projectIds),
+      columns: { id: true, projectType: true }
+    });
+    
+    const allTasks = await db.query.tasks.findMany({
+      where: inArray(tasks.projectId, projectIds)
+    });
+    
+    const allManualHours = await db.query.projectStageHours.findMany({
+      where: inArray(projectStageHours.projectId, projectIds)
+    });
+
+    const staff = await db.query.staffEfficiency.findMany({
+      where: and(eq(staffEfficiency.isActive, true), eq(staffEfficiency.isWorkshopStaff, true))
+    });
+
+    const userRatesRaw = await db.select({
+      user: timeEntries.user,
+      avgRate: sql<number>`avg(${timeEntries.cost} / ${timeEntries.hours})`
+    }).from(timeEntries).where(sql`${timeEntries.hours} > 0`).groupBy(timeEntries.user);
+
+    const ratesMap = new Map<string, number>();
+    userRatesRaw.forEach(r => {
+      ratesMap.set(r.user, Number(r.avgRate));
+    });
+
+    const actualRes = await db.select({
+      projectId: timeEntries.projectId,
+      totalCost: sql<number>`sum(${timeEntries.cost})`
+    }).from(timeEntries).where(inArray(timeEntries.projectId, projectIds)).groupBy(timeEntries.projectId);
+    
+    const actualCostMap = new Map<number, number>();
+    actualRes.forEach(r => {
+      if (r.projectId) actualCostMap.set(r.projectId, Number(r.totalCost));
+    });
+
+    const calcStageCost = (dbKey: keyof typeof staff[0], stageHours: number | null) => {
+      if (!stageHours || stageHours === 0) return null;
+      let totalRate = 0;
+      let totalEff = 0;
+      let count = 0;
+      for (const person of staff) {
+        const eff = person[dbKey];
+        if (eff !== null && eff !== undefined) {
+          const parsedEff = parseFloat(eff as string);
+          const rate = ratesMap.get(person.fullName);
+          if (rate !== undefined && !isNaN(parsedEff)) {
+            totalRate += rate;
+            totalEff += parsedEff;
+            count++;
+          }
+        }
+      }
+      if (count === 0) return null;
+      const avgRate = totalRate / count;
+      const avgEff = totalEff / count;
+      return stageHours * avgRate * avgEff;
+    };
+
+    const taskMapByProj = new Map<number, Map<string, number>>();
+    allTasks.forEach(t => {
+      let m = taskMapByProj.get(t.projectId);
+      if (!m) { m = new Map(); taskMapByProj.set(t.projectId, m); }
+      m.set(t.name, t.budgetHours);
+    });
+
+    const manualMap = new Map<number, typeof allManualHours[0]>();
+    allManualHours.forEach(m => manualMap.set(m.projectId, m));
+
+    const result: Record<number, { actualCost: number, projectedCost: number }> = {};
+
+    allProjects.forEach(p => {
+      const isIfm = p.projectType?.toUpperCase().includes("IFM") || false;
+      const tMap = taskMapByProj.get(p.id) || new Map();
+      const mHours = manualMap.get(p.id);
+
+      const helper = (taskName: string, manualVal: string | null | undefined): number | null => {
+        const wgHours = tMap.get(taskName) || 0;
+        if (wgHours > 0) return wgHours;
+        if (manualVal !== null && manualVal !== undefined) {
+          const val = parseFloat(manualVal);
+          if (!isNaN(val) && val > 0) return val;
+        }
+        return null;
+      };
+
+      const manualFrameAssembly = isIfm ? mHours?.frameAssemblyIfm : mHours?.frameAssemblyIfc;
+      const manualBusbar = isIfm ? mHours?.busbarIfm : mHours?.busbarIfc;
+
+      const costs = {
+        frameAssembly: calcStageCost("frameAssembly", helper("04 - Frame Assembling", manualFrameAssembly)),
+        switchgearMount: calcStageCost("switchgearMount", helper("05 - Switchgear & Component Mounting", mHours?.switchgearMount)),
+        busbar: calcStageCost("busbar", helper("06 - Busbar Assembling", manualBusbar)),
+        wiring: calcStageCost("wiring", helper("07 - Wiring", mHours?.wiring)),
+        labels: calcStageCost("labels", helper("08 - Fixing Labels", mHours?.labels)),
+        testing: calcStageCost("testing", helper("09 - Inspection & Testing", mHours?.testing)),
+        packagingFreight: calcStageCost("packagingFreight", helper("10 - Packaging and Freight", mHours?.packagingFreight)),
+      };
+
+      let totalProjectedCost = 0;
+      Object.values(costs).forEach(c => {
+        if (c !== null) totalProjectedCost += c;
+      });
+
+      const actualCost = actualCostMap.get(p.id) || 0;
+      
+      result[p.id] = { actualCost, projectedCost: totalProjectedCost };
+    });
+
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("[getBulkLabourCosts] Error:", error);
+    return { success: false, error: error.message || "Failed to calculate bulk labour costs." };
+  }
+}
+
 export async function getWorkerSuggestionsForProject(projectId: number, stageWindows?: Record<string, { start: string, end: string }>) {
   await checkAuth();
 

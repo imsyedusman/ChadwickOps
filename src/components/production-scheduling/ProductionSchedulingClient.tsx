@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2, Wand2, Undo2 } from "lucide-react";
-import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem, undoAutoSchedule } from "@/app/actions/production-scheduling";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2, Wand2, Undo2, Download, Loader2 } from "lucide-react";
+import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem, undoAutoSchedule, getBulkLabourCosts } from "@/app/actions/production-scheduling";
 import { AutoSchedulePanel } from "./AutoSchedulePanel";
 import { InsightsPanel } from "./InsightsPanel";
 import { StageCapacity, WeeklyCapacityBreakdown } from "@/lib/stage-capacity";
@@ -48,6 +48,7 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
   const [isCapacityDrawerOpen, setIsCapacityDrawerOpen] = useState(false);
   const [isViewPopoverOpen, setIsViewPopoverOpen] = useState(false);
   const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -377,6 +378,103 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
     });
   }, [filteredProjects, initialData.stageCapacity, weeklyBreakdown, selectedWeekIndex]);
 
+  const handleExportCSV = async () => {
+    if (isExportingCSV) return;
+
+    const headers = [
+      "Project Number",
+      "Project Name",
+      "Project Manager",
+      "Type (IFC/IFM)",
+      "Status",
+      "Client Due Date",
+      "Scheduled Start",
+      "Remaining Hours",
+      "Progress %",
+      "SM Delivered Date",
+      "SG Delivered Date",
+      "Blocked",
+      "Block Reason"
+    ];
+
+    if (isFinance) {
+      headers.push("Actual Labour Cost to Date");
+      headers.push("Projected Remaining Labour Cost");
+      setIsExportingCSV(true);
+    }
+
+    let financeData: Record<number, { actualCost: number, projectedCost: number }> = {};
+    if (isFinance) {
+      try {
+        const pIds = filteredProjects.map(p => p.id);
+        const res = await getBulkLabourCosts(pIds);
+        if (res.success && res.data) {
+          financeData = res.data;
+        }
+      } catch (err) {
+        console.error("Failed to fetch bulk labour costs", err);
+      }
+    }
+
+    const rows = filteredProjects.map(p => {
+      const typeLabel = p.projectType?.toUpperCase().includes("IFM") ? "IFM" : "IFC";
+      
+      let statusText = p.rawStatus || "";
+      if (statusText.match(/^\d+\.\d+\s*-\s*/)) {
+        statusText = statusText.replace(/^\d+\.\d+\s*-\s*/, "");
+      }
+      
+      const rowData = [
+        p.projectNumber,
+        p.name,
+        p.projectManager || "",
+        typeLabel,
+        statusText,
+        p.deliveryDate ? format(new Date(p.deliveryDate), "dd/MM/yyyy") : "",
+        p.scheduledStart ? format(new Date(p.scheduledStart), "dd/MM/yyyy") : "Unscheduled",
+        p.remainingHours.toFixed(1),
+        (Math.round(p.progressPercent * 10) / 10).toString(),
+        p.sheetmetalDeliveredDate ? format(new Date(p.sheetmetalDeliveredDate), "dd/MM/yyyy") : "",
+        p.switchgearDeliveredDate ? format(new Date(p.switchgearDeliveredDate), "dd/MM/yyyy") : "",
+        p.isBlocked ? "Yes" : "No",
+        p.blockReasons && p.blockReasons.length > 0 ? p.blockReasons.join(' | ') : ""
+      ];
+
+      if (isFinance) {
+        const fData = financeData[p.id];
+        const actualCost = fData && fData.actualCost !== undefined ? fData.actualCost : "Data not available";
+        const projectedCost = fData && fData.projectedCost !== undefined ? fData.projectedCost : "Data not available";
+        
+        rowData.push(String(actualCost));
+        rowData.push(String(projectedCost));
+      }
+      
+      return rowData.map(field => {
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      }).join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    const dateStr = format(new Date(), 'yyyy-MM-dd');
+    link.setAttribute('download', `production-schedule-${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (isFinance) {
+      setIsExportingCSV(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       {/* Header */}
@@ -597,6 +695,14 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tools</label>
             <div className="flex gap-2">
+              <button
+                onClick={handleExportCSV}
+                disabled={isExportingCSV}
+                className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800", isExportingCSV && "opacity-70 cursor-not-allowed")}
+              >
+                {isExportingCSV ? <Loader2 className="w-4 h-4 text-slate-400 animate-spin" /> : <Download className="w-4 h-4 text-slate-400" />}
+                {isExportingCSV ? "Exporting..." : "Export CSV"}
+              </button>
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl border h-[38px] transition-colors text-sm font-medium bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
