@@ -20,7 +20,7 @@ export type InsightItem = {
 
 async function checkAuth() {
   if (process.env.BYPASS_AUTH_FOR_TEST === "true") {
-    return { user: { id: "1", role: "admin", roles: ["admin"] } };
+    return { user: { id: "1", role: "admin", roles: ["admin"] }, expires: new Date().toISOString() } as any;
   }
   const session = await validateSession();
   if (!session) {
