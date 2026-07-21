@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import { StageHoursPanel } from "./StageHoursPanel";
+import { WorkerDetailPanel } from "./WorkerDetailPanel";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 interface Props {
@@ -54,6 +55,8 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
   const [selectedProject, setSelectedProject] = useState<ProjectSchedulingData | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isBottleneckPanelOpen, setIsBottleneckPanelOpen] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
+  const [isWorkerDetailOpen, setIsWorkerDetailOpen] = useState(false);
   const [weeklyBreakdown, setWeeklyBreakdown] = useState<WeeklyCapacityBreakdown[]>([]);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
 
@@ -982,6 +985,17 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
         }}
         canEdit={isAdmin}
         isFinance={isFinance}
+        onWorkerClick={(staffId) => {
+          setSelectedStaffId(staffId);
+          setIsWorkerDetailOpen(true);
+        }}
+      />
+    
+      <WorkerDetailPanel
+        staffId={selectedStaffId}
+        isOpen={isWorkerDetailOpen}
+        onClose={() => setIsWorkerDetailOpen(false)}
+        isFinance={isFinance}
       />
     
       {/* Capacity & Bottlenecks Drawer */}
@@ -1106,7 +1120,17 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                           const pct = total > 0 ? (w.committedHours / total) * 100 : 0;
                           return (
                             <tr key={w.staffId}>
-                              <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{w.name}</td>
+                              <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">
+                                <button
+                                  onClick={() => {
+                                    setSelectedStaffId(w.staffId);
+                                    setIsWorkerDetailOpen(true);
+                                  }}
+                                  className="hover:text-brand hover:underline text-left focus:outline-none"
+                                >
+                                  {w.name}
+                                </button>
+                              </td>
                               <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.committedHours.toFixed(1)}</td>
                               <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{w.freeHours.toFixed(1)}</td>
                               <td className="px-4 py-2">

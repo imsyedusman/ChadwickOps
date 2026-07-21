@@ -1366,5 +1366,71 @@ export async function undoAutoSchedule(): Promise<{ success: true; data: { clear
   }
 }
 
+export async function getWorkerDetail(staffId: number) {
+  await checkAuth();
 
+  try {
+    const staff = await db.query.staffEfficiency.findFirst({
+      where: eq(staffEfficiency.id, staffId)
+    });
 
+    if (!staff) {
+      return { success: false, error: "Staff member not found" };
+    }
+
+    const assignments = await db
+      .select({
+        id: workerAssignments.id,
+        stage: workerAssignments.stage,
+        assignedHours: workerAssignments.assignedHours,
+        projectedStart: workerAssignments.projectedStart,
+        projectedEnd: workerAssignments.projectedEnd,
+        projectId: projects.id,
+        projectNumber: projects.projectNumber,
+        projectName: projects.name,
+        workguruId: projects.workguruId
+      })
+      .from(workerAssignments)
+      .innerJoin(projects, eq(workerAssignments.projectId, projects.id))
+      .where(and(
+        eq(workerAssignments.staffId, staffId),
+        eq(workerAssignments.status, 'active')
+      ))
+      .orderBy(workerAssignments.projectedStart);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const absences = await db.query.staffAbsences.findMany({
+      where: and(
+        eq(staffAbsences.staffId, staffId),
+        gte(staffAbsences.endDate, todayStr)
+      ),
+      orderBy: (staffAbsences, { asc }) => [asc(staffAbsences.startDate)]
+    });
+
+    const breakdownRes = await getWeeklyCapacityBreakdown(8);
+    const capacityBreakdown = breakdownRes.map(week => {
+      const worker = week.workerUtilisation.find(w => w.staffId === staffId) || { committedHours: 0, freeHours: 0, isAbsent: false };
+      return {
+        weekStart: week.weekStart,
+        weekEnd: week.weekEnd,
+        committedHours: worker.committedHours,
+        freeHours: worker.freeHours,
+        isAbsent: worker.isAbsent
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        staff,
+        assignments,
+        absences,
+        capacityBreakdown
+      }
+    };
+
+  } catch (error: any) {
+    console.error("[getWorkerDetail] Error:", error);
+    return { success: false, error: error.message || "Failed to load worker details." };
+  }
+}

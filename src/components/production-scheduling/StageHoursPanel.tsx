@@ -17,9 +17,10 @@ interface StageHoursPanelProps {
   onClose: () => void;
   canEdit: boolean;
   isFinance?: boolean;
+  onWorkerClick?: (staffId: number) => void;
 }
 
-export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance = false }: StageHoursPanelProps) {
+export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance = false, onWorkerClick }: StageHoursPanelProps) {
   const [stages, setStages] = useState<Record<string, { value: number | null; source: "wg" | "manual" | "none" }> | null>(null);
   const [costData, setCostData] = useState<any>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -388,8 +389,16 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                   
                   return (
                     <div key={a.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/40 p-2 rounded border border-slate-100 dark:border-slate-800 text-[11px]">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-700 dark:text-slate-300">{a.staffName}</span>
+                      <div className="flex flex-col items-start">
+                        <button
+                          onClick={() => onWorkerClick?.(a.staffId)}
+                          className={cn(
+                            "font-medium text-slate-700 dark:text-slate-300",
+                            onWorkerClick && "hover:text-brand hover:underline"
+                          )}
+                        >
+                          {a.staffName}
+                        </button>
                         <span className="text-[10px] text-slate-500">{hrsPerWeek} hrs/week this project</span>
                       </div>
                       <div className="flex items-center gap-3">
