@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays } from "date-fns";
-import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2, Wand2, Undo2, Download, Loader2 } from "lucide-react";
+import { Search, CalendarDays, User, Clock, AlertCircle, Settings, ChevronDown, ChevronRight, ChevronLeft, Lightbulb, X, BarChart2, Wand2, Undo2, Download, Loader2, Info } from "lucide-react";
 import { ProjectSchedulingData, updateScheduledStart, fetchWeeklyCapacityBreakdown, InsightItem, undoAutoSchedule, getBulkLabourCosts } from "@/app/actions/production-scheduling";
 import { AutoSchedulePanel } from "./AutoSchedulePanel";
 import { InsightsPanel } from "./InsightsPanel";
@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
 import { StageHoursPanel } from "./StageHoursPanel";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface Props {
   initialData: {
@@ -604,7 +605,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                         onChange={(e) => setMaterialsDelivered(e.target.checked)}
                         className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand/20"
                       />
-                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">Materials delivered</span>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap flex items-center gap-1.5">
+                        Materials delivered
+                        <Tooltip content="Shows only projects where sheetmetal or switchgear has arrived. These projects are physically ready for floor work to begin.">
+                          <Info className="w-3 h-3 text-slate-400" />
+                        </Tooltip>
+                      </span>
                     </label>
                   </div>
 
@@ -620,6 +626,9 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                     >
                       <Clock className="w-4 h-4" />
                       Simulate Overtime
+                      <Tooltip content="Temporarily see how extra hours per week would affect all bar lengths. This is a preview only — nothing is saved.">
+                        <Info className="w-4 h-4 opacity-70" />
+                      </Tooltip>
                     </button>
 
                     {isSimulateOpen && (
@@ -765,7 +774,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               : "bg-brand/10 text-brand border-brand/20 hover:bg-brand/20 dark:bg-brand/20 dark:text-brand-300 dark:border-brand/30 dark:hover:bg-brand/30"
           )}
         >
-          Active: {summaryCounts.active}
+          <div className="flex items-center gap-1.5">
+            Active: {summaryCounts.active}
+            <Tooltip content="Projects currently on the floor or ready to proceed — includes Drawings Approved, Ordered, In Progress, Waiting to Start, Ready for Testing, and Tested Defective statuses.">
+              <Info className="w-3 h-3 opacity-70" />
+            </Tooltip>
+          </div>
         </button>
         <button 
           onClick={() => setActiveSummaryFilter(activeSummaryFilter === "testing" ? null : "testing")}
@@ -776,7 +790,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               : "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-900/50"
           )}
         >
-          Testing: {summaryCounts.testing}
+          <div className="flex items-center gap-1.5">
+            Testing: {summaryCounts.testing}
+            <Tooltip content="Projects currently in Ready for Testing or Tested Defective status.">
+              <Info className="w-3 h-3 opacity-70" />
+            </Tooltip>
+          </div>
         </button>
         <button 
           onClick={() => setActiveSummaryFilter(activeSummaryFilter === "onHold" ? null : "onHold")}
@@ -787,7 +806,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700"
           )}
         >
-          On Hold: {summaryCounts.onHold}
+          <div className="flex items-center gap-1.5">
+            On Hold: {summaryCounts.onHold}
+            <Tooltip content="Projects paused — On Hold, Tested Passed, or Ready for Invoicing status. These are shown dimmed on the Gantt and excluded from capacity calculations.">
+              <Info className="w-3 h-3 opacity-70" />
+            </Tooltip>
+          </div>
         </button>
         <button 
           onClick={() => setActiveSummaryFilter(activeSummaryFilter === "overdue" ? null : "overdue")}
@@ -798,7 +822,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/50"
           )}
         >
-          Overdue: {summaryCounts.overdue}
+          <div className="flex items-center gap-1.5">
+            Overdue: {summaryCounts.overdue}
+            <Tooltip content="The client due date has already passed for these projects, regardless of progress or scheduling status.">
+              <Info className="w-3 h-3 opacity-70" />
+            </Tooltip>
+          </div>
         </button>
         <button 
           onClick={() => setShowOnlyAtRisk(!showOnlyAtRisk)}
@@ -809,7 +838,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/50"
           )}
         >
-          At Risk: {summaryCounts.atRisk}
+          <div className="flex items-center gap-1.5">
+            At Risk: {summaryCounts.atRisk}
+            <Tooltip content="Based on the current scheduled start and remaining hours, these projects are projected to finish after their due date if nothing changes. Not yet overdue, but heading that way.">
+              <Info className="w-3 h-3 opacity-70" />
+            </Tooltip>
+          </div>
         </button>
       </div>
 
@@ -1000,10 +1034,31 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
                 <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-t-lg">
                   <tr>
                     <th className="px-4 py-3 font-bold rounded-tl-lg">Stage</th>
-                    <th className="px-4 py-3 font-bold text-right">Available hrs/week</th>
-                    <th className="px-4 py-3 font-bold text-right text-brand">Committed</th>
+                    <th className="px-4 py-3 font-bold text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        Available hrs/week
+                        <Tooltip content="Total hours available this week based on active staff efficiency ratings for this stage, minus any hours already committed to other projects.">
+                          <Info className="w-3 h-3 text-slate-400" />
+                        </Tooltip>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 font-bold text-right text-brand">
+                      <div className="flex items-center justify-end gap-1.5">
+                        Committed
+                        <Tooltip content="Hours already assigned to workers for this stage during this week.">
+                          <Info className="w-3 h-3 text-brand opacity-70" />
+                        </Tooltip>
+                      </div>
+                    </th>
                     <th className="px-4 py-3 font-bold text-right">Total demand</th>
-                    <th className="px-4 py-3 font-bold text-right">Utilisation %</th>
+                    <th className="px-4 py-3 font-bold text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        Utilisation %
+                        <Tooltip content="Total demand from all projects divided by available capacity. Over 100% means this stage is oversubscribed.">
+                          <Info className="w-3 h-3 text-slate-400" />
+                        </Tooltip>
+                      </div>
+                    </th>
                     <th className="px-4 py-3 font-bold text-center rounded-tr-lg">Status</th>
                   </tr>
                 </thead>
@@ -1029,7 +1084,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
 
               {/* Right Column - Worker Utilisation */}
               <div className="w-[40%] overflow-y-auto p-4 bg-slate-50/30 dark:bg-slate-900/50">
-                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Worker Utilisation</h3>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
+                  Worker Utilisation
+                  <Tooltip content="Shows each worker's committed hours (already assigned to projects) versus free hours available this week, based on their standard working hours minus any recorded absences.">
+                    <Info className="w-4 h-4 text-slate-400" />
+                  </Tooltip>
+                </h3>
                 {weeklyBreakdown.length > 0 ? (
                   <table className="w-full text-sm text-left">
                       <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-transparent border-b border-slate-100 dark:border-slate-800">

@@ -57,6 +57,7 @@ export function InsightsPanel({ insights, onFilterApply }: InsightsPanelProps) {
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
+              <p className="text-xs text-slate-500 dark:text-slate-400 pb-3">These are automatically generated based on due dates, material delivery, worker availability, and recorded absences.</p>
               {insights.map((insight) => {
                 let dotColor = "bg-blue-500";
                 if (insight.severity === "critical") dotColor = "bg-red-500";

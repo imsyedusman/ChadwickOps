@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wand2, Loader2, CheckCircle2, X, Search } from "lucide-react";
+import { Wand2, Loader2, CheckCircle2, X, Search, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { previewAutoSchedule, applyAutoSchedule, undoAutoSchedule } from "@/app/actions/production-scheduling";
@@ -11,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface AutoSchedulePanelProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
                 <div className="max-w-md space-y-2">
                   <h3 className="font-bold text-slate-900 dark:text-white text-lg">Generate Auto-Schedule Preview</h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    The system will suggest start dates for all unscheduled projects based on due dates, material delivery, and available floor capacity. Your manually scheduled projects will not be affected.
+                    This suggests start dates and worker assignments based on due date urgency, material delivery status, and current worker availability. Projects you've already scheduled manually are never changed. You can review and deselect any project before applying, and undo the entire batch afterward if needed.
                   </p>
                 </div>
                 <button
@@ -233,7 +234,14 @@ export function AutoSchedulePanel({ isOpen, onClose, projects }: AutoSchedulePan
                         <th className="p-3 text-xs font-bold uppercase tracking-wider text-slate-500">Project</th>
                         <th className="p-3 text-xs font-bold uppercase tracking-wider text-slate-500">Status</th>
                         <th className="p-3 text-xs font-bold uppercase tracking-wider text-slate-500">Suggested Start</th>
-                        <th className="p-3 text-xs font-bold uppercase tracking-wider text-slate-500">Reason</th>
+                        <th className="p-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            Reason
+                            <Tooltip content="Explains why this start date was chosen — usually based on when a suitable worker becomes available for the first stage.">
+                              <Info className="w-3 h-3 text-slate-400" />
+                            </Tooltip>
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

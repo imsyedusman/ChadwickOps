@@ -309,3 +309,44 @@
 .dark .gantt-container .grid-header {
   background: #0f172a;
 }
+
+/* Custom Dashboard Tooltips */
+.wg-tooltip-wrapper {
+  position: relative;
+  cursor: help;
+  display: inline-flex;
+}
+
+.wg-tooltip-wrapper .wg-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  background-color: #1e293b;
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  width: max-content;
+  max-width: 250px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  white-space: normal;
+  line-height: 1.4;
+  border: 1px solid #334155;
+  pointer-events: none;
+  z-index: 1000;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dark .wg-tooltip-wrapper .wg-tooltip {
+  background-color: #0f172a;
+  border-color: #1e293b;
+}
+
+.wg-tooltip-wrapper:hover .wg-tooltip {
+  display: block;
+}

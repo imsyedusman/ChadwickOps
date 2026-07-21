@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { getProjectStageHours, saveProjectStageHours, getProjectedLabourCost, getWorkerSuggestionsForProject, getWorkerAssignmentsForProject, assignWorkerToStage, deleteWorkerAssignment } from "@/app/actions/production-scheduling";
-import { ChevronDown, ChevronRight, X, X as XIcon, Loader2, AlertTriangle, Check, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronRight, X, X as XIcon, Loader2, AlertTriangle, Check, ChevronsUpDown, Info } from "lucide-react";
 import { format, differenceInWeeks, parseISO, addDays } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface StageHoursPanelProps {
   project: any;
@@ -230,10 +231,18 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
 
   const getSourceBadge = (source?: "wg" | "manual" | "none") => {
     if (source === "wg") {
-      return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 uppercase tracking-wider">WG</span>;
+      return (
+        <Tooltip content="WG: this value comes directly from WorkGuru task data.">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 uppercase tracking-wider">WG</span>
+        </Tooltip>
+      );
     }
     if (source === "manual") {
-      return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 uppercase tracking-wider">Manual</span>;
+      return (
+        <Tooltip content="Manual: this value was entered manually because WorkGuru has no data for this stage yet.">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 uppercase tracking-wider">Manual</span>
+        </Tooltip>
+      );
     }
     return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider">No data</span>;
   };
@@ -299,8 +308,23 @@ export function StageHoursPanel({ project, isOpen, onClose, canEdit, isFinance =
                         <tr className="text-slate-400 border-b border-slate-100 dark:border-slate-800/60">
                           <th className="pb-1 font-medium">Name</th>
                           <th className="pb-1 font-medium text-right">Efficiency</th>
-                          <th className="pb-1 font-medium pl-3">Tier</th>
-                          {isFinance && <th className="pb-1 font-medium text-right w-12"></th>}
+                          <th className="pb-1 font-medium pl-3">
+                            <div className="flex items-center gap-1.5">
+                              Tier
+                              <Tooltip content="Recommended, Good, and Available rank workers by cost-effectiveness — their hourly rate divided by their efficiency rating for this stage. Recommended workers offer the best value for this stage.">
+                                <Info className="w-3 h-3 text-slate-400" />
+                              </Tooltip>
+                            </div>
+                          </th>
+                          {isFinance && (
+                            <th className="pb-1 font-medium text-right w-12">
+                              <div className="flex items-center justify-end">
+                                <Tooltip content="Lower score means better value — calculated as hourly rate divided by efficiency rating for this stage.">
+                                  <Info className="w-3 h-3 text-slate-400" />
+                                </Tooltip>
+                              </div>
+                            </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">

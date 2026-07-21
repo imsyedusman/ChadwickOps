@@ -7,6 +7,8 @@ import "./gantt-overrides.css";
 import { ProjectSchedulingData, resetScheduledStart } from "@/app/actions/production-scheduling";
 import { format, addDays, startOfDay } from "date-fns";
 import { toast } from "sonner";
+import { StageHoursPanel } from "./StageHoursPanel";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useRouter } from "next/navigation";
 
 export interface GanttProject extends ProjectSchedulingData {
@@ -217,7 +219,8 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
 
             const tooltipDiv = document.createElement('div');
             tooltipDiv.className = 'lock-tooltip';
-            tooltipDiv.innerHTML = project.blockReasons?.join('<br/>') || '';
+            const reasons = project.blockReasons?.join('<br/>') || '';
+            tooltipDiv.innerHTML = `<div style="margin-bottom:4px;font-weight:bold;">${reasons}</div>This project cannot start Switchgear, Busbar, or Wiring until sheetmetal is delivered. Once delivered these stages can begin.`;
             
             tooltipGroup.appendChild(tooltipDiv);
             lockGroup.appendChild(lockSvg);
@@ -227,6 +230,41 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
         } else {
           const lockGroup = wrapper.querySelector('.lock-indicator');
           if (lockGroup) lockGroup.remove();
+        }
+
+        // Delivery Marker
+        const matDeliveredDate = project?.sheetmetalDeliveredDate || project?.switchgearDeliveredDate;
+        if (matDeliveredDate) {
+          let markerGroup = wrapper.querySelector('.delivery-marker-indicator');
+          if (!markerGroup) {
+            markerGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            markerGroup.setAttribute('class', 'delivery-marker-indicator ignore-mutate');
+            (markerGroup as SVGElement).style.cursor = 'help';
+            
+            const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            triangle.setAttribute('points', '0,0 12,0 6,10');
+            triangle.setAttribute('fill', '#1e3a8a');
+            triangle.setAttribute('transform', 'translate(22, 0)');
+            
+            const tooltipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+            tooltipGroup.setAttribute('width', '250');
+            tooltipGroup.setAttribute('height', '100');
+            tooltipGroup.setAttribute('class', 'lock-tooltip-container');
+            tooltipGroup.setAttribute('x', '22');
+            tooltipGroup.setAttribute('y', '20');
+
+            const tooltipDiv = document.createElement('div');
+            tooltipDiv.className = 'lock-tooltip';
+            tooltipDiv.innerHTML = 'This is when materials (sheetmetal or switchgear) were delivered for this project.';
+            
+            tooltipGroup.appendChild(tooltipDiv);
+            markerGroup.appendChild(triangle);
+            markerGroup.appendChild(tooltipGroup);
+            wrapper.appendChild(markerGroup);
+          }
+        } else {
+          const markerGroup = wrapper.querySelector('.delivery-marker-indicator');
+          if (markerGroup) markerGroup.remove();
         }
       });
     };
@@ -552,12 +590,24 @@ export function GanttChart({ projects, viewMode, canDrag = false, onDateChange, 
                   </a>
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${p.projectType?.toUpperCase().includes("IFM") ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
-                    {p.projectType?.toUpperCase().includes("IFM") ? "IFM" : "IFC"}
-                  </span>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${getBadgeColor(p.rawStatus)} truncate`}>
-                    {formatStatusLabel(p.rawStatus)}
-                  </span>
+                  <Tooltip content={
+                    p.projectType?.toUpperCase().includes("IFM") 
+                      ? "IFM: In Factory Modular — built using standard modular components." 
+                      : "IFC: In Factory Custom — built to a unique custom specification."
+                  }>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${p.projectType?.toUpperCase().includes("IFM") ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
+                      {p.projectType?.toUpperCase().includes("IFM") ? "IFM" : "IFC"}
+                    </span>
+                  </Tooltip>
+                  <Tooltip content={
+                    p.rawStatus?.includes("Drawings Approved") ? "Drawings Approved: drawings have been approved and manufacturing can proceed once materials arrive." :
+                    p.rawStatus?.includes("In Progress") ? "In Progress: this project is actively being worked on the floor." :
+                    p.rawStatus
+                  }>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${getBadgeColor(p.rawStatus)} truncate`}>
+                      {formatStatusLabel(p.rawStatus)}
+                    </span>
+                  </Tooltip>
                 </div>
                 <span className="text-[9px] font-medium text-slate-400 mt-1 truncate">
                   {p.scheduledStart ? `Starts: ${format(new Date(p.scheduledStart), "dd MMM yy")}` : "Unscheduled"}
