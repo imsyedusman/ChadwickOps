@@ -84,14 +84,15 @@ export function WorkerDetailPanel({ staffId, isOpen, onClose, isFinance = false 
               )}
             </div>
             {staff && (
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Rate</span>
-                <span className="text-sm font-mono font-medium text-slate-900 dark:text-slate-100">
-                  <BlurredValue 
-                    value={`$${parseFloat(staff.hourlyRate).toFixed(2)}/hr`} 
-                    isAuthorized={isFinance} 
-                  />
-                </span>
+              <div className="flex items-center mt-2">
+                <BlurredValue 
+                  label="Rate" 
+                  canUnblur={isFinance}
+                >
+                  <span className="font-mono text-slate-900 dark:text-slate-100">
+                    {`$${parseFloat(staff.hourlyRate).toFixed(2)}/hr`}
+                  </span>
+                </BlurredValue>
               </div>
             )}
           </div>
