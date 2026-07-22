@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   Zap,
   Clock,
-  PieChart
+  PieChart,
+  CalendarDays
 } from "lucide-react";
 import { ACTIVE_STATUSES, EXCLUDED_WIP_STATUSES } from "@/lib/project-utils";
 
@@ -250,7 +251,84 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* 6. Archives Section */}
+        {/* 6. Production Scheduling Section */}
+        <section id="production-scheduling" className="space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div className="p-2 bg-purple-500 rounded-lg text-white">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Production Scheduling</h2>
+          </div>
+
+          <p className="text-slate-600 dark:text-slate-400 font-medium">
+            The Production Scheduling page shows all active projects on a visual timeline (Gantt chart). It helps plan when floor work begins, tracks material delivery dependencies, and manages workshop staff assignments.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Understanding the Gantt bars</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Bar position shows when work starts, bar length shows estimated duration based on remaining hours. Colours indicate status (blue = active/in progress, amber = approved/ordered awaiting start, purple = testing, dashed grey = on hold or similar paused status). A dashed border means it is unscheduled (no start date has been set yet).
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Scheduling a project</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Dragging a bar sets its scheduled start date and saves automatically. Resizing a bar only previews duration and is never saved. Clicking a bar opens the Stage Hours panel for entering hours and assigning workers. The small X that appears on hover clears a project&apos;s schedule back to unscheduled.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Dependency padlocks</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                A padlock icon appears on a bar when sheetmetal has not yet been delivered — Switchgear Mount, Busbar, and Wiring cannot begin until it arrives. Hover the padlock to see the specific reason.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Delivery date markers</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                The dark marker on a bar shows when materials (sheetmetal or switchgear) were delivered for that project.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Stage Hours panel</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Clicking any project bar opens a panel to enter hours per manufacturing stage. Hours are either pulled automatically from WorkGuru (shown with a &quot;WG&quot; badge) or entered manually (shown with a &quot;Manual&quot; badge) when WorkGuru has no data yet. This panel is also where workers get assigned to each stage.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Assigning workers</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                For each stage, click &quot;Assign Worker&quot; to see a ranked list of suitable staff. Workers are ranked Recommended, Good, or Available based on cost-effectiveness (their rate divided by their skill rating for that stage). Workers on recorded leave are shown greyed out and cannot be assigned during their absence period.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Capacity and Bottlenecks</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                This panel (opened via the Capacity button) shows how much work each stage can handle per week based on rated staff, how many hours are already committed, and whether a stage is on track, busy, or overloaded for the selected week. The Worker Utilisation table alongside it shows each worker&apos;s committed and free hours for that week.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Insights and Alerts</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                This panel automatically surfaces things needing attention — overdue unscheduled projects, projects at risk of missing their due date, scheduling conflicts with staff leave, and stages with no rated staff.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm md:col-span-2">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Auto-Schedule</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Auto-Schedule automatically suggests start dates and worker assignments for all unscheduled projects. It prioritises overdue projects and those with materials already delivered, then finds the earliest week where a suitable worker is actually available — not just theoretically possible. Projects you have already scheduled manually are never touched. Before applying, you can review every suggestion and deselect any project you don&apos;t want auto-scheduled. If the result isn&apos;t right, use Undo Auto-Schedule to revert every automatically created schedule and worker assignment in one click — your manual scheduling is never affected by undo.
+              </p>
+            </div>
+            <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm md:col-span-2">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-2">Staff Absences</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Found in Settings, this records when workshop staff are on leave. The system automatically prevents new assignments during recorded absences and flags any existing assignment that conflicts with newly recorded leave.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 7. Archives Section */}
         <section id="archives" className="space-y-6">
           <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div className="p-2 bg-slate-700 rounded-lg text-white">
