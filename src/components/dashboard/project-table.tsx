@@ -930,10 +930,28 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     // Clear existing before applying
     handleClearFilters();
     
+    let mappedPm = result.pm;
+    if (mappedPm) {
+      const lower = mappedPm.toLowerCase();
+      mappedPm = filterOptions.pms.find(p => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase())) || mappedPm;
+    }
+    
+    let mappedStatus = result.status;
+    if (mappedStatus) {
+      const lower = mappedStatus.toLowerCase();
+      mappedStatus = filterOptions.statuses.find(s => s.toLowerCase().includes(lower)) || mappedStatus;
+    }
+    
+    let mappedProjectType = result.projectType;
+    if (mappedProjectType) {
+      const lower = mappedProjectType.toLowerCase();
+      mappedProjectType = filterOptions.projectTypes.find(t => t.toLowerCase().includes(lower)) || mappedProjectType;
+    }
+
     if (result.searchText) setSearch(result.searchText);
-    if (result.pm) setPmFilter([result.pm]);
-    if (result.status) setStatusFilter([result.status]);
-    if (result.projectType) setProjectTypeFilter([result.projectType]);
+    if (mappedPm) setPmFilter([mappedPm]);
+    if (mappedStatus) setStatusFilter([mappedStatus]);
+    if (mappedProjectType) setProjectTypeFilter([mappedProjectType]);
     if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom);
     if (result.dueDateTo) setDueFilterEnd(result.dueDateTo);
     if (result.startDateFrom) setStartFilterStart(result.startDateFrom);
@@ -1002,10 +1020,28 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     
     isAiFilterApplyRef.current = true;
     
+    let mappedPm = result.pm;
+    if (mappedPm) {
+      const lower = mappedPm.toLowerCase();
+      mappedPm = filterOptions.pms.find(p => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase())) || mappedPm;
+    }
+    
+    let mappedStatus = result.status;
+    if (mappedStatus) {
+      const lower = mappedStatus.toLowerCase();
+      mappedStatus = filterOptions.statuses.find(s => s.toLowerCase().includes(lower)) || mappedStatus;
+    }
+    
+    let mappedProjectType = result.projectType;
+    if (mappedProjectType) {
+      const lower = mappedProjectType.toLowerCase();
+      mappedProjectType = filterOptions.projectTypes.find(t => t.toLowerCase().includes(lower)) || mappedProjectType;
+    }
+    
     if (result.searchText) setSearch(result.searchText); else setSearch("");
-    if (result.pm) setPmFilter([result.pm]); else setPmFilter([]);
-    if (result.status) setStatusFilter([result.status]); else setStatusFilter([]);
-    if (result.projectType) setProjectTypeFilter([result.projectType]); else setProjectTypeFilter([]);
+    if (mappedPm) setPmFilter([mappedPm]); else setPmFilter([]);
+    if (mappedStatus) setStatusFilter([mappedStatus]); else setStatusFilter([]);
+    if (mappedProjectType) setProjectTypeFilter([mappedProjectType]); else setProjectTypeFilter([]);
     if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom); else setDueFilterStart("");
     if (result.dueDateTo) setDueFilterEnd(result.dueDateTo); else setDueFilterEnd("");
     if (result.startDateFrom) setStartFilterStart(result.startDateFrom); else setStartFilterStart("");
