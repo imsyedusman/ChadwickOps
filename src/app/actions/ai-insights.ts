@@ -13,7 +13,12 @@ export async function generatePageAISummary(page: "wip" | "capacity" | "procurem
 
   try {
     const contextString = Object.entries(context)
-      .map(([key, value]) => `- ${key}: ${value}`)
+      .map(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          return `- ${key}:\n${JSON.stringify(value, null, 2)}`;
+        }
+        return `- ${key}: ${value}`;
+      })
       .join("\n");
 
     const pageNames = {
@@ -22,12 +27,18 @@ export async function generatePageAISummary(page: "wip" | "capacity" | "procurem
       procurement: "Procurement Hub"
     };
 
-    const prompt = `You are an operations assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data from the ${pageNames[page]}, write exactly 2-3 sentences in plain English summarising the current situation and highlighting any key takeaways. Be direct and specific. No bullet points. No headers.
+    let promptInstructions = `write exactly 2-3 sentences in plain English summarising the current situation and highlighting any key takeaways. Be direct and specific. No bullet points. No headers.`;
+
+    if (page === "capacity") {
+      promptInstructions = `interpret the data and tell the operations team what they should actually pay attention to right now. Is the workload front-loaded or spread evenly? When does capacity get tight? Is there enough buffer? Write exactly 2-3 sentences in plain English containing genuine insight, not just a restatement of the numbers provided. Be direct and specific. No bullet points. No headers.`;
+    }
+
+    const prompt = `You are an operations assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data from the ${pageNames[page]}, ${promptInstructions}
 
 Current data:
 ${contextString}
 
-Summary:`;
+Response:`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);

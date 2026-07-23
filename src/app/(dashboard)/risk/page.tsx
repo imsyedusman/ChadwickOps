@@ -9,8 +9,41 @@ import { generatePageAISummary } from "@/app/actions/ai-insights";
 import { AISummaryCard } from "@/components/ui/AISummaryCard";
 import { Suspense } from "react";
 import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
+import { format, addMonths, startOfMonth, parseISO } from "date-fns";
+import { isProductiveProject } from "@/lib/project-utils";
 
-async function CapacityAISummaryWrapper({ activeCount }: { activeCount: number }) {
+async function CapacityAISummaryWrapper({ activeProjects, settings }: { activeProjects: any[], settings: any }) {
+  const currentCapacity = settings.staff * settings.hoursPerWeek * settings.weeksPerMonth * settings.efficiency;
+
+  const months: string[] = [];
+  const now = startOfMonth(new Date());
+  for (let i = 0; i < 6; i++) {
+      months.push(format(addMonths(now, i), 'yyyy-MM'));
+  }
+  
+  const monthlyData: Record<string, { remaining: number }> = {};
+  months.forEach(m => monthlyData[m] = { remaining: 0 });
+
+  activeProjects.forEach(p => {
+      if (!p.deliveryDate) return;
+      const m = format(new Date(p.deliveryDate), 'yyyy-MM');
+      if (monthlyData[m] && isProductiveProject(p.projectNumber)) {
+          const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
+          monthlyData[m].remaining += (p.budgetHours - adjustedActual);
+      }
+  });
+
+  const monthlyBreakdown = months.map(m => {
+     const demand = monthlyData[m].remaining;
+     const utilisation = currentCapacity > 0 ? Math.round((demand / currentCapacity) * 100) : 0;
+     return {
+        month: format(parseISO(`${m}-01`), 'MMM yyyy'),
+        demandHours: Math.round(demand),
+        availableHours: Math.round(currentCapacity),
+        utilisationPercentage: utilisation
+     }
+  });
+
   const baseCapacity = await getStageCapacityPerWeek();
   const breakdown = await getWeeklyCapacityBreakdown(1);
   const currentWeek = breakdown.length > 0 ? breakdown[0] : null;
@@ -21,39 +54,22 @@ async function CapacityAISummaryWrapper({ activeCount }: { activeCount: number }
   ];
 
   const over100: string[] = [];
-  const between80And100: string[] = [];
-  let totalCommitted = 0;
-  let totalBase = 0;
-
+  
   if (currentWeek && baseCapacity) {
     for (const stage of stages) {
       const base = baseCapacity[stage];
-      // Current week availableCapacity is actually the free hours, committedHours is what's assigned.
       const committed = currentWeek.committedHours[stage] as number;
-      
-      if (typeof base === 'number' && typeof committed === 'number') {
-        totalBase += base;
-        totalCommitted += committed;
-
-        if (base > 0) {
-          const util = (committed / base) * 100;
-          if (util > 100) {
-            over100.push(stage);
-          } else if (util >= 80) {
-            between80And100.push(stage);
-          }
+      if (typeof base === 'number' && typeof committed === 'number' && base > 0) {
+        if ((committed / base) > 1) {
+          over100.push(stage);
         }
       }
     }
   }
 
-  const avgUtil = totalBase > 0 ? Math.round((totalCommitted / totalBase) * 100) : 0;
-
   const context = {
-    activeProjectCount: activeCount,
-    stagesOver100PercentUtilisation: over100.length > 0 ? over100.join(', ') : 'None',
-    stagesBetween80And100PercentUtilisation: between80And100.length > 0 ? between80And100.join(', ') : 'None',
-    overallAverageUtilisation: `${avgUtil}%`
+    monthlyBreakdown,
+    currentBottleneckStages: over100.length > 0 ? over100.join(', ') : 'None'
   };
 
   const result = await generatePageAISummary("capacity", context);
@@ -89,7 +105,7 @@ export default async function CapacityPage({
         <div className="flex flex-col items-end gap-3 w-full md:w-[45%]">
           <div className="w-full">
             <Suspense fallback={<AISummaryCard summary={null} loading={true} compact={true} />}>
-              <CapacityAISummaryWrapper activeCount={activeProjects.length} />
+              <CapacityAISummaryWrapper activeProjects={activeProjects} settings={settings} />
             </Suspense>
           </div>
         </div>
