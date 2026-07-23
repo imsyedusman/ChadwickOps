@@ -51,7 +51,7 @@ export function AISummaryCard({ summary, loading, compact = false }: AISummaryCa
             "font-bold text-blue-700/80 dark:text-blue-300/80 uppercase tracking-widest",
             compact ? "text-[10px]" : "text-xs"
           )}>
-            AI Summary
+            CHADWICK AI SUMMARY
           </span>
         </div>
         {isOpen ? (

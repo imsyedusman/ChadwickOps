@@ -86,7 +86,7 @@ export function InsightsPanel({ insights, onFilterApply, schedulingContext, isFi
             <div className="bg-blue-50 dark:bg-blue-950 rounded-xl p-4 border border-blue-100 dark:border-blue-900 shadow-sm animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center gap-1.5 mb-2">
                 <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-xs font-bold text-blue-700/80 dark:text-blue-300/80 uppercase tracking-widest">AI Summary</span>
+                <span className="text-xs font-bold text-blue-700/80 dark:text-blue-300/80 uppercase tracking-widest">CHADWICK AI SUMMARY</span>
               </div>
               {aiLoading ? (
                 <div className="animate-pulse space-y-2">

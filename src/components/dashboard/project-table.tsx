@@ -1054,7 +1054,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               >
                 <Sparkles className="h-3.5 w-3.5 text-brand" />
                 <span className="text-[11px] font-bold whitespace-nowrap text-brand">
-                  AI Search
+                  Chadwick AI Search
                 </span>
               </button>
 
