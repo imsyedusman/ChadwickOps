@@ -19,6 +19,15 @@ import { cn } from "@/lib/utils";
 import { ProjectTable } from "@/components/dashboard/project-table";
 import { DashboardSummaries } from "@/components/dashboard/DashboardSummaries";
 import { isProductiveProject, isActiveWorkStatus } from "@/lib/project-utils";
+import { generatePageAISummary } from "@/app/actions/ai-insights";
+import { AISummaryCard } from "@/components/ui/AISummaryCard";
+import { Suspense } from "react";
+
+async function WipAISummaryWrapper({ context }: { context: Record<string, any> }) {
+  const result = await generatePageAISummary("wip", context);
+  const summary = result.success && result.data ? result.data.summary : null;
+  return <AISummaryCard summary={summary} loading={false} compact={true} />;
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -157,16 +166,50 @@ export default async function DashboardPage({
 
   const initialTableFilter = "";
 
+  const activeProjectsList = productiveProjects.filter(p => isActiveWorkStatus(p.rawStatus));
+  
+  const overdueOrPastDueCount = activeProjectsList.filter(p => {
+    const isOverdueStatus = p.rawStatus?.toLowerCase().includes("overdue");
+    const isPastDue = p.deliveryDate && new Date(p.deliveryDate) < todayStart;
+    return isOverdueStatus || isPastDue;
+  }).length;
+  
+  const overBudgetCount = activeProjectsList.filter(p => (p.remainingHours || 0) < 0).length;
+  const totalRemainingHours = activeProjectsList.reduce((sum, p) => sum + (p.remainingHours || 0), 0);
+  
+  const statusCounts = activeProjectsList.reduce((acc, p) => {
+    const status = p.rawStatus || "Unknown";
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const topStatuses = Object.entries(statusCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([status, count]) => `${status} (${count})`)
+    .join(", ");
+
+  const aiContext = {
+    activeProjectCount: activeProjectsList.length,
+    overdueOrPastDueCount,
+    overBudgetCount,
+    totalRemainingHours: Math.round(totalRemainingHours),
+    topStatuses
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="flex-1">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">WIP / Operations</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Monitoring {allProjects.length} active projects across the business.</p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-100/50 dark:bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-700/50">
-           <TrendingUp className="h-3 w-3 text-brand" />
-           Last Updated: {lastUpdatedText}
+        <div className="flex flex-col items-end gap-3 w-full md:w-[45%]">
+          <div className="w-full">
+            <Suspense fallback={<AISummaryCard summary={null} loading={true} compact={true} />}>
+              <WipAISummaryWrapper context={aiContext} />
+            </Suspense>
+          </div>
         </div>
       </div>
 

@@ -4,6 +4,33 @@ import { ProcurementHubClient } from "@/components/procurement/ProcurementHubCli
 import { ProcurementSyncStatus } from "@/components/dashboard/ProcurementSyncStatus";
 import { ProcurementIntegrityBanner } from "@/components/procurement/ProcurementIntegrityBanner";
 import { HelpCircle } from "lucide-react";
+import { generatePageAISummary } from "@/app/actions/ai-insights";
+import { AISummaryCard } from "@/components/ui/AISummaryCard";
+import { Suspense } from "react";
+import { db } from "@/db";
+import { purchaseOrders } from "@/db/schema";
+import { notInArray, count } from "drizzle-orm";
+
+async function ProcurementAISummaryWrapper({ backorderData, outstandingValue }: { backorderData: any[], outstandingValue: number }) {
+  const resultData = await db.select({
+    count: count()
+  }).from(purchaseOrders).where(notInArray(purchaseOrders.status, ['Fully Received', 'Cancelled']));
+  const totalOpenPOs = resultData[0]?.count || 0;
+
+  const backorderedPOCount = new Set(backorderData.map(b => b.poNumber)).size;
+  const overduePOCount = new Set(backorderData.filter(b => b.daysOutstanding > 0).map(b => b.poNumber)).size;
+
+  const context = {
+    totalOpenPOCount: totalOpenPOs,
+    backorderedPOCount,
+    overduePOCount,
+    totalOutstandingValue: outstandingValue
+  };
+
+  const result = await generatePageAISummary("procurement", context);
+  const summary = result.success && result.data ? result.data.summary : null;
+  return <AISummaryCard summary={summary} loading={false} compact={true} />;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +58,8 @@ export default async function ProcurementPage() {
   return (
     <div className="flex flex-col gap-8 p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-3xl font-bold tracking-tight">Procurement Hub</h1>
             <div className="group relative">
@@ -46,8 +73,18 @@ export default async function ProcurementPage() {
           <p className="text-slate-500 font-medium text-sm">Operational investigation and traceability command center.</p>
         </div>
         
-        <div className="flex-1 flex justify-end items-center gap-4">
-          <ProcurementSyncStatus initialProgress={syncProgressResult} />
+        <div className="flex flex-col items-end gap-3 w-full md:w-[45%]">
+          <div className="w-full">
+            <Suspense fallback={<AISummaryCard summary={null} loading={true} compact={true} />}>
+              <ProcurementAISummaryWrapper 
+                backorderData={backorderData} 
+                outstandingValue={summary.outstandingMaterialCost} 
+              />
+            </Suspense>
+          </div>
+          <div className="flex justify-end items-center gap-4">
+            <ProcurementSyncStatus initialProgress={syncProgressResult} />
+          </div>
         </div>
       </div>
       
