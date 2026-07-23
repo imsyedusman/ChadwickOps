@@ -56,7 +56,7 @@ export function AISummaryCard({ summary, loading, compact = false }: AISummaryCa
           ) : (
             <p className={cn(
               "text-blue-900 dark:text-blue-100 font-medium leading-relaxed",
-              compact ? "text-[13px]" : "text-sm"
+              compact ? "text-[14px]" : "text-sm"
             )}>
               {summary}
             </p>
