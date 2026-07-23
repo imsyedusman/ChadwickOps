@@ -1462,7 +1462,7 @@ Current scheduling data:
 Summary:`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     const response = await fetch(`${process.env.OLLAMA_URL}/api/generate`, {
       method: "POST",
