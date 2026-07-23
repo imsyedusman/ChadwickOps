@@ -13,10 +13,25 @@ interface AISummaryCardProps {
 
 export function AISummaryCard({ summary, loading, compact = false }: AISummaryCardProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [showMore, setShowMore] = useState(false);
 
   if (!loading && !summary) {
     return null;
   }
+
+  const lines = summary ? summary.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const leadLines: string[] = [];
+  const bulletLines: string[] = [];
+
+  lines.forEach(line => {
+    if (line.startsWith('-')) {
+      bulletLines.push(line.replace(/^-+\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1'));
+    } else {
+      leadLines.push(line.replace(/\*\*(.*?)\*\*/g, '$1'));
+    }
+  });
+
+  const leadText = leadLines.join(' ');
 
   return (
     <div className={cn(
@@ -54,12 +69,35 @@ export function AISummaryCard({ summary, loading, compact = false }: AISummaryCa
               <div className="h-3 bg-blue-200/50 dark:bg-blue-800/50 rounded w-4/5"></div>
             </div>
           ) : (
-            <p className={cn(
-              "text-blue-900 dark:text-blue-100 font-medium leading-relaxed",
-              compact ? "text-[14px]" : "text-sm"
-            )}>
-              {summary}
-            </p>
+            <div className="space-y-2">
+              <p className={cn(
+                "text-blue-900 dark:text-blue-100 font-medium leading-relaxed",
+                compact ? "text-[14px]" : "text-sm"
+              )}>
+                {leadText}
+              </p>
+              
+              {bulletLines.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {showMore && (
+                    <ul className={cn(
+                      "list-disc pl-5 space-y-1 text-blue-800/90 dark:text-blue-200/90",
+                      compact ? "text-[13px]" : "text-sm"
+                    )}>
+                      {bulletLines.map((bullet, i) => (
+                        <li key={i}>{bullet}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <button
+                    onClick={() => setShowMore(!showMore)}
+                    className="text-xs text-blue-500/70 hover:text-blue-600 dark:text-blue-400/70 dark:hover:text-blue-300 transition-colors font-medium block"
+                  >
+                    {showMore ? "Show less" : "Show more"}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

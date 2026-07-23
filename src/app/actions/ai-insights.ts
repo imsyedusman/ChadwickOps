@@ -1,7 +1,6 @@
 "use server";
 
 import { validateSession } from "@/lib/auth-helpers";
-import { format, startOfMonth, endOfMonth, addMonths, startOfWeek, endOfWeek } from "date-fns";
 
 export async function generatePageAISummary(page: "wip" | "capacity" | "procurement", context: Record<string, any>) {
   // We use checkAuth equivalent
@@ -28,10 +27,14 @@ export async function generatePageAISummary(page: "wip" | "capacity" | "procurem
       procurement: "Procurement Hub"
     };
 
-    let promptInstructions = `write exactly 2-3 sentences in plain English summarising the current situation and highlighting any key takeaways. Be direct and specific. No bullet points. No headers.`;
+    let promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that captures the most important thing about the current data state. Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not.
+Then: exactly 3 bullet points (using a hyphen - not asterisk *) covering key stats or things to act on. Each bullet one sentence max.
+No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Just 2 sentences then 3 hyphen bullets. Tell Ollama explicitly to follow this structure and nothing else.`;
 
     if (page === "capacity") {
-      promptInstructions = `interpret the data and tell the operations team what they should actually pay attention to right now. Is the workload front-loaded or spread evenly? When does capacity get tight? Is there enough buffer? Write exactly 2-3 sentences in plain English containing genuine insight, not just a restatement of the numbers provided. Be direct and specific. No bullet points. No headers.`;
+      promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that interprets the data and tells the operations team what they should actually pay attention to right now. Is the workload front-loaded or spread evenly? When does capacity get tight? Is there enough buffer? Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not.
+Then: exactly 3 bullet points (using a hyphen - not asterisk *) covering key stats or things to act on. Each bullet one sentence max.
+No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Just 2 sentences then 3 hyphen bullets. Tell Ollama explicitly to follow this structure and nothing else.`;
     }
 
     const prompt = `You are an operations assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data from the ${pageNames[page]}, ${promptInstructions}
@@ -93,28 +96,6 @@ export async function interpretNaturalLanguageFilter(
   }
 
   try {
-    const now = new Date(context.todayDate);
-    let resolvedDatesMsg = "";
-    const lowerQuery = query.toLowerCase();
-
-    if (lowerQuery.includes("this month")) {
-      const from = format(startOfMonth(now), 'yyyy-MM-dd');
-      const to = format(endOfMonth(now), 'yyyy-MM-dd');
-      resolvedDatesMsg = `\nThe user asked for "this month". You MUST use exactly dueDateFrom="${from}" and dueDateTo="${to}".`;
-    } else if (lowerQuery.includes("next month")) {
-      const nextMonth = addMonths(now, 1);
-      const from = format(startOfMonth(nextMonth), 'yyyy-MM-dd');
-      const to = format(endOfMonth(nextMonth), 'yyyy-MM-dd');
-      resolvedDatesMsg = `\nThe user asked for "next month". You MUST use exactly dueDateFrom="${from}" and dueDateTo="${to}".`;
-    } else if (lowerQuery.includes("this week")) {
-      const from = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const to = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      resolvedDatesMsg = `\nThe user asked for "this week". You MUST use exactly dueDateFrom="${from}" and dueDateTo="${to}".`;
-    } else if (lowerQuery.includes("today")) {
-      const todayStr = format(now, 'yyyy-MM-dd');
-      resolvedDatesMsg = `\nThe user asked for "today". You MUST use exactly dueDateFrom="${todayStr}" and dueDateTo="${todayStr}".`;
-    }
-
     const prompt = `Act as a filter interpreter for a project management dashboard.
 Available PM names: ${context.pmNames.join(', ')}
 Available status values: ${context.statusValues.join(', ')}
@@ -124,9 +105,8 @@ Today's date: ${context.todayDate}
 User query: "${query}"
 
 Return ONLY a valid JSON object with no other text, no markdown, no explanation — just raw JSON.
-Only include a field in your response if the user's query explicitly mentions it. When in doubt, omit the field.
 The JSON object should have these optional fields: searchText (string), pm (string matching one of the available PMs), status (string matching one of the available statuses), projectType ("IFC" or "IFM"), dueDateFrom (ISO date string), dueDateTo (ISO date string), startDateFrom (ISO date string), startDateTo (ISO date string), overdue (boolean).
-"overdue" means due date is before today.${resolvedDatesMsg}`;
+"overdue" means due date is before today, "this month" means due date within the current month, "this week" means due date within the current week.`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -158,13 +138,13 @@ The JSON object should have these optional fields: searchText (string), pm (stri
     const rawResponse = json.response.trim();
     const startIndex = rawResponse.indexOf('{');
     const endIndex = rawResponse.lastIndexOf('}');
-    
+
     if (startIndex === -1 || endIndex === -1) {
       return null;
     }
-    
+
     const cleanJsonString = rawResponse.substring(startIndex, endIndex + 1);
-    
+
     return JSON.parse(cleanJsonString);
   } catch (error) {
     console.error('[interpretNaturalLanguageFilter] Error:', error);

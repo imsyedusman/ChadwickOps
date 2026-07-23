@@ -49,19 +49,19 @@ import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
-import { 
-  getProjectScheduleStatus, 
-  isProjectBacklog, 
-  formatSydneyDate, 
+import {
+  getProjectScheduleStatus,
+  isProjectBacklog,
+  formatSydneyDate,
   getSydneyNow,
   isTerminalStatus
 } from "@/lib/project-logic";
-import { 
-  differenceInDays, 
-  isBefore, 
-  addDays, 
+import {
+  differenceInDays,
+  isBefore,
+  addDays,
   startOfDay,
-  isValid 
+  isValid
 } from "date-fns";
 import { useUserPreferences } from "@/components/providers/user-preferences-provider";
 import { useSearchParams } from "next/navigation";
@@ -164,13 +164,13 @@ const getColorClasses = (color: string) => {
 
 const getUrgencyIndicator = (project: Project, now: Date) => {
   if (isTerminalStatus(project.rawStatus)) return null;
-  
+
   // Exclude specific statuses from urgency logic
   const status = project.rawStatus?.replace(/^[\d.]+ - /, '').trim();
   if (status === 'Ready for Invoicing' || status === 'Invoiced') return null;
 
   if (!project.deliveryDate) return null;
-  
+
   const dueDate = new Date(project.deliveryDate);
   if (!isValid(dueDate)) return null;
 
@@ -240,17 +240,17 @@ function SyncRowButton({ workguruId, onSyncComplete }: { workguruId: string; onS
   );
 }
 
-function FilterPopover({ 
-  label, 
-  icon: Icon, 
-  options, 
-  selected, 
-  onChange 
-}: { 
-  label: string; 
-  icon: any; 
-  options: string[]; 
-  selected: string[]; 
+function FilterPopover({
+  label,
+  icon: Icon,
+  options,
+  selected,
+  onChange
+}: {
+  label: string;
+  icon: any;
+  options: string[];
+  selected: string[];
   onChange: (selected: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -275,8 +275,8 @@ function FilterPopover({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "flex items-center gap-2 bg-white dark:bg-slate-950 border rounded-xl px-2.5 py-1.5 transition-all",
-          selected.length > 0 
-            ? "border-brand ring-2 ring-brand/5 bg-brand/[0.02]" 
+          selected.length > 0
+            ? "border-brand ring-2 ring-brand/5 bg-brand/[0.02]"
             : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
         )}
       >
@@ -296,15 +296,15 @@ function FilterPopover({
               onChange={(e) => setSearch(e.target.value)}
               className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-brand/10 transition-all font-medium"
             />
-            
+
             <div className="flex items-center justify-between px-1">
-              <button 
+              <button
                 onClick={() => onChange(options)}
                 className="text-[10px] font-bold text-brand hover:underline"
               >
                 Select All
               </button>
-              <button 
+              <button
                 onClick={() => onChange([])}
                 className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
               >
@@ -314,17 +314,17 @@ function FilterPopover({
 
             <div className="space-y-0.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
               {filteredOptions.length > 0 ? filteredOptions.map((opt) => (
-                <div 
+                <div
                   key={opt}
                   onClick={() => {
-                    const next = selected.includes(opt) 
-                      ? selected.filter(s => s !== opt) 
+                    const next = selected.includes(opt)
+                      ? selected.filter(s => s !== opt)
                       : [...selected, opt];
                     onChange(next);
                   }}
                   className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer group transition-colors"
                 >
-                  <Checkbox checked={selected.includes(opt)} onChange={() => {}} className="pointer-events-none" />
+                  <Checkbox checked={selected.includes(opt)} onChange={() => { }} className="pointer-events-none" />
                   <span className={cn(
                     "text-[11px] font-medium transition-colors line-clamp-1",
                     selected.includes(opt) ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"
@@ -354,7 +354,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
 
   const handleApplyPreset = (presetName: string) => {
     const newVisibility: Record<string, boolean> = {};
-    
+
     const hides: Record<string, string[]> = {
       Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate'],
       Operations: [],
@@ -575,14 +575,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const matchesPm = pmFilter.length === 0 || (p.projectManager && pmFilter.includes(p.projectManager));
       const matchesStatus = statusFilter.length === 0 || (p.rawStatus && statusFilter.includes(p.rawStatus));
       const matchesClient = !clientFilter || p.client?.name === clientFilter;
-      
+
       const pDueDate = p.deliveryDate ? new Date(p.deliveryDate) : null;
-      const matchesDueDate = (!dueFilterStart || (pDueDate && format(pDueDate, 'yyyy-MM-dd') >= dueFilterStart)) && 
-                          (!dueFilterEnd || (pDueDate && format(pDueDate, 'yyyy-MM-dd') <= dueFilterEnd));
+      const matchesDueDate = (!dueFilterStart || (pDueDate && format(pDueDate, 'yyyy-MM-dd') >= dueFilterStart)) &&
+        (!dueFilterEnd || (pDueDate && format(pDueDate, 'yyyy-MM-dd') <= dueFilterEnd));
 
       const pStartDate = p.startDate ? new Date(p.startDate) : null;
-      const matchesStartDate = (!startFilterStart || (pStartDate && format(pStartDate, 'yyyy-MM-dd') >= startFilterStart)) && 
-                            (!startFilterEnd || (pStartDate && format(pStartDate, 'yyyy-MM-dd') <= startFilterEnd));
+      const matchesStartDate = (!startFilterStart || (pStartDate && format(pStartDate, 'yyyy-MM-dd') >= startFilterStart)) &&
+        (!startFilterEnd || (pStartDate && format(pStartDate, 'yyyy-MM-dd') <= startFilterEnd));
 
       const now = getSydneyNow();
       const sStatus = getProjectScheduleStatus(p, now);
@@ -816,7 +816,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     if (clientFilter) activeFilters.push(`Client: ${clientFilter}`);
     if (dueFilterStart || dueFilterEnd) activeFilters.push(`Due Date: ${dueFilterStart || 'Any'} to ${dueFilterEnd || 'Any'}`);
     if (startFilterStart || startFilterEnd) activeFilters.push(`Start Date: ${startFilterStart || 'Any'} to ${startFilterEnd || 'Any'}`);
-    
+
     const filtersText = activeFilters.length > 0 ? activeFilters.join(' | ') : 'None';
 
     const labels: Record<string, string> = {
@@ -844,9 +844,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     };
 
     const orderedColumnKeys = [
-      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'bayLocation', 'projectType', 
-      'startDate', 'deliveryDate', 'drawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 
-      'switchgearOrderedDate', 'switchgearDeliveredDate', 'budgetHours', 'actualHours', 'remainingHours', 
+      'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'bayLocation', 'projectType',
+      'startDate', 'deliveryDate', 'drawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate',
+      'switchgearOrderedDate', 'switchgearDeliveredDate', 'budgetHours', 'actualHours', 'remainingHours',
       'progressPercent', 'total'
     ];
 
@@ -877,7 +877,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
         else if (key === 'remainingHours') val = Number(project.remainingHours || 0).toFixed(2);
         else if (key === 'progressPercent') val = Math.round(project.progressPercent || 0) + '%';
         else if (key === 'total') val = project.total || 0;
-        
+
         rowData.push(val);
       });
       return rowData;
@@ -901,66 +901,48 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     else if (activeFilters.length > 0) filterSlug = '-filtered';
 
     const filename = `wip-export-${format(new Date(), 'dd-MMM-yy')}${filterSlug}.${exportFormat}`;
-    
+
     XLSX.writeFile(wb, filename);
     setIsExportPickerOpen(false);
   };
 
   const handleNlSearch = async () => {
     if (!nlQuery.trim() || isNlLoading) return;
-    
+
     setIsNlLoading(true);
     setNlError("");
-    
+
     const result = await interpretNaturalLanguageFilter(nlQuery, {
       pmNames: filterOptions.pms,
       statusValues: filterOptions.statuses,
       projectTypes: filterOptions.projectTypes,
       todayDate: format(getSydneyNow(), 'yyyy-MM-dd')
     });
-    
+
     setIsNlLoading(false);
-    
+
     if (!result) {
       setNlError("Couldn't interpret that — try rephrasing");
       setTimeout(() => setNlError(""), 3000);
       return;
     }
-    
+
     // Clear existing before applying
     handleClearFilters();
-    
-    let mappedPm = result.pm;
-    if (mappedPm) {
-      const lower = mappedPm.toLowerCase();
-      mappedPm = filterOptions.pms.find(p => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase())) || mappedPm;
-    }
-    
-    let mappedStatus = result.status;
-    if (mappedStatus) {
-      const lower = mappedStatus.toLowerCase();
-      mappedStatus = filterOptions.statuses.find(s => s.toLowerCase().includes(lower)) || mappedStatus;
-    }
-    
-    let mappedProjectType = result.projectType;
-    if (mappedProjectType) {
-      const lower = mappedProjectType.toLowerCase();
-      mappedProjectType = filterOptions.projectTypes.find(t => t.toLowerCase().includes(lower)) || mappedProjectType;
-    }
 
     if (result.searchText) setSearch(result.searchText);
-    if (mappedPm) setPmFilter([mappedPm]);
-    if (mappedStatus) setStatusFilter([mappedStatus]);
-    if (mappedProjectType) setProjectTypeFilter([mappedProjectType]);
+    if (result.pm) setPmFilter([result.pm]);
+    if (result.status) setStatusFilter([result.status]);
+    if (result.projectType) setProjectTypeFilter([result.projectType]);
     if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom);
     if (result.dueDateTo) setDueFilterEnd(result.dueDateTo);
     if (result.startDateFrom) setStartFilterStart(result.startDateFrom);
     if (result.startDateTo) setStartFilterEnd(result.startDateTo);
-    
+
     if (result.overdue) {
       setDueFilterEnd(format(new Date(getSydneyNow().getTime() - 86400000), 'yyyy-MM-dd'));
     }
-    
+
     setActiveNlFilter(nlQuery);
     setNlQuery("");
   };
@@ -969,7 +951,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   // We'll track previous filter states and if they change while activeNlFilter is set, we clear it.
   const filterStateStr = JSON.stringify({ pmFilter, statusFilter, projectTypeFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, search });
   const [prevFilterStateStr, setPrevFilterStateStr] = useState(filterStateStr);
-  
+
   useEffect(() => {
     if (filterStateStr !== prevFilterStateStr) {
       setPrevFilterStateStr(filterStateStr);
@@ -981,10 +963,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       // Wait, simpler: handleNlSearch sets activeNlFilter.
     }
   }, [filterStateStr, prevFilterStateStr]);
-  
+
   // A ref to know if the last filter change was from AI
   const isAiFilterApplyRef = useRef(false);
-  
+
   // Better approach for dismissing:
   useEffect(() => {
     if (isAiFilterApplyRef.current) {
@@ -999,58 +981,40 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   // Adjust handleNlSearch to use the ref
   const handleNlSearchWithRef = async () => {
     if (!nlQuery.trim() || isNlLoading) return;
-    
+
     setIsNlLoading(true);
     setNlError("");
-    
+
     const result = await interpretNaturalLanguageFilter(nlQuery, {
       pmNames: filterOptions.pms,
       statusValues: filterOptions.statuses,
       projectTypes: filterOptions.projectTypes,
       todayDate: format(getSydneyNow(), 'yyyy-MM-dd')
     });
-    
+
     setIsNlLoading(false);
-    
+
     if (!result) {
       setNlError("Couldn't interpret that — try rephrasing");
       setTimeout(() => setNlError(""), 3000);
       return;
     }
-    
+
     isAiFilterApplyRef.current = true;
-    
-    let mappedPm = result.pm;
-    if (mappedPm) {
-      const lower = mappedPm.toLowerCase();
-      mappedPm = filterOptions.pms.find(p => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase())) || mappedPm;
-    }
-    
-    let mappedStatus = result.status;
-    if (mappedStatus) {
-      const lower = mappedStatus.toLowerCase();
-      mappedStatus = filterOptions.statuses.find(s => s.toLowerCase().includes(lower)) || mappedStatus;
-    }
-    
-    let mappedProjectType = result.projectType;
-    if (mappedProjectType) {
-      const lower = mappedProjectType.toLowerCase();
-      mappedProjectType = filterOptions.projectTypes.find(t => t.toLowerCase().includes(lower)) || mappedProjectType;
-    }
-    
+
     if (result.searchText) setSearch(result.searchText); else setSearch("");
-    if (mappedPm) setPmFilter([mappedPm]); else setPmFilter([]);
-    if (mappedStatus) setStatusFilter([mappedStatus]); else setStatusFilter([]);
-    if (mappedProjectType) setProjectTypeFilter([mappedProjectType]); else setProjectTypeFilter([]);
+    if (result.pm) setPmFilter([result.pm]); else setPmFilter([]);
+    if (result.status) setStatusFilter([result.status]); else setStatusFilter([]);
+    if (result.projectType) setProjectTypeFilter([result.projectType]); else setProjectTypeFilter([]);
     if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom); else setDueFilterStart("");
     if (result.dueDateTo) setDueFilterEnd(result.dueDateTo); else setDueFilterEnd("");
     if (result.startDateFrom) setStartFilterStart(result.startDateFrom); else setStartFilterStart("");
     if (result.startDateTo) setStartFilterEnd(result.startDateTo); else setStartFilterEnd("");
-    
+
     if (result.overdue) {
       setDueFilterEnd(format(new Date(getSydneyNow().getTime() - 86400000), 'yyyy-MM-dd'));
     }
-    
+
     setActiveNlFilter(nlQuery);
     setNlQuery("");
     setIsNlPopoverOpen(false);
@@ -1082,7 +1046,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                 className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-4 focus:ring-brand/5 focus:border-brand/30 outline-none transition-all"
               />
             </div>
-            
+
             <div className="relative" ref={nlPopoverRef}>
               <button
                 onClick={() => setIsNlPopoverOpen(!isNlPopoverOpen)}
@@ -1134,7 +1098,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                 </div>
               )}
             </div>
-            
+
             {activeNlFilter && (
               <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 px-2 py-1.5 rounded-xl text-[11px] font-semibold animate-in fade-in zoom-in duration-200 border border-blue-200 dark:border-blue-500/30 shadow-sm ml-1">
                 <Sparkles className="h-3 w-3" />
@@ -1149,7 +1113,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
             )}
           </div>
           <div className="flex items-center gap-2">
-            <FilterPopover 
+            <FilterPopover
               label="PM"
               icon={User}
               options={filterOptions.pms}
@@ -1157,7 +1121,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               onChange={setPmFilter}
             />
 
-            <FilterPopover 
+            <FilterPopover
               label="Status"
               icon={Activity}
               options={filterOptions.statuses}
@@ -1165,7 +1129,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               onChange={setStatusFilter}
             />
 
-            <FilterPopover 
+            <FilterPopover
               label="Project Type"
               icon={Briefcase}
               options={filterOptions.projectTypes}
@@ -1174,7 +1138,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
             />
 
 
-            <DateRangePicker 
+            <DateRangePicker
               label="Filter by Start Date"
               startDate={startFilterStart}
               endDate={startFilterEnd}
@@ -1184,7 +1148,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               }}
             />
 
-            <DateRangePicker 
+            <DateRangePicker
               label="Filter by Due Date"
               startDate={dueFilterStart}
               endDate={dueFilterEnd}
@@ -1575,15 +1539,15 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                                 const priority = getPriorityIndicator(project.priority);
                                 if (!priority) return null;
                                 return (
-                                  <div 
-                                    className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", priority.color)} 
+                                  <div
+                                    className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", priority.color)}
                                     title={priority.label}
                                   />
                                 );
                               })()}
                               {urgency && (
-                                <div 
-                                  className={cn("w-2 h-2 rounded-full flex-shrink-0", urgency.color)} 
+                                <div
+                                  className={cn("w-2 h-2 rounded-full flex-shrink-0", urgency.color)}
                                   title={urgency.label}
                                 />
                               )}
@@ -1597,225 +1561,225 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                             ) : (
                               <span>{project.projectNumber}</span>
                             )}
-                            <SyncRowButton 
-                              workguruId={project.workguruId} 
+                            <SyncRowButton
+                              workguruId={project.workguruId}
                               onSyncComplete={() => {
-                                 // Optional: handle local state refresh if needed, 
-                                 // handled by revalidatePath for now.
-                              }} 
+                                // Optional: handle local state refresh if needed, 
+                                // handled by revalidatePath for now.
+                              }}
                             />
                           </div>
                         </td>
                       )}
-                    {columnVisibility.projectName && (
-                      <td
-                        style={{
-                          left: getStickyOffset('projectName'),
-                          width: STICKY_WIDTHS.projectName,
-                          minWidth: STICKY_WIDTHS.projectName
-                        }}
-                        className={cn(
-                          "sticky z-10 px-4 py-3 border-r border-slate-100/60 dark:border-slate-800/60 transition-colors",
-                          project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
-                        )}
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex justify-between items-start">
-                            <div className="flex flex-col gap-0.5 max-w-full">
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[13px] font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
-                                >
-                                  {project.name}
-                                  <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
-                                </a>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight line-clamp-1">{project.client?.name}</span>
+                      {columnVisibility.projectName && (
+                        <td
+                          style={{
+                            left: getStickyOffset('projectName'),
+                            width: STICKY_WIDTHS.projectName,
+                            minWidth: STICKY_WIDTHS.projectName
+                          }}
+                          className={cn(
+                            "sticky z-10 px-4 py-3 border-r border-slate-100/60 dark:border-slate-800/60 transition-colors",
+                            project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
+                          )}
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex justify-between items-start">
+                              <div className="flex flex-col gap-0.5 max-w-full">
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={`https://app.workguru.io/App/Projects/Detail2/${project.workguruId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[13px] font-bold text-slate-900 dark:text-slate-100 line-clamp-1 hover:text-brand hover:underline flex items-center gap-1.5"
+                                  >
+                                    {project.name}
+                                    <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
+                                  </a>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 tracking-tight line-clamp-1">{project.client?.name}</span>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.itemName && (
-                      <td
-                        style={{
-                          left: getStickyOffset('itemName'),
-                          width: STICKY_WIDTHS.itemName,
-                          minWidth: STICKY_WIDTHS.itemName
-                        }}
-                        className={cn(
-                          "sticky z-10 px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400 border-r border-slate-100/60 dark:border-slate-800/60 transition-all",
-                          isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]",
-                          project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
-                        )}
-                      >
-                        <div className="line-clamp-2 leading-relaxed">
-                          {project.description || '—'}
-                        </div>
-                      </td>
-                    )}
+                        </td>
+                      )}
+                      {columnVisibility.itemName && (
+                        <td
+                          style={{
+                            left: getStickyOffset('itemName'),
+                            width: STICKY_WIDTHS.itemName,
+                            minWidth: STICKY_WIDTHS.itemName
+                          }}
+                          className={cn(
+                            "sticky z-10 px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400 border-r border-slate-100/60 dark:border-slate-800/60 transition-all",
+                            isScrolled && "shadow-[6px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[6px_0_10px_-4px_rgba(0,0,0,0.3)]",
+                            project.priority?.toLowerCase() === 'critical' ? "bg-red-50/60 dark:bg-red-900/10" : "bg-white dark:bg-slate-900"
+                          )}
+                        >
+                          <div className="line-clamp-2 leading-relaxed">
+                            {project.description || '—'}
+                          </div>
+                        </td>
+                      )}
 
-                    {columnVisibility.projectManager && (
-                      <td className="px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400">
-                        {project.projectManager || 'Unassigned'}
-                      </td>
-                    )}
-                    {columnVisibility.status && (
-                      <td className="px-4 py-3 text-center">
-                        {(() => {
-                          const { color, icon: Icon } = getStatusStyles(project.rawStatus);
-                          return (
-                            <span className={getColorClasses(color)}>
-                              <Icon className="h-3 w-3" />
-                              {project.rawStatus}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                    )}
-                    {columnVisibility.bayLocation && (
-                      <td className="px-4 py-3 text-center text-[12px] font-bold text-slate-700 dark:text-slate-300">
-                        {project.bayLocation || '—'}
-                      </td>
-                    )}
-                    {columnVisibility.projectType && (
-                      <td className="px-4 py-3 text-center text-[12px] font-medium text-slate-600 dark:text-slate-400">
-                        {project.projectType || '—'}
-                      </td>
-                    )}
-                    {columnVisibility.startDate && (
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex flex-col items-center">
+                      {columnVisibility.projectManager && (
+                        <td className="px-4 py-3 text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                          {project.projectManager || 'Unassigned'}
+                        </td>
+                      )}
+                      {columnVisibility.status && (
+                        <td className="px-4 py-3 text-center">
                           {(() => {
-                            const isError = project.startDate && project.deliveryDate && new Date(project.startDate) > new Date(project.deliveryDate);
+                            const { color, icon: Icon } = getStatusStyles(project.rawStatus);
                             return (
-                              <span className={cn(
-                                "text-[12px] font-bold tabular-nums",
-                                isError 
-                                  ? "text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30"
-                                  : getProjectScheduleStatus(project, getSydneyNow()) === 'FUTURE' 
-                                    ? "text-brand px-1.5 py-0.5 bg-brand/5 rounded" 
-                                    : "text-slate-800 dark:text-slate-200",
-                                !project.startDate && "text-slate-300 dark:text-slate-700 font-medium"
-                              )}>
-                                {formatSydneyDate(project.startDate)}
+                              <span className={getColorClasses(color)}>
+                                <Icon className="h-3 w-3" />
+                                {project.rawStatus}
                               </span>
                             );
                           })()}
-                          {isDebug && (
-                            <span className="text-[8px] font-bold text-slate-400 dark:text-slate-600 mt-0.5">
-                              {getProjectScheduleStatus(project, getSydneyNow())}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.deliveryDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.drawingApprovalDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.sheetmetalOrderedDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.sheetmetalDeliveredDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.switchgearOrderedDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.switchgearOrderedDate ? format(new Date(project.switchgearOrderedDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.switchgearDeliveredDate && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                          {project.switchgearDeliveredDate ? format(new Date(project.switchgearDeliveredDate), 'dd MMM yy') : '—'}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.budgetHours && (
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                          {Number(Number(project.budgetHours || 0).toFixed(2)).toLocaleString()}h
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.actualHours && (
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                            {Number(Number(project.actualHours || 0).toFixed(2)).toLocaleString()}h
-                          </span>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.remainingHours && (
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn(
-                          "text-[12px] font-bold tabular-nums",
-                          project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
-                        )}>
-                          {Number(Number(project.remainingHours || 0).toFixed(2)).toLocaleString()}h
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.progressPercent && (
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center gap-2 justify-center min-w-[80px]">
-                          <span className={cn(
-                            "text-[10px] font-bold tabular-nums",
-                            project.progressPercent >= 100 ? "text-red-500" :
-                              project.progressPercent >= 80 ? "text-orange-500" : "text-brand"
-                          )}>{Math.round(project.progressPercent)}%</span>
-                          <div className="w-12 bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
-                            <div
-                              className={cn(
-                                "h-full rounded-full transition-all duration-1000",
-                                project.progressPercent >= 100 ? "bg-red-500" :
-                                  project.progressPercent >= 80 ? "bg-orange-500" : "bg-brand"
-                              )}
-                              style={{ width: `${Math.min(project.progressPercent, 100)}%` }}
-                            />
+                        </td>
+                      )}
+                      {columnVisibility.bayLocation && (
+                        <td className="px-4 py-3 text-center text-[12px] font-bold text-slate-700 dark:text-slate-300">
+                          {project.bayLocation || '—'}
+                        </td>
+                      )}
+                      {columnVisibility.projectType && (
+                        <td className="px-4 py-3 text-center text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                          {project.projectType || '—'}
+                        </td>
+                      )}
+                      {columnVisibility.startDate && (
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex flex-col items-center">
+                            {(() => {
+                              const isError = project.startDate && project.deliveryDate && new Date(project.startDate) > new Date(project.deliveryDate);
+                              return (
+                                <span className={cn(
+                                  "text-[12px] font-bold tabular-nums",
+                                  isError
+                                    ? "text-red-600 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30"
+                                    : getProjectScheduleStatus(project, getSydneyNow()) === 'FUTURE'
+                                      ? "text-brand px-1.5 py-0.5 bg-brand/5 rounded"
+                                      : "text-slate-800 dark:text-slate-200",
+                                  !project.startDate && "text-slate-300 dark:text-slate-700 font-medium"
+                                )}>
+                                  {formatSydneyDate(project.startDate)}
+                                </span>
+                              );
+                            })()}
+                            {isDebug && (
+                              <span className="text-[8px] font-bold text-slate-400 dark:text-slate-600 mt-0.5">
+                                {getProjectScheduleStatus(project, getSydneyNow())}
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.total && (
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
-                            {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(project.total || 0)}
+                        </td>
+                      )}
+                      {columnVisibility.deliveryDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yy') : '—'}
                           </span>
-                          {isDebug && project.total === 0 && (
-                             <span className="text-[8px] font-bold text-orange-500 mt-0.5">VALUE PENDING SYNC</span>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                        </td>
+                      )}
+                      {columnVisibility.drawingApprovalDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.sheetmetalOrderedDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.sheetmetalDeliveredDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.switchgearOrderedDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.switchgearOrderedDate ? format(new Date(project.switchgearOrderedDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.switchgearDeliveredDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.switchgearDeliveredDate ? format(new Date(project.switchgearDeliveredDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.budgetHours && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                            {Number(Number(project.budgetHours || 0).toFixed(2)).toLocaleString()}h
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.actualHours && (
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                              {Number(Number(project.actualHours || 0).toFixed(2)).toLocaleString()}h
+                            </span>
+                          </div>
+                        </td>
+                      )}
+                      {columnVisibility.remainingHours && (
+                        <td className="px-4 py-3 text-center">
+                          <span className={cn(
+                            "text-[12px] font-bold tabular-nums",
+                            project.remainingHours < 0 ? "text-red-500" : "text-slate-700 dark:text-slate-300"
+                          )}>
+                            {Number(Number(project.remainingHours || 0).toFixed(2)).toLocaleString()}h
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.progressPercent && (
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center gap-2 justify-center min-w-[80px]">
+                            <span className={cn(
+                              "text-[10px] font-bold tabular-nums",
+                              project.progressPercent >= 100 ? "text-red-500" :
+                                project.progressPercent >= 80 ? "text-orange-500" : "text-brand"
+                            )}>{Math.round(project.progressPercent)}%</span>
+                            <div className="w-12 bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-1000",
+                                  project.progressPercent >= 100 ? "bg-red-500" :
+                                    project.progressPercent >= 80 ? "bg-orange-500" : "bg-brand"
+                                )}
+                                style={{ width: `${Math.min(project.progressPercent, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      {columnVisibility.total && (
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                              {new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(project.total || 0)}
+                            </span>
+                            {isDebug && project.total === 0 && (
+                              <span className="text-[8px] font-bold text-orange-500 mt-0.5">VALUE PENDING SYNC</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
