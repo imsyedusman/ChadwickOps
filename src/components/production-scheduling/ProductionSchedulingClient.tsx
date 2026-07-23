@@ -382,7 +382,45 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
     });
   }, [filteredProjects, initialData.stageCapacity, weeklyBreakdown, selectedWeekIndex]);
 
+  const schedulingContext = useMemo(() => {
+    const unscheduledCount = initialData.autoScheduledCount || filteredProjects.filter(p => !p.scheduledStart).length;
+    
+    let busiestStage = "None";
+    let busiestStageUtilisation = 0;
+    
+    if (bottleneckData && bottleneckData.length > 0) {
+      const busiest = [...bottleneckData].sort((a, b) => {
+        const utilA = a.available > 0 ? (a.demand / a.available) : 0;
+        const utilB = b.available > 0 ? (b.demand / b.available) : 0;
+        return utilB - utilA;
+      })[0];
+      
+      if (busiest) {
+        busiestStage = busiest.name;
+        busiestStageUtilisation = busiest.available > 0 ? Math.round((busiest.demand / busiest.available) * 100) : 0;
+      }
+    }
+    
+    const workerConflicts = insights
+      .filter(i => i.type === 'assignment-conflict')
+      .map(i => i.description);
+      
+    const recentlyUnblockedCount = insights.find(i => i.actionFilter === "recently-unblocked")?.affectedCount || 0;
+
+    return {
+      activeCount: summaryCounts.active,
+      overdueCount: summaryCounts.overdue,
+      atRiskCount: summaryCounts.atRisk,
+      unscheduledCount,
+      busiestStage,
+      busiestStageUtilisation,
+      workerConflicts,
+      recentlyUnblockedCount
+    };
+  }, [summaryCounts, initialData.autoScheduledCount, filteredProjects, bottleneckData, insights]);
+
   const handleExportCSV = async () => {
+
     if (isExportingCSV) return;
 
     const headers = [
@@ -965,12 +1003,12 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(100vh-200px)] space-y-4 pr-1">
-      <InsightsPanel insights={insights} onFilterApply={handleInsightFilterApply} />
-
-
-
-
-
+              <InsightsPanel 
+                insights={insights} 
+                onFilterApply={handleInsightFilterApply}
+                schedulingContext={schedulingContext}
+                isFinance={isFinance}
+              />
             </div>
           </div>
         )}

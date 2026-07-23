@@ -1434,3 +1434,64 @@ export async function getWorkerDetail(staffId: number) {
     return { success: false, error: error.message || "Failed to load worker details." };
   }
 }
+
+export async function generateAISchedulingInsights(schedulingContext: {
+  activeCount: number
+  overdueCount: number
+  atRiskCount: number
+  unscheduledCount: number
+  busiestStage: string
+  busiestStageUtilisation: number
+  workerConflicts: string[]
+  recentlyUnblockedCount: number
+}) {
+  await checkAuth();
+
+  try {
+    const prompt = `You are a production scheduling assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data, write exactly 2-3 sentences in plain English summarising the current production situation and the single most important action the operations manager should take today. Be direct and specific. No bullet points. No headers.
+
+Current scheduling data:
+- Active projects: ${schedulingContext.activeCount}
+- Overdue projects: ${schedulingContext.overdueCount}
+- At risk of missing deadline: ${schedulingContext.atRiskCount}
+- Unscheduled active projects: ${schedulingContext.unscheduledCount}
+- Most loaded stage: ${schedulingContext.busiestStage} at ${schedulingContext.busiestStageUtilisation}% utilisation
+- Worker scheduling conflicts: ${schedulingContext.workerConflicts.length > 0 ? schedulingContext.workerConflicts.join(', ') : 'none'}
+- Projects with materials recently delivered and ready to schedule: ${schedulingContext.recentlyUnblockedCount}
+
+Summary:`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(`${process.env.OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL,
+        prompt: prompt,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (!json.response) {
+      throw new Error("No response string from Ollama");
+    }
+
+    return { success: true, data: { summary: json.response.trim() } };
+
+  } catch (error) {
+    console.error("[generateAISchedulingInsights] Error:", error);
+    return { success: false, error: "AI insights unavailable" };
+  }
+}

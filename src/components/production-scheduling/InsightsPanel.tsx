@@ -1,18 +1,33 @@
 import { useState, useEffect } from "react";
-import { Lightbulb, ChevronDown, ChevronRight, AlertTriangle, AlertCircle, Info, CheckCircle2 } from "lucide-react";
+import { Lightbulb, ChevronDown, ChevronRight, AlertTriangle, AlertCircle, Info, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { InsightItem } from "@/app/actions/production-scheduling";
+import { InsightItem, generateAISchedulingInsights } from "@/app/actions/production-scheduling";
 
 interface InsightsPanelProps {
   insights: InsightItem[];
   onFilterApply: (filter: string) => void;
+  schedulingContext?: {
+    activeCount: number;
+    overdueCount: number;
+    atRiskCount: number;
+    unscheduledCount: number;
+    busiestStage: string;
+    busiestStageUtilisation: number;
+    workerConflicts: string[];
+    recentlyUnblockedCount: number;
+  };
+  isFinance?: boolean;
 }
 
-export function InsightsPanel({ insights, onFilterApply }: InsightsPanelProps) {
+export function InsightsPanel({ insights, onFilterApply, schedulingContext, isFinance }: InsightsPanelProps) {
   const hasCritical = insights.some((i) => i.severity === "critical");
   const hasWarning = insights.some((i) => i.severity === "warning");
   
   const [isOpen, setIsOpen] = useState(hasCritical);
+
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [hasFetchedAi, setHasFetchedAi] = useState(false);
 
   // Update default open state if insights change and we haven't interacted? 
   // Requirements say "Default expanded state: expanded if any critical insights exist, collapsed otherwise."
@@ -20,6 +35,22 @@ export function InsightsPanel({ insights, onFilterApply }: InsightsPanelProps) {
   useEffect(() => {
     setIsOpen(hasCritical);
   }, [hasCritical]);
+
+  useEffect(() => {
+    if (isOpen && !hasFetchedAi && schedulingContext) {
+      setHasFetchedAi(true);
+      setAiLoading(true);
+      generateAISchedulingInsights(schedulingContext)
+        .then(res => {
+          if (res.success && res.data) {
+            setAiSummary(res.data.summary);
+          }
+        })
+        .finally(() => {
+          setAiLoading(false);
+        });
+    }
+  }, [isOpen, hasFetchedAi, schedulingContext]);
 
   let badgeColor = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/50";
   if (hasCritical) {
@@ -49,7 +80,27 @@ export function InsightsPanel({ insights, onFilterApply }: InsightsPanelProps) {
       </button>
 
       {isOpen && (
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+          
+          {(aiLoading || aiSummary) && (
+            <div className="bg-blue-50 dark:bg-blue-950 rounded-xl p-4 border border-blue-100 dark:border-blue-900 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-xs font-bold text-blue-700/80 dark:text-blue-300/80 uppercase tracking-widest">AI Summary</span>
+              </div>
+              {aiLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-3.5 bg-blue-200/50 dark:bg-blue-800/50 rounded w-full"></div>
+                  <div className="h-3.5 bg-blue-200/50 dark:bg-blue-800/50 rounded w-4/5"></div>
+                </div>
+              ) : (
+                <p className="text-sm text-blue-900 dark:text-blue-100 font-medium leading-relaxed">
+                  {aiSummary}
+                </p>
+              )}
+            </div>
+          )}
+
           {insights.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 p-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
