@@ -11,7 +11,8 @@ import {
   Command,
   LogOut,
   UserCircle,
-  TrendingUp
+  TrendingUp,
+  ExternalLink
 } from "lucide-react";
 import React, { useState, useEffect, useSyncExternalStore, useRef } from "react";
 import { useTheme } from "next-themes";
@@ -69,6 +70,26 @@ export function Header({ user, lastUpdatedText }: HeaderProps) {
   return (
     <header className="h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 transition-all duration-300 w-full">
       <div className="flex items-center gap-6 flex-1 max-w-2xl">
+        <div className="hidden md:flex items-center gap-2">
+          <Link 
+            href="https://ncr.chadwickswitchboards.tech/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            title="Non-Conformance Reports"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+          >
+            NCR <ExternalLink className="h-3 w-3" />
+          </Link>
+          <Link 
+            href="https://q2c.chadwickswitchboards.tech/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            title="Estimation"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+          >
+            Q2C <ExternalLink className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
       
       <div className="flex items-center gap-6 ml-6">
