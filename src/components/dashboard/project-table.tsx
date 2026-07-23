@@ -39,7 +39,10 @@ import {
   AlertCircle,
   HelpCircle,
   Circle,
-  Download
+  Download,
+  Sparkles,
+  Loader2,
+  X
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { cn } from "@/lib/utils";
@@ -66,6 +69,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { TableSubtotals } from "./TableSubtotals";
 import { DateRangePicker } from "../ui/DateRangePicker";
 import { handleSyncProject } from "@/app/actions/sync-project";
+import { interpretNaturalLanguageFilter } from "@/app/actions/ai-insights";
 
 interface Project {
   id: number;
@@ -401,6 +405,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       if (exportPickerRef.current && !exportPickerRef.current.contains(event.target as Node)) {
         setIsExportPickerOpen(false);
       }
+      if (nlPopoverRef.current && !nlPopoverRef.current.contains(event.target as Node)) {
+        setIsNlPopoverOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -421,8 +428,27 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
   const [projectTypeFilter, setProjectTypeFilter] = useState<string[]>([]);
 
+  // NL Search State
+  const [nlQuery, setNlQuery] = useState("");
+  const [isNlLoading, setIsNlLoading] = useState(false);
+  const [nlError, setNlError] = useState("");
+  const [activeNlFilter, setActiveNlFilter] = useState("");
+  const [isNlPopoverOpen, setIsNlPopoverOpen] = useState(false);
+  const nlPopoverRef = useRef<HTMLDivElement>(null);
+
   const searchParams = useSearchParams();
   const isDebug = searchParams.get('debug') === '1';
+
+  // Watch for external filter changes (from KPI cards) to clear internal filters
+  const currentUrlFilter = searchParams.get('filter');
+  const [prevUrlFilter, setPrevUrlFilter] = useState(currentUrlFilter);
+
+  useEffect(() => {
+    if (currentUrlFilter !== prevUrlFilter) {
+      setPrevUrlFilter(currentUrlFilter);
+      handleClearFilters();
+    }
+  }, [currentUrlFilter, prevUrlFilter]);
 
   const handleClearFilters = () => {
     setPmFilter([]);
@@ -435,6 +461,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setStartFilterEnd("");
     setSearch("");
     setProjectTypeFilter([]);
+    setActiveNlFilter("");
   };
 
   const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || projectTypeFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
@@ -534,6 +561,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   }, [projects]);
 
   const filteredAndSortedProjects = useMemo(() => {
+    // If manual filter changes, dismiss AI chip (except search? The instructions say "if a user manually changes a filter after an AI filter is applied, the AI chip disappears since the state has diverged")
+    // We can handle this divergence by watching state changes, but for simplicity we'll just clear the chip when manual changes happen. It might be easier to use an effect for that, but we can't easily detect manual vs programmatic inside the render.
+    // Instead, I'll do this in the handlers. But wait, `setPmFilter` is passed directly. It's fine for now.
+
     const result = projects.filter(p => {
       const searchLower = search.toLowerCase();
       const matchesSearch =
@@ -875,6 +906,120 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setIsExportPickerOpen(false);
   };
 
+  const handleNlSearch = async () => {
+    if (!nlQuery.trim() || isNlLoading) return;
+    
+    setIsNlLoading(true);
+    setNlError("");
+    
+    const result = await interpretNaturalLanguageFilter(nlQuery, {
+      pmNames: filterOptions.pms,
+      statusValues: filterOptions.statuses,
+      projectTypes: filterOptions.projectTypes,
+      todayDate: format(getSydneyNow(), 'yyyy-MM-dd')
+    });
+    
+    setIsNlLoading(false);
+    
+    if (!result) {
+      setNlError("Couldn't interpret that — try rephrasing");
+      setTimeout(() => setNlError(""), 3000);
+      return;
+    }
+    
+    // Clear existing before applying
+    handleClearFilters();
+    
+    if (result.searchText) setSearch(result.searchText);
+    if (result.pm) setPmFilter([result.pm]);
+    if (result.status) setStatusFilter([result.status]);
+    if (result.projectType) setProjectTypeFilter([result.projectType]);
+    if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom);
+    if (result.dueDateTo) setDueFilterEnd(result.dueDateTo);
+    if (result.startDateFrom) setStartFilterStart(result.startDateFrom);
+    if (result.startDateTo) setStartFilterEnd(result.startDateTo);
+    
+    if (result.overdue) {
+      setDueFilterEnd(format(new Date(getSydneyNow().getTime() - 86400000), 'yyyy-MM-dd'));
+    }
+    
+    setActiveNlFilter(nlQuery);
+    setNlQuery("");
+  };
+
+  // Watch for manual filter changes to dismiss AI chip
+  // We'll track previous filter states and if they change while activeNlFilter is set, we clear it.
+  const filterStateStr = JSON.stringify({ pmFilter, statusFilter, projectTypeFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, search });
+  const [prevFilterStateStr, setPrevFilterStateStr] = useState(filterStateStr);
+  
+  useEffect(() => {
+    if (filterStateStr !== prevFilterStateStr) {
+      setPrevFilterStateStr(filterStateStr);
+      // Only clear if we actually have an active NL filter and it's a real user change
+      // (The programmatic change from handleNlSearch also triggers this, so we need a way to not clear immediately.
+      // Easiest is to set a flag during handleNlSearch, but since handleNlSearch changes filters all at once, 
+      // subsequent manual changes will trigger this.)
+      // We will clear activeNlFilter if filters change unless it's exactly when we applied it.
+      // Wait, simpler: handleNlSearch sets activeNlFilter.
+    }
+  }, [filterStateStr, prevFilterStateStr]);
+  
+  // A ref to know if the last filter change was from AI
+  const isAiFilterApplyRef = useRef(false);
+  
+  // Better approach for dismissing:
+  useEffect(() => {
+    if (isAiFilterApplyRef.current) {
+      isAiFilterApplyRef.current = false;
+      return;
+    }
+    if (activeNlFilter) {
+      setActiveNlFilter("");
+    }
+  }, [pmFilter, statusFilter, projectTypeFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, search]);
+
+  // Adjust handleNlSearch to use the ref
+  const handleNlSearchWithRef = async () => {
+    if (!nlQuery.trim() || isNlLoading) return;
+    
+    setIsNlLoading(true);
+    setNlError("");
+    
+    const result = await interpretNaturalLanguageFilter(nlQuery, {
+      pmNames: filterOptions.pms,
+      statusValues: filterOptions.statuses,
+      projectTypes: filterOptions.projectTypes,
+      todayDate: format(getSydneyNow(), 'yyyy-MM-dd')
+    });
+    
+    setIsNlLoading(false);
+    
+    if (!result) {
+      setNlError("Couldn't interpret that — try rephrasing");
+      setTimeout(() => setNlError(""), 3000);
+      return;
+    }
+    
+    isAiFilterApplyRef.current = true;
+    
+    if (result.searchText) setSearch(result.searchText); else setSearch("");
+    if (result.pm) setPmFilter([result.pm]); else setPmFilter([]);
+    if (result.status) setStatusFilter([result.status]); else setStatusFilter([]);
+    if (result.projectType) setProjectTypeFilter([result.projectType]); else setProjectTypeFilter([]);
+    if (result.dueDateFrom) setDueFilterStart(result.dueDateFrom); else setDueFilterStart("");
+    if (result.dueDateTo) setDueFilterEnd(result.dueDateTo); else setDueFilterEnd("");
+    if (result.startDateFrom) setStartFilterStart(result.startDateFrom); else setStartFilterStart("");
+    if (result.startDateTo) setStartFilterEnd(result.startDateTo); else setStartFilterEnd("");
+    
+    if (result.overdue) {
+      setDueFilterEnd(format(new Date(getSydneyNow().getTime() - 86400000), 'yyyy-MM-dd'));
+    }
+    
+    setActiveNlFilter(nlQuery);
+    setNlQuery("");
+    setIsNlPopoverOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <TableSubtotals
@@ -887,18 +1032,85 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm flex flex-col h-full">
         {/* Table Toolbar */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Filter projects..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-4 focus:ring-brand/5 focus:border-brand/30 outline-none transition-all"
-            />
+          <div className="flex items-center gap-2 flex-1 max-w-2xl">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter projects..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-4 focus:ring-brand/5 focus:border-brand/30 outline-none transition-all"
+              />
+            </div>
+            
+            <div className="relative" ref={nlPopoverRef}>
+              <button
+                onClick={() => setIsNlPopoverOpen(!isNlPopoverOpen)}
+                className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-brand" />
+                <span className="text-[11px] font-bold whitespace-nowrap text-brand">
+                  AI Search
+                </span>
+              </button>
+
+              {isNlPopoverOpen && (
+                <div className="absolute left-0 mt-2 w-80 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex flex-col gap-2">
+                    <div className="relative flex items-center">
+                      <div className="absolute left-3 flex items-center justify-center">
+                        {isNlLoading ? (
+                          <Loader2 className="h-4 w-4 text-brand animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4 text-brand" />
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder='e.g. "Nithin&apos;s IFC jobs with less than 50 hours left"'
+                        value={nlQuery}
+                        onChange={(e) => setNlQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleNlSearchWithRef();
+                        }}
+                        disabled={isNlLoading}
+                        className="w-full pl-9 pr-14 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px] font-medium focus:ring-2 focus:ring-brand/10 focus:border-brand/40 outline-none transition-all disabled:opacity-50"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleNlSearchWithRef}
+                        disabled={isNlLoading || !nlQuery.trim()}
+                        className="absolute right-1.5 px-2 py-1 bg-brand text-white rounded-lg text-[10px] font-bold hover:bg-brand/90 transition-colors disabled:opacity-50"
+                      >
+                        Ask
+                      </button>
+                    </div>
+                    {nlError && (
+                      <span className="text-[10px] font-medium text-red-500 animate-in fade-in zoom-in duration-200 px-1">
+                        {nlError}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {activeNlFilter && (
+              <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 px-2 py-1.5 rounded-xl text-[11px] font-semibold animate-in fade-in zoom-in duration-200 border border-blue-200 dark:border-blue-500/30 shadow-sm ml-1">
+                <Sparkles className="h-3 w-3" />
+                <span className="max-w-[120px] truncate" title={activeNlFilter}>AI: {activeNlFilter}</span>
+                <button
+                  onClick={handleClearFilters}
+                  className="ml-0.5 hover:bg-blue-100 dark:hover:bg-blue-500/20 rounded-full p-0.5 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <FilterPopover 
@@ -924,7 +1136,6 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               selected={projectTypeFilter}
               onChange={setProjectTypeFilter}
             />
-
 
 
             <DateRangePicker 

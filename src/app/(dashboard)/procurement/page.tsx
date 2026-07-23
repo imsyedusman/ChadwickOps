@@ -4,35 +4,11 @@ import { ProcurementHubClient } from "@/components/procurement/ProcurementHubCli
 import { ProcurementSyncStatus } from "@/components/dashboard/ProcurementSyncStatus";
 import { ProcurementIntegrityBanner } from "@/components/procurement/ProcurementIntegrityBanner";
 import { HelpCircle } from "lucide-react";
-import { generatePageAISummary } from "@/app/actions/ai-insights";
-import { AISummaryCard } from "@/components/ui/AISummaryCard";
-import { Suspense } from "react";
+import { notInArray, count } from "drizzle-orm";
+import { ClientAISummaryCardWrapper } from "@/components/ui/ClientAISummaryCardWrapper";
 import { db } from "@/db";
 import { purchaseOrders } from "@/db/schema";
-import { notInArray, count } from "drizzle-orm";
 
-async function ProcurementAISummaryWrapper({ backorderData, outstandingValue }: { backorderData: any[], outstandingValue: number }) {
-  const resultData = await db.select({
-    count: count()
-  }).from(purchaseOrders).where(notInArray(purchaseOrders.status, ['Fully Received', 'Cancelled']));
-  const totalOpenPOs = resultData[0]?.count || 0;
-
-  const backorderedPOCount = new Set(backorderData.map(b => b.poNumber)).size;
-  const overduePOCount = new Set(backorderData.filter(b => b.daysOutstanding > 0).map(b => b.poNumber)).size;
-
-  const context = {
-    totalOpenPOCount: totalOpenPOs,
-    backorderedPOCount,
-    overduePOCount,
-    totalOutstandingValue: outstandingValue
-  };
-
-  const result = await generatePageAISummary("procurement", context);
-  const summary = result.success && result.data ? result.data.summary : null;
-  return <AISummaryCard summary={summary} loading={false} compact={true} />;
-}
-
-export const dynamic = "force-dynamic";
 
 export default async function ProcurementPage() {
   const [dashboardResult, backordersResult, supplierResult, syncProgressResult] = await Promise.all([
@@ -55,6 +31,21 @@ export default async function ProcurementPage() {
   const backorderData = backordersResult.data || [];
   const supplierData = supplierResult.data || [];
 
+  const resultData = await db.select({
+    count: count()
+  }).from(purchaseOrders).where(notInArray(purchaseOrders.status, ['Fully Received', 'Cancelled']));
+  const totalOpenPOs = resultData[0]?.count || 0;
+
+  const backorderedPOCount = new Set(backorderData.map(b => b.poNumber)).size;
+  const overduePOCount = new Set(backorderData.filter(b => b.daysOutstanding > 0).map(b => b.poNumber)).size;
+
+  const aiContext = {
+    totalOpenPOCount: totalOpenPOs,
+    backorderedPOCount,
+    overduePOCount,
+    totalOutstandingValue: summary.outstandingMaterialCost
+  };
+
   return (
     <div className="flex flex-col gap-8 p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       {/* Header */}
@@ -75,12 +66,7 @@ export default async function ProcurementPage() {
         
         <div className="flex flex-col items-end gap-3 w-full md:w-[45%]">
           <div className="w-full">
-            <Suspense fallback={<AISummaryCard summary={null} loading={true} compact={true} />}>
-              <ProcurementAISummaryWrapper 
-                backorderData={backorderData} 
-                outstandingValue={summary.outstandingMaterialCost} 
-              />
-            </Suspense>
+            <ClientAISummaryCardWrapper page="procurement" context={aiContext} compact={true} />
           </div>
           <div className="flex justify-end items-center gap-4">
             <ProcurementSyncStatus initialProgress={syncProgressResult} />

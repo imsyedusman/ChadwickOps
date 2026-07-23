@@ -19,15 +19,10 @@ import { cn } from "@/lib/utils";
 import { ProjectTable } from "@/components/dashboard/project-table";
 import { DashboardSummaries } from "@/components/dashboard/DashboardSummaries";
 import { isProductiveProject, isActiveWorkStatus } from "@/lib/project-utils";
-import { generatePageAISummary } from "@/app/actions/ai-insights";
 import { AISummaryCard } from "@/components/ui/AISummaryCard";
-import { Suspense } from "react";
+import { ClientAISummaryCardWrapper } from "@/components/ui/ClientAISummaryCardWrapper";
 
-async function WipAISummaryWrapper({ context }: { context: Record<string, any> }) {
-  const result = await generatePageAISummary("wip", context);
-  const summary = result.success && result.data ? result.data.summary : null;
-  return <AISummaryCard summary={summary} loading={false} compact={true} />;
-}
+
 
 export default async function DashboardPage({
   searchParams,
@@ -206,22 +201,22 @@ export default async function DashboardPage({
         </div>
         <div className="flex flex-col items-end gap-3 w-full md:w-[45%]">
           <div className="w-full">
-            <Suspense fallback={<AISummaryCard summary={null} loading={true} compact={true} />}>
-              <WipAISummaryWrapper context={aiContext} />
-            </Suspense>
+            <ClientAISummaryCardWrapper page="wip" context={aiContext} compact={true} />
           </div>
         </div>
       </div>
 
-      <DashboardSummaries 
-        totalCount={stats.activeJobs}
-        allCount={stats.total}
-        dueThisWeekCount={stats.dueThisWeek}
-        overdueCount={stats.overdue}
-        thisMonthCount={stats.thisMonth}
-        totalValue={stats.totalValue}
-        currentFilter={filter}
-      />
+      <div className="relative z-10">
+        <DashboardSummaries 
+          totalCount={stats.activeJobs}
+          allCount={stats.total}
+          dueThisWeekCount={stats.dueThisWeek}
+          overdueCount={stats.overdue}
+          thisMonthCount={stats.thisMonth}
+          totalValue={stats.totalValue}
+          currentFilter={filter}
+        />
+      </div>
 
 
       <div className="space-y-8">
