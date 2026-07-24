@@ -68,6 +68,24 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     };
 
     const currentCapacity = settings.staff * settings.hoursPerWeek * settings.weeksPerMonth * settings.efficiency;
+    
+    const today = new Date();
+    const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    let remainingWorkingDays = 0;
+    for (let d = today.getDate(); d <= endOfCurrentMonth.getDate(); d++) {
+        const date = new Date(today.getFullYear(), today.getMonth(), d);
+        const day = date.getDay();
+        if (day !== 0 && day !== 6) {
+            remainingWorkingDays++;
+        }
+    }
+    const dailyCapacity = (settings.staff * settings.hoursPerWeek * settings.efficiency) / 5;
+    const currentMonthCapacity = remainingWorkingDays * dailyCapacity;
+    const currentMonthStr = format(today, 'yyyy-MM');
+    
+    const getCapacityForMonth = (m: string) => {
+        return m === currentMonthStr ? currentMonthCapacity : currentCapacity;
+    };
 
     // Generate continuous months based on selector
     const months = useMemo(() => {
@@ -141,14 +159,14 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     }, [allProjects, months, settings.actualsFactor]);
 
     // Summary Metrics
-    const totalCapacity = currentCapacity * months.length;
+    const totalCapacity = months.reduce((acc, m) => acc + getCapacityForMonth(m), 0);
     const totalPlanned = months.reduce((acc, m) => acc + monthlyData[m].remaining, 0);
     const netAvailable = totalCapacity - totalPlanned;
-    const overloadedMonthsCount = months.filter(m => currentCapacity - monthlyData[m].remaining < 0).length;
+    const overloadedMonthsCount = months.filter(m => getCapacityForMonth(m) - monthlyData[m].remaining < 0).length;
 
     // Intelligent Insight - Productive Only
     const insightText = useMemo(() => {
-        const overloaded = months.find(m => currentCapacity - monthlyData[m].remaining < 0);
+        const overloaded = months.find(m => getCapacityForMonth(m) - monthlyData[m].remaining < 0);
         if (overloaded) {
             const topReqs = [...monthlyData[overloaded].projects]
                 .filter(p => isProductiveProject(p.projectNumber))
@@ -158,13 +176,13 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
             return `${format(parseISO(`${overloaded}-01`), 'MMMM')} is overloaded, primarily driven by ${names || 'multiple smaller projects'}.`;
         }
 
-        const atRisk = months.find(m => (currentCapacity - monthlyData[m].remaining) <= currentCapacity * 0.1);
+        const atRisk = months.find(m => (getCapacityForMonth(m) - monthlyData[m].remaining) <= getCapacityForMonth(m) * 0.1);
         if (atRisk) {
             return `Capacity tightens in ${format(parseISO(`${atRisk}-01`), 'MMMM')}. Consider spacing out deliverables.`;
         }
 
         return `Forward capacity is healthy with ample buffer across the next ${months.length} months.`;
-    }, [months, monthlyData, currentCapacity]);
+    }, [months, monthlyData, getCapacityForMonth]);
 
     // PM Load Breakdown - Split
     const pmLoad = useMemo(() => {
@@ -285,12 +303,13 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                         const d = monthlyData[m];
                                         const planned = d.remaining;
                                         const internal = d.internalRemaining;
-                                        const available = currentCapacity - planned;
-                                        const percent = currentCapacity > 0 ? (planned / currentCapacity) * 100 : 0;
+                                        const monthCap = getCapacityForMonth(m);
+                                        const available = monthCap - planned;
+                                        const percent = monthCap > 0 ? (planned / monthCap) * 100 : 0;
 
                                         const isSelected = selectedMonth === m;
                                         const isOverloaded = available < 0;
-                                        const isAtRisk = available >= 0 && available <= currentCapacity * 0.1;
+                                        const isAtRisk = available >= 0 && available <= monthCap * 0.1;
 
                                         const rowClass = cn(
                                             "transition-all cursor-pointer group",
@@ -342,6 +361,11 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                         isOverloaded ? "text-red-500" : isAtRisk ? "text-orange-500" : "text-emerald-600 dark:text-emerald-400"
                                                     )}>
                                                         {formatHours(available)}
+                                                        {m === currentMonthStr && (
+                                                            <div className="text-[9px] font-normal text-slate-400/80 mt-0.5">
+                                                                {remainingWorkingDays} days remaining
+                                                            </div>
+                                                        )}
                                                     </td>
 
                                                     {/* Visual Risk Bar */}

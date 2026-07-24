@@ -31,6 +31,24 @@ export default async function CapacityPage({
 
   const currentCapacity = settings.staff * settings.hoursPerWeek * settings.weeksPerMonth * settings.efficiency;
 
+  const today = new Date();
+  const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  let remainingWorkingDays = 0;
+  for (let d = today.getDate(); d <= endOfCurrentMonth.getDate(); d++) {
+      const date = new Date(today.getFullYear(), today.getMonth(), d);
+      const day = date.getDay();
+      if (day !== 0 && day !== 6) {
+          remainingWorkingDays++;
+      }
+  }
+  const dailyCapacity = (settings.staff * settings.hoursPerWeek * settings.efficiency) / 5;
+  const currentMonthCapacity = remainingWorkingDays * dailyCapacity;
+  const currentMonthStr = format(today, 'yyyy-MM');
+  
+  const getCapacityForMonth = (m: string) => {
+      return m === currentMonthStr ? currentMonthCapacity : currentCapacity;
+  };
+
   const monthsList: string[] = [];
   const now = startOfMonth(new Date());
   for (let i = 0; i < 6; i++) {
@@ -51,11 +69,12 @@ export default async function CapacityPage({
 
   const monthlyBreakdown = monthsList.map(m => {
      const demand = monthlyData[m].remaining;
-     const utilisation = currentCapacity > 0 ? Math.round((demand / currentCapacity) * 100) : 0;
+     const monthCap = getCapacityForMonth(m);
+     const utilisation = monthCap > 0 ? Math.round((demand / monthCap) * 100) : 0;
      return {
         month: format(parseISO(`${m}-01`), 'MMM yyyy'),
         demandHours: Math.round(demand),
-        availableHours: Math.round(currentCapacity),
+        availableHours: Math.round(monthCap),
         utilisationPercentage: utilisation
      }
   });
