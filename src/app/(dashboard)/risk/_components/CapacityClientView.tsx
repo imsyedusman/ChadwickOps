@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION, isActiveWorkStatus } from '@/lib/project-utils';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
     BarChart,
@@ -54,17 +55,54 @@ const formatHours = (value: number) => {
     return new Intl.NumberFormat('en-AU').format(Math.round(value)) + 'h';
 };
 
-const formatCompactCurrency = (value: number) => {
-    if (value >= 1000000) {
-        return '$' + (value / 1000000).toFixed(1) + 'M';
-    }
-    if (value >= 1000) {
-        return '$' + Math.round(value / 1000) + 'K';
-    }
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(value || 0);
-};
+function formatCompactCurrency(val: number) {
+    if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+    if (val >= 1000) return `$${(val / 1000).toFixed(1)}k`;
+    return `$${val}`;
+}
 
-type TimeRangeType = '3' | '6' | '12' | 'custom';
+function FormulaTooltip({ title, explanation, formula, dynamicCalculation }: { title: string, explanation: string, formula: string, dynamicCalculation: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open}>
+            <PopoverTrigger asChild>
+                <div 
+                    className="relative inline-flex items-center ml-1.5" 
+                    onMouseEnter={() => setOpen(true)} 
+                    onMouseLeave={() => setOpen(false)}
+                >
+                    <div className="bg-slate-200/50 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full p-[3px] cursor-help transition-colors">
+                        <Info className="h-3 w-3" />
+                    </div>
+                </div>
+            </PopoverTrigger>
+            <PopoverContent 
+                className="w-80 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl normal-case pointer-events-none z-[9999]" 
+                side="top" 
+                sideOffset={8}
+                onOpenAutoFocus={e => e.preventDefault()}
+                onInteractOutside={e => e.preventDefault()}
+            >
+                <div className="space-y-4">
+                    <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-xs mb-1.5">{title}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed font-normal">{explanation}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-950/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Formula</div>
+                        <code className="text-[11px] text-brand font-mono font-medium block whitespace-pre-wrap">{formula}</code>
+                    </div>
+                    <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Calculation Example</div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400 font-mono font-medium whitespace-pre-wrap leading-relaxed bg-slate-100/50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                            {dynamicCalculation}
+                        </div>
+                    </div>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
 
 export default function CapacityClientView({ initialSettings, allProjects }: CapacityClientViewProps) {
     const [settings, setSettings] = useState<CapacitySettings>(initialSettings);
@@ -232,6 +270,11 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
             .filter(([_, stats]) => (stats.productive + stats.internal) > 0);
     }, [monthlyData, months]);
 
+    const exMonth = selectedMonth && months.includes(selectedMonth) ? selectedMonth : months[0];
+    const exData = exMonth ? monthlyData[exMonth] : null;
+    const exMonthCap = exMonth ? getCapacityForMonth(exMonth) : 0;
+    const exMonthStr = exMonth ? format(parseISO(`${exMonth}-01`), 'MMM yyyy') : '';
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-slate-50 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
@@ -277,47 +320,97 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200/60 dark:border-slate-700/60 text-[10px] uppercase tracking-widest font-bold text-slate-400">
-                                    <tr>
+                                    <tr className="whitespace-nowrap">
                                         <th className="px-5 py-3">Month</th>
                                         <th className="px-5 py-3 text-right">
-                                            <Tooltip content="Number of active productive projects contributing to workload this month.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Active Jobs</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Active Jobs</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Active Jobs"
+                                                    explanation="Jobs with an active production status due this month. Internal 99-series jobs excluded."
+                                                    formula="Count of active productive jobs"
+                                                    dynamicCalculation={`For ${exMonthStr}: ${exData.activeJobs}`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right">
-                                            <Tooltip content="Total value of active productive projects contributing to workload this month.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Active Value</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Active Value</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Active Value"
+                                                    explanation="Total contract value of active productive jobs due this month."
+                                                    formula="Sum of contract values (active jobs only)"
+                                                    dynamicCalculation={`For ${exMonthStr}: $${exData.activeValue.toLocaleString()}`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right">
-                                            <Tooltip content="Total value of all scheduled projects for this month (including non-productive projects).">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Total Value</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Total Value</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Total Value"
+                                                    explanation="Total contract value of all jobs due this month regardless of status."
+                                                    formula="Sum of contract values (all jobs)"
+                                                    dynamicCalculation={`For ${exMonthStr}: $${exData.totalValue.toLocaleString()}`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right">
-                                            <Tooltip content="Total estimated hours from all project tasks in WorkGuru.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Budget</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Budget</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Budget"
+                                                    explanation="Total budgeted hours across all active productive jobs due this month."
+                                                    formula="Sum of budgeted hours"
+                                                    dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.budget)} hrs`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right">
-                                            <Tooltip content="Adjusted productive hours (raw actuals × actuals factor). Raw WorkGuru hours shown in brackets.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Actual</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Actual</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Actual"
+                                                    explanation="Hours logged in WorkGuru adjusted by the Actuals Factor. Bracketed figure is raw unmodified logged hours."
+                                                    formula="Logged Hours × Actuals Factor"
+                                                    dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.rawActual)} hrs × ${settings.actualsFactor ?? 0.7} = ${formatHours(exData.actual)} hrs`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">
-                                            <Tooltip content="Outstanding work (Budget minus Actual). Calculated for active projects only.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Remaining</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Remaining</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Remaining"
+                                                    explanation="Estimated hours still to complete."
+                                                    formula="Budget Hours − (Logged Hours × Actuals Factor)"
+                                                    dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.budget)} - ${formatHours(exData.actual)} = ${formatHours(exData.remaining)} hrs`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 text-right text-slate-700 dark:text-slate-300">
-                                            <Tooltip content="Capacity minus Remaining work. Shows how much more work the workshop can take on.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Available</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end">
+                                                <span>Available</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Available"
+                                                    explanation="Team capacity remaining after demand. Negative means overloaded."
+                                                    formula={`Monthly Capacity − Remaining Hours\n\n${exMonth === currentMonthStr ? 'Monthly Capacity = Remaining Working Days × (Staff × Hrs/Wk × Efficiency ÷ 5)' : 'Monthly Capacity = Staff × Hrs/Wk × Wks/Mo × Efficiency'}`}
+                                                    dynamicCalculation={exMonth === currentMonthStr 
+                                                        ? `For ${exMonthStr}:\nCapacity = ${remainingWorkingDays}d × (${settings.staff} × ${settings.hoursPerWeek} × ${settings.efficiency} ÷ 5) = ${formatHours(exMonthCap)} hrs\nAvailable = ${formatHours(exMonthCap)} - ${formatHours(exData.remaining)} = ${formatHours(exMonthCap - exData.remaining)} hrs`
+                                                        : `For ${exMonthStr}:\nCapacity = ${settings.staff} × ${settings.hoursPerWeek} × ${settings.weeksPerMonth} × ${settings.efficiency} = ${formatHours(exMonthCap)} hrs\nAvailable = ${formatHours(exMonthCap)} - ${formatHours(exData.remaining)} = ${formatHours(exMonthCap - exData.remaining)} hrs`}
+                                                />}
+                                            </div>
                                         </th>
                                         <th className="px-5 py-3 w-[25%] text-left">
-                                            <Tooltip content="Workload vs. available capacity. Higher % means higher risk of delays.">
-                                                <span className="cursor-help border-b border-dotted border-slate-300">Capacity Utilization</span>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-start">
+                                                <span>Capacity Utilization</span>
+                                                {exData && <FormulaTooltip 
+                                                    title="Capacity Utilisation"
+                                                    explanation="Remaining demand as a percentage of available capacity."
+                                                    formula="Remaining Hours ÷ Monthly Capacity × 100"
+                                                    dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.remaining)} ÷ ${formatHours(exMonthCap)} × 100 = ${exMonthCap > 0 ? Math.round((exData.remaining / exMonthCap) * 100) : 0}%`}
+                                                />}
+                                            </div>
                                         </th>
                                     </tr>
                                 </thead>
