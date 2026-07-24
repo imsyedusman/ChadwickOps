@@ -149,7 +149,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     };
 
     const months = useMemo(() => {
-        const list = [];
+        let list = [];
         if (timeRange === 'custom') {
             let curr = parseISO(`${customStart}-01`);
             const end = parseISO(`${customEnd}-01`);
@@ -167,6 +167,10 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                 list.push(format(addMonths(now, i), 'yyyy-MM'));
             }
         }
+        
+        list = list.filter(m => m !== '2030-12');
+        list.push('2030-12');
+        
         return list;
     }, [timeRange, customStart, customEnd]);
 
