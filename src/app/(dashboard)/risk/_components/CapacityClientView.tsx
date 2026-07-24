@@ -8,6 +8,27 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION, isActiveWorkStatus } from '@/lib/project-utils';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    ReferenceLine,
+    Cell
+} from 'recharts';
+
+const chartConfig = {
+    demand: {
+        label: "Remaining Demand",
+        color: "#3b82f6",
+    },
+    capacity: {
+        label: "Available Capacity",
+        color: "#94a3b8",
+    },
+} satisfies ChartConfig;
 
 interface Project {
     id: number;
@@ -26,7 +47,7 @@ interface Project {
 interface CapacityClientViewProps {
     initialSettings: CapacitySettings;
     allProjects: Project[];
-    initialHorizon: number; // Ignored for Phase 4 since we track local state
+    initialHorizon: number;
 }
 
 const formatHours = (value: number) => {
@@ -68,7 +89,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     };
 
     const currentCapacity = settings.staff * settings.hoursPerWeek * settings.weeksPerMonth * settings.efficiency;
-    
+
     const today = new Date();
     const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     let remainingWorkingDays = 0;
@@ -82,25 +103,23 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     const dailyCapacity = (settings.staff * settings.hoursPerWeek * settings.efficiency) / 5;
     const currentMonthCapacity = remainingWorkingDays * dailyCapacity;
     const currentMonthStr = format(today, 'yyyy-MM');
-    
+
     const getCapacityForMonth = (m: string) => {
         return m === currentMonthStr ? currentMonthCapacity : currentCapacity;
     };
 
-    // Generate continuous months based on selector
     const months = useMemo(() => {
         const list = [];
         if (timeRange === 'custom') {
             let curr = parseISO(`${customStart}-01`);
             const end = parseISO(`${customEnd}-01`);
-            // Guard against infinite loop if invalid
             let count = 0;
             while (curr <= end && count < 60) {
                 list.push(format(curr, 'yyyy-MM'));
                 curr = addMonths(curr, 1);
                 count++;
             }
-            if (list.length === 0) list.push(format(new Date(), 'yyyy-MM')); // Fallback
+            if (list.length === 0) list.push(format(new Date(), 'yyyy-MM'));
         } else {
             const horizon = parseInt(timeRange);
             const now = startOfMonth(new Date());
@@ -128,16 +147,13 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
             if (!p.deliveryDate) return;
             const m = format(new Date(p.deliveryDate), 'yyyy-MM');
             if (data[m]) {
-                // 1. Total Value includes EVERY unarchived project mapped to this month
                 data[m].totalValue += (Number(p.total) || 0);
 
-                // 2. Gate operational metrics to active production statuses
                 if (isActiveWorkStatus(p.rawStatus)) {
                     const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
                     const calculatedRemaining = p.budgetHours - adjustedActual;
                     const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
 
-                    // 3. Separate productive vs internal load
                     if (isProductiveProject(p.projectNumber)) {
                         data[m].budget += p.budgetHours;
                         data[m].actual += adjustedActual;
@@ -149,7 +165,6 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                         data[m].internalRemaining += calculatedRemaining;
                     }
 
-                    // 4. Only active projects populate the Top Drivers & PM Load arrays
                     data[m].projects.push(modifiedProject);
                 }
             }
@@ -158,13 +173,26 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
         return data;
     }, [allProjects, months, settings.actualsFactor]);
 
-    // Summary Metrics
+    const chartData = useMemo(() => {
+        return months.map(m => {
+            const planned = monthlyData[m].remaining;
+            const monthCap = getCapacityForMonth(m);
+            return {
+                name: format(parseISO(`${m}-01`), 'MMM yy'),
+                month: m,
+                demand: Math.round(planned),
+                capacity: Math.round(monthCap),
+                utilisation: monthCap > 0 ? Math.round((planned / monthCap) * 100) : 0,
+                isCurrentMonth: m === currentMonthStr
+            };
+        });
+    }, [months, monthlyData, currentMonthStr]);
+
     const totalCapacity = months.reduce((acc, m) => acc + getCapacityForMonth(m), 0);
     const totalPlanned = months.reduce((acc, m) => acc + monthlyData[m].remaining, 0);
     const netAvailable = totalCapacity - totalPlanned;
     const overloadedMonthsCount = months.filter(m => getCapacityForMonth(m) - monthlyData[m].remaining < 0).length;
 
-    // Intelligent Insight - Productive Only
     const insightText = useMemo(() => {
         const overloaded = months.find(m => getCapacityForMonth(m) - monthlyData[m].remaining < 0);
         if (overloaded) {
@@ -184,7 +212,6 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
         return `Forward capacity is healthy with ample buffer across the next ${months.length} months.`;
     }, [months, monthlyData, getCapacityForMonth]);
 
-    // PM Load Breakdown - Split
     const pmLoad = useMemo(() => {
         const load: Record<string, { productive: number; internal: number }> = {};
         months.forEach(m => {
@@ -201,13 +228,12 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
         });
 
         return Object.entries(load)
-            .sort((a, b) => (b[1].productive + b[1].internal) - (a[1].productive + a[1].internal)) // Sort by total load
+            .sort((a, b) => (b[1].productive + b[1].internal) - (a[1].productive + a[1].internal))
             .filter(([_, stats]) => (stats.productive + stats.internal) > 0);
     }, [monthlyData, months]);
 
     return (
         <div className="space-y-6">
-            {/* Dynamic Time Selector & Insight */}
             <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-slate-50 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
                 <div className="flex items-center gap-3">
                     <div className="flex p-1 bg-white dark:bg-slate-950 rounded-xl shadow-sm border border-slate-200/50 dark:border-slate-800/50">
@@ -230,14 +256,12 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                     )}
                 </div>
 
-                {/* Simple Insight */}
                 <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300">
                     <Lightbulb className="h-4 w-4 shrink-0" />
                     <p className="text-xs font-semibold">{insightText}</p>
                 </div>
             </div>
 
-            {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <SummaryCard title="Total Demand" value={formatHours(totalPlanned)} subtitle={`${months.length} mo horizon`} icon={<PieChart />} />
                 <SummaryCard title="Total Capacity" value={formatHours(totalCapacity)} subtitle={`Team of ${settings.staff}`} icon={<Users />} />
@@ -245,10 +269,9 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                 <SummaryCard title="Risk Periods" value={overloadedMonthsCount} suffix="mos" subtitle="Overloaded months" highlight={overloadedMonthsCount > 0 ? 'orange' : 'neutral'} icon={<AlertTriangle />} />
             </div>
 
-            {/* Main Grid: Data & Sidebars */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
-                {/* Table & Drivers (Left 9 columns) */}
+
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                 <div className="xl:col-span-9 space-y-6">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
@@ -463,6 +486,101 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                             </div>
                         </div>
                     )}
+
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-sm">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Demand vs Capacity</h3>
+                        
+                        {/* Custom Legend */}
+                        <div className="flex flex-wrap items-center gap-4 mb-4 text-[10px] font-medium text-slate-500">
+                            <div className="flex items-center gap-1">
+                                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#10b981]"></div>
+                                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#f59e0b]"></div>
+                                <div className="w-2.5 h-2.5 rounded-[2px] bg-[#ef4444]"></div>
+                                <span className="ml-1">Remaining demand (Green &lt; 80%, Amber 80-90%, Red &gt; 90%)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 rounded-[2px] bg-slate-400"></div>
+                                <span>Available capacity</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-4 h-0.5 border-t-2 border-dashed border-amber-500"></div>
+                                <span>90% warning threshold</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-4 h-0.5 border-t-2 border-dashed border-red-500"></div>
+                                <span>100% capacity limit</span>
+                            </div>
+                        </div>
+
+                        <ChartContainer config={chartConfig} className="h-72 w-full">
+                            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} tickFormatter={(val) => `${val}h`} />
+                                <ChartTooltip 
+                                    cursor={{ fill: 'var(--muted)' }}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            let color = '#10b981';
+                                            if (data.utilisation >= 90) color = '#ef4444';
+                                            else if (data.utilisation >= 80) color = '#f59e0b';
+                                            
+                                            return (
+                                                <div className="grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                                                    <div className="font-medium">{format(parseISO(`${data.month}-01`), 'MMMM yyyy')}</div>
+                                                    <div className="grid gap-1.5">
+                                                        <div className="flex w-full items-center gap-2">
+                                                            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
+                                                            <div className="flex flex-1 justify-between leading-none items-center gap-4">
+                                                                <span className="text-muted-foreground">{chartConfig.demand.label}</span>
+                                                                <span className="font-mono font-medium tabular-nums text-foreground">{data.demand}h</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex w-full items-center gap-2">
+                                                            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--color-capacity)]" />
+                                                            <div className="flex flex-1 justify-between leading-none items-center gap-4">
+                                                                <span className="text-muted-foreground">{chartConfig.capacity.label}</span>
+                                                                <span className="font-mono font-medium tabular-nums text-foreground">{data.capacity}h</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex w-full items-center gap-2 mt-1 pt-1 border-t border-border/50">
+                                                            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-transparent" />
+                                                            <div className="flex flex-1 justify-between leading-none items-center gap-4">
+                                                                <span className="text-muted-foreground">Utilisation</span>
+                                                                <span className="font-mono font-medium tabular-nums text-foreground">{data.utilisation}%</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <ReferenceLine y={Math.round(currentCapacity * 0.9)} stroke="#f59e0b" strokeDasharray="4 4" label={{ position: 'insideTopRight', value: '90% threshold', fill: '#f59e0b', fontSize: 10 }} />
+                                <ReferenceLine y={Math.round(currentCapacity)} stroke="#ef4444" strokeDasharray="4 4" label={{ position: 'insideTopRight', value: 'Capacity limit', fill: '#ef4444', fontSize: 10 }} />
+                                <Bar dataKey="demand" name="demand" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                                    {chartData.map((entry, index) => {
+                                        let color = '#10b981';
+                                        if (entry.utilisation >= 90) color = '#ef4444';
+                                        else if (entry.utilisation >= 80) color = '#f59e0b';
+                                        return <Cell key={`cell-demand-${index}`} fill={color} fillOpacity={entry.isCurrentMonth ? 0.6 : 1} />;
+                                    })}
+                                </Bar>
+                                <Bar dataKey="capacity" name="capacity" fill="var(--color-capacity)" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                                    {chartData.map((entry, index) => (
+                                        <Cell key={`cell-cap-${index}`} fillOpacity={entry.isCurrentMonth ? 0.6 : 1} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+
+                        <p className="mt-4 text-[10px] text-slate-400 italic">
+                            Utilisation = Demand ÷ Capacity × 100. {format(today, 'MMMM')} capacity is prorated for remaining working days only.
+                        </p>
+                    </div>
+
                 </div>
 
                 {/* Right Sidebar (Settings + PM Load) */}
