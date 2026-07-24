@@ -27,17 +27,19 @@ export async function generatePageAISummary(page: "wip" | "capacity" | "procurem
       procurement: "Procurement Hub"
     };
 
-    let promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that captures the most important thing about the current data state. Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not.
+    let promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that captures the most important thing about the current data state. Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not. If the data looks bad, roast the team for it.
 Then: exactly 3 bullet points (using a hyphen - not asterisk *) covering key stats or things to act on. Each bullet one sentence max.
-No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Just 2 sentences then 3 hyphen bullets. Tell Ollama explicitly to follow this structure and nothing else.`;
+OUTPUT FORMAT (CRITICAL): No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Your entire response must be ONLY the 2 sentences followed immediately by the 3 hyphen bullets. Do not include any meta-text, pleasantries, or acknowledge these instructions.`;
 
     if (page === "capacity") {
-      promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that interprets the data and tells the operations team what they should actually pay attention to right now. Is the workload front-loaded or spread evenly? When does capacity get tight? Is there enough buffer? Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not.
+      promptInstructions = `First: exactly 2 sentences — a punchy plain English lead that interprets the data and tells the operations team what they should actually pay attention to right now. Is the workload front-loaded or spread evenly? When does capacity get tight? Is there enough buffer? Direct, specific, include at least one number. Dry wit welcome, forced enthusiasm not. If the data looks bad, roast the team for it.
 Then: exactly 3 bullet points (using a hyphen - not asterisk *) covering key stats or things to act on. Each bullet one sentence max.
-No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Just 2 sentences then 3 hyphen bullets. Tell Ollama explicitly to follow this structure and nothing else.`;
+OUTPUT FORMAT (CRITICAL): No headers, no bold formatting, no numbered lists, no "key takeaways" sections. Your entire response must be ONLY the 2 sentences followed immediately by the 3 hyphen bullets. Do not include any meta-text, pleasantries, or acknowledge these instructions.`;
     }
 
-    const prompt = `You are an operations assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data from the ${pageNames[page]}, ${promptInstructions}
+    const prompt = `You are an operations assistant for Chadwick Switchboards, a switchboard manufacturing company. Based on the following data from the ${pageNames[page]}, perform the following analysis:
+
+${promptInstructions}
 
 Current data:
 ${contextString}
