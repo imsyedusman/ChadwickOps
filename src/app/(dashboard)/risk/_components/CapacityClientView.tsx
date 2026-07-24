@@ -61,6 +61,8 @@ function formatCompactCurrency(val: number) {
     return `$${val}`;
 }
 
+type TimeRangeType = '3' | '6' | '12' | 'custom';
+
 function FormulaTooltip({ title, explanation, formula, dynamicCalculation }: { title: string, explanation: string, formula: string, dynamicCalculation: string }) {
     const [open, setOpen] = useState(false);
     return (
