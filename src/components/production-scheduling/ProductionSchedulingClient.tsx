@@ -15,6 +15,7 @@ import Link from "next/link";
 import { StageHoursPanel } from "./StageHoursPanel";
 import { WorkerDetailPanel } from "./WorkerDetailPanel";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { DateRangePicker } from "../ui/DateRangePicker";
 
 interface Props {
   initialData: {
@@ -42,6 +43,10 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
   const [hideDimmed, setHideDimmed] = useState(false);
   const [activeSummaryFilter, setActiveSummaryFilter] = useState<"active" | "testing" | "onHold" | "overdue" | null>(null);
   const [sortBy, setSortBy] = useState("Due Date");
+  const [startFilterStart, setStartFilterStart] = useState("");
+  const [startFilterEnd, setStartFilterEnd] = useState("");
+  const [dueFilterStart, setDueFilterStart] = useState("");
+  const [dueFilterEnd, setDueFilterEnd] = useState("");
   const [overtimeHours, setOvertimeHours] = useState(0);
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
   const [showOnlyAtRisk, setShowOnlyAtRisk] = useState(false);
@@ -133,7 +138,15 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
 
             const matchMaterials = !materialsDelivered || (p.sheetmetalDeliveredDate !== null || p.switchgearDeliveredDate !== null);
 
-      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter && matchAtRisk && matchMaterials;
+      const pStartDate = p.scheduledStart ? new Date(p.scheduledStart) : null;
+      const matchStartDate = (!startFilterStart || (pStartDate && format(pStartDate, 'yyyy-MM-dd') >= startFilterStart)) &&
+        (!startFilterEnd || (pStartDate && format(pStartDate, 'yyyy-MM-dd') <= startFilterEnd));
+
+      const pDueDate = p.deliveryDate ? new Date(p.deliveryDate) : null;
+      const matchDueDate = (!dueFilterStart || (pDueDate && format(pDueDate, 'yyyy-MM-dd') >= dueFilterStart)) &&
+        (!dueFilterEnd || (pDueDate && format(pDueDate, 'yyyy-MM-dd') <= dueFilterEnd));
+
+      return matchSearch && matchManager && matchType && matchHideDimmed && matchSummaryFilter && matchAtRisk && matchMaterials && matchStartDate && matchDueDate;
     }).map(p => {
       let isBlocked = false;
       const blockReasons: string[] = [];
@@ -173,7 +186,7 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       return 0;
     });
     return result;
-  }, [projects, searchQuery, selectedManager, selectedType, hideDimmed, activeSummaryFilter, sortBy, showOnlyAtRisk, materialsDelivered]);
+  }, [projects, searchQuery, selectedManager, selectedType, hideDimmed, activeSummaryFilter, sortBy, showOnlyAtRisk, materialsDelivered, startFilterStart, startFilterEnd, dueFilterStart, dueFilterEnd]);
 
   const summaryCounts = useMemo(() => {
     let active = 0;
@@ -541,19 +554,20 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all text-slate-900 dark:text-slate-100"
-          />
-        </div>
-        
-        <div className="flex gap-4 w-full md:w-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 shadow-sm flex flex-col gap-4">
+        {/* Row 1: Filters */}
+        <div className="flex flex-wrap items-end gap-4 w-full">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search projects..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all text-slate-900 dark:text-slate-100"
+            />
+          </div>
+
           <div className="flex flex-col gap-1 w-full md:w-48">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Manager</label>
             <select
@@ -596,6 +610,29 @@ export function ProductionSchedulingClient({ initialData, insights, canDrag = fa
             </select>
           </div>
 
+          <DateRangePicker
+            label="Start Date"
+            startDate={startFilterStart}
+            endDate={startFilterEnd}
+            onRangeChange={(start, end) => {
+              setStartFilterStart(start);
+              setStartFilterEnd(end);
+            }}
+          />
+
+          <DateRangePicker
+            label="Due Date"
+            startDate={dueFilterStart}
+            endDate={dueFilterEnd}
+            onRangeChange={(start, end) => {
+              setDueFilterStart(start);
+              setDueFilterEnd(end);
+            }}
+          />
+        </div>
+
+        {/* Row 2: Actions */}
+        <div className="flex flex-wrap items-end justify-end gap-4 w-full pt-4 border-t border-slate-100 dark:border-slate-800/50">
           <div className="relative flex flex-col justify-end">
             <button
               onClick={() => setIsViewPopoverOpen(!isViewPopoverOpen)}
