@@ -90,7 +90,8 @@ export async function getWorkshopInProgress() {
                 projectNumber: p.projectNumber,
                 progressPercent: p.progressPercent, // Uncapped, exactly as calculated
                 deliveryDate: p.deliveryDate,
-                priority: p.priority
+                priority: p.priority,
+                statusReason: p.rawStatus
             });
         }
     }
