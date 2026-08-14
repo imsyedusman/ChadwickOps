@@ -74,6 +74,7 @@ export class ProfitabilitySyncService {
           projectNumber: item.ProjectNo,
           quotedProfit: item.ForecastDollarProfit ? Number(item.ForecastDollarProfit) : 0,
           actualProfit: item.DollarProfit ? Number(item.DollarProfit) : 0,
+          invoicedAmount: item.TotalInvoiced ? Number(item.TotalInvoiced) : (item.Total ? Number(item.Total) : 0),
           completionDate: null, // Active projects usually aren't completed
           isHistorical: false,
           lastSyncedAt: new Date()
@@ -93,6 +94,7 @@ export class ProfitabilitySyncService {
               set: {
                 quotedProfit: sql`EXCLUDED.quoted_profit`,
                 actualProfit: sql`EXCLUDED.actual_profit`,
+                invoicedAmount: sql`EXCLUDED.invoiced_amount`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,
@@ -136,6 +138,7 @@ export class ProfitabilitySyncService {
             projectNumber: item.ProjectNo,
             quotedProfit: quotedProfit,
             actualProfit: actualProfit,
+            invoicedAmount: total,
             completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
             isHistorical: true,
             lastSyncedAt: new Date()
@@ -155,6 +158,7 @@ export class ProfitabilitySyncService {
               set: {
                 quotedProfit: sql`EXCLUDED.quoted_profit`,
                 actualProfit: sql`EXCLUDED.actual_profit`,
+                invoicedAmount: sql`EXCLUDED.invoiced_amount`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,

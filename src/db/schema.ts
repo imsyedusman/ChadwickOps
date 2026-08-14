@@ -378,6 +378,7 @@ export const profitabilityData = pgTable('profitability_data', {
   projectNumber: varchar('project_number', { length: 100 }).notNull().unique(),
   quotedProfit: doublePrecision('quoted_profit').default(0).notNull(),
   actualProfit: doublePrecision('actual_profit').default(0).notNull(),
+  invoicedAmount: doublePrecision('invoiced_amount').default(0).notNull(),
   completionDate: timestamp('completion_date'),
   isHistorical: boolean('is_historical').default(false).notNull(),
   lastSyncedAt: timestamp('last_synced_at').defaultNow().notNull(),

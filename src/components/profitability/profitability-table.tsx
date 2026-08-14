@@ -6,7 +6,7 @@ import {
   Search, ChevronDown, ChevronRight, TrendingUp, AlertTriangle, ExternalLink,
   Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle, 
   PauseCircle, Timer, CheckCircle2, Receipt, DollarSign, Truck, Archive, Ban, HelpCircle,
-  Filter, Layers, Check, Briefcase, TrendingDown, Calendar
+  Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -25,6 +25,7 @@ export interface MergedProfitabilityProject {
   deliveryDate: Date | null;
   quotedProfit: number;
   actualProfit: number;
+  invoicedAmount: number;
   completionDate: Date | null;
   isHistorical: boolean;
 }
@@ -179,6 +180,10 @@ const formatDate = (date: Date | null | undefined) => {
   return format(date, "dd-MMM-yy");
 };
 
+const getMarginPct = (est: number, act: number) => {
+  return est > 0 ? (act - est) / Math.abs(est) * 100 : 0;
+};
+
 const getMarginColor = (marginPct: number) => {
   if (marginPct < 0) return "text-red-600 dark:text-red-400";
   if (marginPct <= 15) return "text-amber-500 dark:text-amber-400";
@@ -190,6 +195,8 @@ const MONTH_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
+type SortKey = "project" | "client" | "schedule" | "status" | "profit";
+
 export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState<"active" | "completed">("active");
@@ -199,6 +206,29 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [monthFilter, setMonthFilter] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  
+  const [sortKey, setSortKey] = useState<SortKey>("profit");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  // Reset sorting defaults when switching active/completed tabs
+  useEffect(() => {
+    if (filterActive === "active") {
+      setSortKey("profit");
+      setSortDir("asc"); // Worst performing at the top
+    } else {
+      setSortKey("schedule");
+      setSortDir("desc"); // Newest completed at the top
+    }
+  }, [filterActive]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir(key === "profit" || key === "schedule" ? "desc" : "asc"); // logical defaults for new columns
+    }
+  };
 
   const allStatuses = useMemo(() => {
     const s = new Set<string>();
@@ -237,7 +267,13 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       }
 
       const rawStatusStr = project.rawStatus?.toLowerCase() || "";
-      const isCompletedStatus = rawStatusStr.includes("completed") || rawStatusStr.includes("delivered") || rawStatusStr.includes("cancelled");
+      const isCompletedStatus = 
+        rawStatusStr.includes("completed") || 
+        rawStatusStr.includes("delivered") || 
+        rawStatusStr.includes("cancelled") ||
+        rawStatusStr.includes("invoiced") ||
+        rawStatusStr.includes("ready for invoicing");
+        
       const isCompleted = isCompletedStatus || project.isHistorical;
 
       if (filterActive === "active" && isCompleted) return false;
@@ -299,6 +335,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       projects: MergedProfitabilityProject[];
       totalEstimated: number;
       totalActual: number;
+      totalInvoiced: number;
       hasLoss: boolean;
     }> = {};
 
@@ -314,6 +351,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           projects: [],
           totalEstimated: 0,
           totalActual: 0,
+          totalInvoiced: 0,
           hasLoss: false,
         };
       }
@@ -321,13 +359,75 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       groups[prefix].projects.push(project);
       groups[prefix].totalEstimated += project.quotedProfit;
       groups[prefix].totalActual += project.actualProfit;
+      groups[prefix].totalInvoiced += project.invoicedAmount;
       if (project.actualProfit < 0) {
         groups[prefix].hasLoss = true;
       }
     }
     
-    return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
-  }, [filteredProjects]);
+    const groupsArray = Object.values(groups);
+    
+    // Sort logic
+    groupsArray.forEach(group => {
+      group.projects.sort((a, b) => {
+        let valA, valB;
+        switch (sortKey) {
+          case "project":
+            valA = a.projectNumber;
+            valB = b.projectNumber;
+            return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case "client":
+            valA = a.clientName || "";
+            valB = b.clientName || "";
+            return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case "schedule":
+            valA = filterActive === "completed" ? (a.completionDate?.getTime() || 0) : (a.startDate?.getTime() || 0);
+            valB = filterActive === "completed" ? (b.completionDate?.getTime() || 0) : (b.startDate?.getTime() || 0);
+            return sortDir === "asc" ? valA - valB : valB - valA;
+          case "status":
+            valA = a.rawStatus || "";
+            valB = b.rawStatus || "";
+            return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          case "profit":
+            valA = getMarginPct(a.quotedProfit, a.actualProfit);
+            valB = getMarginPct(b.quotedProfit, b.actualProfit);
+            return sortDir === "asc" ? valA - valB : valB - valA;
+          default:
+            return 0;
+        }
+      });
+    });
+
+    groupsArray.sort((a, b) => {
+      let valA, valB;
+      switch (sortKey) {
+        case "project":
+          valA = a.key;
+          valB = b.key;
+          return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case "client":
+          valA = a.projects[0]?.clientName || "";
+          valB = b.projects[0]?.clientName || "";
+          return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case "schedule":
+          valA = filterActive === "completed" ? (a.projects[0]?.completionDate?.getTime() || 0) : (a.projects[0]?.startDate?.getTime() || 0);
+          valB = filterActive === "completed" ? (b.projects[0]?.completionDate?.getTime() || 0) : (b.projects[0]?.startDate?.getTime() || 0);
+          return sortDir === "asc" ? valA - valB : valB - valA;
+        case "status":
+          valA = a.projects[0]?.rawStatus || "";
+          valB = b.projects[0]?.rawStatus || "";
+          return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case "profit":
+          valA = getMarginPct(a.totalEstimated, a.totalActual);
+          valB = getMarginPct(b.totalEstimated, b.totalActual);
+          return sortDir === "asc" ? valA - valB : valB - valA;
+        default:
+          return 0;
+      }
+    });
+
+    return groupsArray;
+  }, [filteredProjects, sortKey, sortDir, filterActive]);
 
   const toggleGroup = (key: string) => {
     const newCollapsed = new Set(collapsedGroups);
@@ -341,6 +441,13 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const renderSortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return <div className="w-3.5 inline-block opacity-0 group-hover:opacity-30 transition-opacity"><ArrowDown className="h-3.5 w-3.5 inline ml-1" /></div>;
+    return sortDir === "asc" 
+      ? <ArrowUp className="h-3.5 w-3.5 inline ml-1 text-brand" /> 
+      : <ArrowDown className="h-3.5 w-3.5 inline ml-1 text-brand" />;
   };
 
   return (
@@ -485,11 +592,36 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             <thead className="bg-slate-50 dark:bg-slate-800 border-b text-slate-500 dark:text-slate-400 font-medium">
               <tr>
                 <th className="px-4 py-3 font-semibold w-12"></th>
-                <th className="px-4 py-3 font-semibold w-[20%]">Project</th>
-                <th className="px-4 py-3 font-semibold w-[20%]">Client & PM</th>
-                <th className="px-4 py-3 font-semibold min-w-[200px]">Schedule</th>
-                <th className="px-4 py-3 font-semibold w-[200px]">Status / Type</th>
-                <th className="px-4 py-3 font-semibold text-right min-w-[180px]">Profit & Variance</th>
+                <th 
+                  className="px-4 py-3 font-semibold w-[20%] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  onClick={() => toggleSort("project")}
+                >
+                  Project {renderSortIndicator("project")}
+                </th>
+                <th 
+                  className="px-4 py-3 font-semibold w-[20%] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  onClick={() => toggleSort("client")}
+                >
+                  Client & PM {renderSortIndicator("client")}
+                </th>
+                <th 
+                  className="px-4 py-3 font-semibold min-w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  onClick={() => toggleSort("schedule")}
+                >
+                  Schedule {renderSortIndicator("schedule")}
+                </th>
+                <th 
+                  className="px-4 py-3 font-semibold w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  onClick={() => toggleSort("status")}
+                >
+                  Status / Type {renderSortIndicator("status")}
+                </th>
+                <th 
+                  className="px-4 py-3 font-semibold text-right min-w-[180px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  onClick={() => toggleSort("profit")}
+                >
+                  Profit & Variance {renderSortIndicator("profit")}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -509,7 +641,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                 const variance = group.totalActual - group.totalEstimated;
                 const progressPct = group.totalEstimated > 0 ? Math.min(100, Math.max(0, (group.totalActual / group.totalEstimated) * 100)) : 0;
                 
-                const groupMargin = group.totalEstimated > 0 ? (group.totalActual - group.totalEstimated) / Math.abs(group.totalEstimated) * 100 : 0;
+                const groupMargin = getMarginPct(group.totalEstimated, group.totalActual);
 
                 return (
                   <React.Fragment key={group.key}>
@@ -544,10 +676,16 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             <div className="text-sm text-slate-500">
                               Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(group.totalEstimated)}</span>
                             </div>
+                            <div className="text-xs text-brand font-medium my-0.5">
+                              Invoiced: {formatCurrency(group.totalInvoiced)}
+                            </div>
                             <div className={`text-base font-bold mt-0.5 ${variance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                               Variance: {variance >= 0 ? "+" : ""}{formatCurrency(variance)}
                             </div>
-                            <div className="w-32 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1 opacity-70">
+                            <div 
+                              className="w-32 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1 opacity-70 cursor-help"
+                              title="Actual profit as a percentage of estimated profit"
+                            >
                               <div 
                                 className={`h-full ${variance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} 
                                 style={{ width: `${progressPct}%` }}
@@ -563,7 +701,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                       const pVariance = p.actualProfit - p.quotedProfit;
                       const pProgressPct = p.quotedProfit > 0 ? Math.min(100, Math.max(0, (p.actualProfit / p.quotedProfit) * 100)) : 0;
                       
-                      const pMargin = p.quotedProfit > 0 ? (p.actualProfit - p.quotedProfit) / Math.abs(p.quotedProfit) * 100 : 0;
+                      const pMargin = getMarginPct(p.quotedProfit, p.actualProfit);
 
                       const styleConfig = getStatusStyles(p.rawStatus);
                       const StatusIcon = styleConfig.icon;
@@ -629,10 +767,16 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                               <div className="text-sm text-slate-500">
                                 Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(p.quotedProfit)}</span>
                               </div>
+                              <div className="text-xs text-brand font-medium my-0.5">
+                                Invoiced: {formatCurrency(p.invoicedAmount)}
+                              </div>
                               <div className={`text-base font-bold mt-0.5 ${pVariance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                 Variance: {pVariance >= 0 ? "+" : ""}{formatCurrency(pVariance)}
                               </div>
-                              <div className="w-24 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1.5 ml-auto opacity-70">
+                              <div 
+                                className="w-24 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1.5 ml-auto opacity-70 cursor-help"
+                                title="Actual profit as a percentage of estimated profit"
+                              >
                                 <div 
                                   className={`h-full ${pVariance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} 
                                   style={{ width: `${pProgressPct}%` }}
