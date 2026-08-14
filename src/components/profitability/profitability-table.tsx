@@ -676,9 +676,6 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             <div className="text-sm text-slate-500">
                               Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(group.totalEstimated)}</span>
                             </div>
-                            <div className="text-xs text-brand font-medium my-0.5">
-                              Invoiced: {formatCurrency(group.totalInvoiced)}
-                            </div>
                             <div className={`text-base font-bold mt-0.5 ${variance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                               Variance: {variance >= 0 ? "+" : ""}{formatCurrency(variance)}
                             </div>
@@ -766,9 +763,6 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                               </div>
                               <div className="text-sm text-slate-500">
                                 Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(p.quotedProfit)}</span>
-                              </div>
-                              <div className="text-xs text-brand font-medium my-0.5">
-                                Invoiced: {formatCurrency(p.invoicedAmount)}
                               </div>
                               <div className={`text-base font-bold mt-0.5 ${pVariance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                 Variance: {pVariance >= 0 ? "+" : ""}{formatCurrency(pVariance)}
