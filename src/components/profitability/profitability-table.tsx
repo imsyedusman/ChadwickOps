@@ -11,6 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
+import { ProjectDetailDrawer } from "./project-detail-drawer";
 
 export interface MergedProfitabilityProject {
   id: number | string;
@@ -209,6 +210,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   
   const [sortKey, setSortKey] = useState<SortKey>("profit");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selectedProject, setSelectedProject] = useState<MergedProfitabilityProject | null>(null);
 
   // Reset sorting defaults when switching active/completed tabs
   useEffect(() => {
@@ -704,7 +706,14 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                       const StatusIcon = styleConfig.icon;
 
                       return (
-                        <tr key={p.projectNumber} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors ${!isSingle ? 'border-l-4 border-l-transparent' : ''}`}>
+                        <tr 
+                          key={p.projectNumber} 
+                          className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${!isSingle ? 'border-l-4 border-l-transparent' : ''}`}
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('a')) return;
+                            setSelectedProject(p);
+                          }}
+                        >
                           <td className="px-4 py-3"></td>
                           <td className={`px-4 py-3 ${!isSingle ? 'pl-8' : ''}`}>
                             {p.workguruId ? (
@@ -788,6 +797,16 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           </table>
         </div>
       </div>
+
+      {selectedProject && (
+        <ProjectDetailDrawer 
+          project={selectedProject}
+          isOpen={true}
+          onClose={() => setSelectedProject(null)}
+          statusIcon={getStatusStyles(selectedProject.rawStatus).icon}
+          statusColor={getColorClasses(getStatusStyles(selectedProject.rawStatus).color)}
+        />
+      )}
     </div>
   );
 }
