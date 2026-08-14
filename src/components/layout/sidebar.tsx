@@ -34,6 +34,7 @@ const navigation = [
   { name: 'Capacity & Risk', href: '/risk', icon: SlidersHorizontal },
   { name: 'Production Scheduling', href: '/production-scheduling', icon: CalendarDays },
   { name: 'Reports', href: '/reports', icon: ChartPie },
+  { name: 'Profitability', href: '/profitability', icon: TrendingUp },
   { name: 'Sync Logs', href: '/logs', icon: History },
   { name: 'Help Guide', href: '/help', icon: BookOpen },
 ];

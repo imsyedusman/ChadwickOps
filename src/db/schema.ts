@@ -373,6 +373,21 @@ export const staffAbsences = pgTable('staff_absences', {
   createdBy: integer('created_by').references(() => users.id),
 });
 
+export const profitabilityData = pgTable('profitability_data', {
+  id: serial('id').primaryKey(),
+  projectNumber: varchar('project_number', { length: 100 }).notNull().unique(),
+  quotedProfit: doublePrecision('quoted_profit').default(0).notNull(),
+  actualProfit: doublePrecision('actual_profit').default(0).notNull(),
+  completionDate: timestamp('completion_date'),
+  isHistorical: boolean('is_historical').default(false).notNull(),
+  lastSyncedAt: timestamp('last_synced_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('profitability_project_number_idx').on(table.projectNumber),
+  ];
+});
 
 // Relations
 export const clientsRelations = relations(clients, ({ many }) => ({

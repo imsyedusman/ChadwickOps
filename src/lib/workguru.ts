@@ -261,6 +261,38 @@ export class WorkGuruClient {
     }
   }
 
+  async getProjectProfitSummary(start?: string, end?: string) {
+    const url = `${BASE_URL}/api/services/app/ProjectPivotReport/GetProjectProfitSummary`;
+    const headers = await this.getAuthHeader();
+    const params = { start, end, MaxResultCount: 10000 };
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getAllProjectsCompletedInDateRange(start?: string, end?: string) {
+    const url = `${BASE_URL}/api/services/app/ProjectPivotReport/GetAllProjectsCompletedInDateRange`;
+    const headers = await this.getAuthHeader();
+    const params = { start, end, MaxResultCount: 10000 };
+    this.logRequest(url, 'GET', params);
+    
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
   async getClients() {
     const url = `${BASE_URL}/api/services/app/Client/GetClients`;
     const headers = await this.getAuthHeader();
