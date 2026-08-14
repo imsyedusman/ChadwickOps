@@ -190,6 +190,13 @@
       "when": 1786675255973,
       "tag": "0026_previous_rage",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786677270897,
+      "tag": "0027_natural_medusa",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "profitability_data" ADD COLUMN "invoiced_amount" double precision DEFAULT 0 NOT NULL;
