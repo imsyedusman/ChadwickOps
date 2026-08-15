@@ -311,7 +311,7 @@ export interface ProfitabilityGroup {
 
 export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[] }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterActive, setFilterActive] = useState<"active" | "completed">("active");
+  const [filterActive, setFilterActive] = useState<"active" | "completed">("completed");
   const [filterLoss, setFilterLoss] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
