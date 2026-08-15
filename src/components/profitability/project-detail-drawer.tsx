@@ -14,6 +14,39 @@ interface ProjectDetailDrawerProps {
   statusColor: string;
 }
 
+const renderProgressBar = (actual: number, estimated: number, isMargin: boolean = false, isRevenue: boolean = false) => {
+  if (isMargin) {
+    const pct = Math.max(0, Math.min(100, actual));
+    return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", actual < 0 ? "bg-red-500" : actual <= 15 ? "bg-amber-500" : "bg-emerald-500")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    );
+  } else {
+    if (!estimated || estimated === 0) return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div className="h-full bg-slate-200 dark:bg-slate-700 rounded-full w-0" />
+      </div>
+    );
+    const rawPct = (actual / estimated) * 100;
+    const displayPct = Math.max(0, Math.min(100, rawPct));
+    const barColor = isRevenue
+      ? (rawPct >= 100 ? "bg-emerald-500" : "bg-brand")
+      : (rawPct > 100 ? "bg-red-500" : "bg-brand");
+    return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", barColor)}
+          style={{ width: `${displayPct}%` }}
+        />
+      </div>
+    );
+  }
+};
+
 export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: StatusIcon, statusColor }: ProjectDetailDrawerProps) {
   const [liveData, setLiveData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,12 +90,20 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
     return ((invoiced - cost) / invoiced) * 100;
   };
   
+  // Local Synced Profitability Data
   const pInvoiced = project.invoicedAmount || 0;
   const pCost = project.totalCost || 0;
   const gp = pInvoiced - pCost;
   const wgEstimatedProfit = project.quotedProfit;
   const variance = gp - wgEstimatedProfit;
   const marginPct = getGPMarginPct(pInvoiced, pCost);
+  
+  const pMat = (project.materialsCost || 0) + (project.purchasesCost || 0);
+  const pLab = project.labourCost || 0;
+  const pEstMat = project.estimatedMaterialsCost || 0;
+  const pEstLab = project.estimatedLabourCost || 0;
+  const pEstCost = project.estimatedTotalCost || 0;
+  const pEstInvoiced = project.estimatedInvoicedAmount || 0;
 
   return (
     <>
@@ -131,7 +172,7 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
         {/* Content Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
           
-          {/* Section 1: Financial Overview (Instant from props) */}
+          {/* Section 1: Financial Overview */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Briefcase className="h-4 w-4" /> Financial Overview
@@ -160,11 +201,78 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                 <span className={cn("text-lg font-black", marginPct >= 15 ? "text-emerald-600 dark:text-emerald-400" : marginPct >= 0 ? "text-amber-500" : "text-red-600")}>
                   {marginPct > 0 ? "+" : ""}{marginPct.toFixed(1)}%
                 </span>
+                {renderProgressBar(marginPct, 100, true)}
               </div>
             </div>
           </div>
 
-          {/* Error State */}
+          {/* Section 2: Invoiced vs Cost (Local) */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <DollarSign className="h-4 w-4" /> Invoiced vs Cost
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Invoiced</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pInvoiced)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-slate-500">
+                  <span>Estimated Invoiced</span>
+                  <span>{formatCurrency(pEstInvoiced)}</span>
+                </div>
+                {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Cost To Date</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pCost)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-slate-500">
+                  <span>Estimated Cost</span>
+                  <span>{formatCurrency(pEstCost)}</span>
+                </div>
+                {renderProgressBar(pCost, pEstCost)}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Cost Split (Local) */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Layers className="h-4 w-4" /> Cost Split
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Materials & Purchases</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pMat)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-slate-500">
+                  <span>Estimated</span>
+                  <span>{formatCurrency(pEstMat)}</span>
+                </div>
+                {renderProgressBar(pMat, pEstMat)}
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Labour</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pLab)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-slate-500">
+                  <span>Estimated</span>
+                  <span>{formatCurrency(pEstLab)}</span>
+                </div>
+                {renderProgressBar(pLab, pEstLab)}
+              </div>
+            </div>
+          </div>
+
+          {/* Error State for Live Data */}
           {error && (
             <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-600 dark:text-red-400">
               <p className="font-bold flex items-center gap-2"><X className="h-4 w-4" /> Failed to load live data</p>
@@ -172,65 +280,18 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             </div>
           )}
 
-          {/* Loading Skeleton */}
+          {/* Loading Skeleton for Live Data */}
           {isLoading && !error && (
             <div className="space-y-5 animate-pulse">
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 h-[200px]" />
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 h-[120px]" />
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 h-[100px]" />
             </div>
           )}
 
-          {/* Live Data Sections */}
+          {/* Live Data Sections (Tasks, Hours, WIP) */}
           {!isLoading && !error && liveData && (
             <>
-              {/* Section 2: Invoiced vs Cost */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Invoiced vs Cost
-                </h3>
-                
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-sm font-semibold text-brand">Total Invoiced</span>
-                    <span className="text-base font-black text-brand">{formatCurrency(liveData.totalInvoiced)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center pb-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Cost To Date</span>
-                    <span className="text-base font-bold text-slate-900 dark:text-white">{formatCurrency(liveData.totalCost)}</span>
-                  </div>
-                  
-                  <div className="pl-4 border-l-2 border-slate-100 dark:border-slate-800 space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-500">Time</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(liveData.costTime)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-500">Materials</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(liveData.costMaterials)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-500">Purchases</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(liveData.costPurchases)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Gross Total</span>
-                    <span className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(liveData.grossTotal)}</span>
-                  </div>
-                  {/* Supplier Credits (Placeholder) */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Supplier Credits</span>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      {liveData.supplierCredits > 0 ? `-${formatCurrency(liveData.supplierCredits)}` : '$0'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Hours */}
+              {/* Section 4: Hours */}
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                   <Clock className="h-4 w-4" /> Hours Tracking
@@ -274,7 +335,7 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                 </div>
               </div>
 
-              {/* Section 4 & 5: Tasks & WIP (Row) */}
+              {/* Section 5: Tasks & WIP (Row) */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col justify-between">
                   <div className="flex items-center gap-2 text-slate-400 mb-2">
