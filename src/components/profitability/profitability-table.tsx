@@ -27,9 +27,50 @@ export interface MergedProfitabilityProject {
   quotedProfit: number;
   actualProfit: number;
   invoicedAmount: number;
+  totalCost: number | null;
+  labourCost: number | null;
+  materialsCost: number | null;
+  purchasesCost: number | null;
+  estimatedLabourCost: number | null;
+  estimatedMaterialsCost: number | null;
+  estimatedTotalCost: number | null;
+  estimatedInvoicedAmount: number | null;
   completionDate: Date | null;
   isHistorical: boolean;
 }
+
+const renderProgressBar = (actual: number, estimated: number, isMargin: boolean = false, isRevenue: boolean = false) => {
+  if (isMargin) {
+     const pct = Math.max(0, Math.min(100, actual));
+     return (
+       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
+         <div 
+           className={cn("h-full rounded-full transition-all duration-500", actual < 0 ? "bg-red-500" : actual <= 15 ? "bg-amber-500" : "bg-emerald-500")} 
+           style={{ width: `${pct}%` }} 
+         />
+       </div>
+     );
+  } else {
+     if (!estimated || estimated === 0) return (
+       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
+         <div className="h-full bg-slate-200 dark:bg-slate-700 rounded-full w-0" />
+       </div>
+     );
+     const rawPct = (actual / estimated) * 100;
+     const displayPct = Math.max(0, Math.min(100, rawPct));
+     const barColor = isRevenue 
+       ? (rawPct >= 100 ? "bg-emerald-500" : "bg-brand") 
+       : (rawPct > 100 ? "bg-red-500" : "bg-brand");
+     return (
+       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
+         <div 
+           className={cn("h-full rounded-full transition-all duration-500", barColor)} 
+           style={{ width: `${displayPct}%` }} 
+         />
+       </div>
+     );
+  }
+};
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
   'Not Drawn': { color: 'slate', icon: Clock },
@@ -181,8 +222,10 @@ const formatDate = (date: Date | null | undefined) => {
   return format(date, "dd-MMM-yy");
 };
 
-const getMarginPct = (est: number, act: number) => {
-  return est > 0 ? (act - est) / Math.abs(est) * 100 : 0;
+const getGPMarginPct = (invoiced: number, cost: number) => {
+  if (invoiced <= 0 && cost > 0) return -100;
+  if (invoiced <= 0) return 0;
+  return ((invoiced - cost) / invoiced) * 100;
 };
 
 const getMarginColor = (marginPct: number) => {
@@ -281,7 +324,9 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       if (filterActive === "active" && isCompleted) return false;
       if (filterActive === "completed" && !isCompleted) return false;
 
-      if (filterLoss && project.actualProfit >= 0) return false;
+      const pInvoiced = project.invoicedAmount || 0;
+      const pCost = project.totalCost || 0;
+      if (filterLoss && (pInvoiced - pCost) >= 0) return false;
 
       if (statusFilter.length > 0) {
         const st = project.rawStatus?.replace(/^[\d.]+ - /, '').trim() || 'Unknown';
@@ -312,21 +357,23 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   }, [data, searchTerm, filterActive, filterLoss, statusFilter, typeFilter, monthFilter, yearFilter]);
 
   const summaryData = useMemo(() => {
-    let totalEstimated = 0;
-    let totalActual = 0;
+    let totalInvoiced = 0;
+    let totalCost = 0;
     let projectsInLoss = 0;
 
     for (const p of filteredProjects) {
-      totalEstimated += p.quotedProfit;
-      totalActual += p.actualProfit;
-      if (p.actualProfit < 0) projectsInLoss++;
+      const pInvoiced = p.invoicedAmount || 0;
+      const pCost = p.totalCost || 0;
+      totalInvoiced += pInvoiced;
+      totalCost += pCost;
+      if ((pInvoiced - pCost) < 0) projectsInLoss++;
     }
 
     return {
       totalProjects: filteredProjects.length,
-      totalEstimated,
-      totalActual,
-      totalVariance: totalActual - totalEstimated,
+      totalInvoiced,
+      totalCost,
+      totalGP: totalInvoiced - totalCost,
       projectsInLoss
     };
   }, [filteredProjects]);
@@ -335,9 +382,14 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     const groups: Record<string, {
       key: string;
       projects: MergedProfitabilityProject[];
-      totalEstimated: number;
-      totalActual: number;
       totalInvoiced: number;
+      totalCost: number;
+      totalMaterials: number;
+      totalLabour: number;
+      totalEstimatedMaterials: number;
+      totalEstimatedLabour: number;
+      totalEstimatedCost: number;
+      totalEstimatedInvoiced: number;
       hasLoss: boolean;
     }> = {};
 
@@ -351,18 +403,36 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         groups[prefix] = {
           key: prefix,
           projects: [],
-          totalEstimated: 0,
-          totalActual: 0,
           totalInvoiced: 0,
+          totalCost: 0,
+          totalMaterials: 0,
+          totalLabour: 0,
+          totalEstimatedMaterials: 0,
+          totalEstimatedLabour: 0,
+          totalEstimatedCost: 0,
+          totalEstimatedInvoiced: 0,
           hasLoss: false,
         };
       }
 
       groups[prefix].projects.push(project);
-      groups[prefix].totalEstimated += project.quotedProfit;
-      groups[prefix].totalActual += project.actualProfit;
-      groups[prefix].totalInvoiced += project.invoicedAmount;
-      if (project.actualProfit < 0) {
+      const pInvoiced = project.invoicedAmount || 0;
+      const pCost = project.totalCost || 0;
+      const pMaterials = (project.materialsCost || 0) + (project.purchasesCost || 0);
+      const pLabour = project.labourCost || 0;
+      const pEstMaterials = project.estimatedMaterialsCost || 0;
+      const pEstLabour = project.estimatedLabourCost || 0;
+      const pEstCost = project.estimatedTotalCost || 0;
+      const pEstInvoiced = project.estimatedInvoicedAmount || 0;
+      groups[prefix].totalInvoiced += pInvoiced;
+      groups[prefix].totalCost += pCost;
+      groups[prefix].totalMaterials += pMaterials;
+      groups[prefix].totalLabour += pLabour;
+      groups[prefix].totalEstimatedMaterials += pEstMaterials;
+      groups[prefix].totalEstimatedLabour += pEstLabour;
+      groups[prefix].totalEstimatedCost += pEstCost;
+      groups[prefix].totalEstimatedInvoiced += pEstInvoiced;
+      if ((pInvoiced - pCost) < 0) {
         groups[prefix].hasLoss = true;
       }
     }
@@ -391,8 +461,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             valB = b.rawStatus || "";
             return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
           case "profit":
-            valA = getMarginPct(a.quotedProfit, a.actualProfit);
-            valB = getMarginPct(b.quotedProfit, b.actualProfit);
+            valA = getGPMarginPct(a.invoicedAmount || 0, a.totalCost || 0);
+            valB = getGPMarginPct(b.invoicedAmount || 0, b.totalCost || 0);
             return sortDir === "asc" ? valA - valB : valB - valA;
           default:
             return 0;
@@ -420,8 +490,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           valB = b.projects[0]?.rawStatus || "";
           return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
         case "profit":
-          valA = getMarginPct(a.totalEstimated, a.totalActual);
-          valB = getMarginPct(b.totalEstimated, b.totalActual);
+          valA = getGPMarginPct(a.totalInvoiced, a.totalCost);
+          valB = getGPMarginPct(b.totalInvoiced, b.totalCost);
           return sortDir === "asc" ? valA - valB : valB - valA;
         default:
           return 0;
@@ -469,30 +539,30 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center gap-2 text-slate-500 mb-2">
             <FileText className="h-4 w-4" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Estimated</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Invoiced</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {formatCurrency(summaryData.totalEstimated)}
+            {formatCurrency(summaryData.totalInvoiced)}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center gap-2 text-slate-500 mb-2">
             <Receipt className="h-4 w-4" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Actual</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Cost</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {formatCurrency(summaryData.totalActual)}
+            {formatCurrency(summaryData.totalCost)}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center gap-2 text-slate-500 mb-2">
-            {summaryData.totalVariance >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Variance</span>
+            {summaryData.totalGP >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+            <span className="text-xs font-semibold uppercase tracking-wider">Total GP</span>
           </div>
-          <div className={`text-2xl font-bold ${summaryData.totalVariance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            {summaryData.totalVariance >= 0 ? '+' : ''}{formatCurrency(summaryData.totalVariance)}
+          <div className={`text-2xl font-bold ${summaryData.totalGP >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+            {summaryData.totalGP >= 0 ? '+' : ''}{formatCurrency(summaryData.totalGP)}
           </div>
         </div>
 
@@ -601,12 +671,6 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                   Project {renderSortIndicator("project")}
                 </th>
                 <th 
-                  className="px-4 py-3 font-semibold w-[20%] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
-                  onClick={() => toggleSort("client")}
-                >
-                  Client & PM {renderSortIndicator("client")}
-                </th>
-                <th 
                   className="px-4 py-3 font-semibold min-w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("schedule")}
                 >
@@ -618,11 +682,23 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                 >
                   Status / Type {renderSortIndicator("status")}
                 </th>
+                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+                  Invoiced
+                </th>
+                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+                  Cost
+                </th>
                 <th 
-                  className="px-4 py-3 font-semibold text-right min-w-[180px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                  className="px-4 py-3 font-semibold min-w-[140px] text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("profit")}
                 >
-                  Profit & Variance {renderSortIndicator("profit")}
+                  GP {renderSortIndicator("profit")}
+                </th>
+                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+                  Materials
+                </th>
+                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+                  Labour
                 </th>
               </tr>
             </thead>
@@ -640,17 +716,15 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                 const isCollapsed = collapsedGroups.has(group.key);
                 
                 // Group aggregates
-                const variance = group.totalActual - group.totalEstimated;
-                const progressPct = group.totalEstimated > 0 ? Math.min(100, Math.max(0, (group.totalActual / group.totalEstimated) * 100)) : 0;
-                
-                const groupMargin = getMarginPct(group.totalEstimated, group.totalActual);
+                const gp = group.totalInvoiced - group.totalCost;
+                const groupMargin = getGPMarginPct(group.totalInvoiced, group.totalCost);
 
                 return (
                   <React.Fragment key={group.key}>
                     {/* Parent Row (only if > 1 project) */}
                     {!isSingle && (
                       <tr 
-                        className={`group hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${group.hasLoss ? "bg-red-50/30 dark:bg-red-900/10" : "bg-slate-50/50 dark:bg-slate-800/30"}`}
+                        className={`group hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${group.hasLoss ? "bg-red-50 dark:bg-red-900/20" : "bg-slate-100/50 dark:bg-slate-800/40"}`}
                         onClick={() => toggleGroup(group.key)}
                       >
                         <td className={`px-4 py-3 ${group.hasLoss ? "border-l-4 border-l-red-500" : ""}`}>
@@ -666,41 +740,67 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                         </td>
                         <td className="px-4 py-3"></td>
                         <td className="px-4 py-3"></td>
-                        <td className="px-4 py-3"></td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            <div className={`font-black text-lg ${getMarginColor(groupMargin)}`}>
-                              Group Margin: {groupMargin > 0 ? '+' : ''}{groupMargin.toFixed(1)}%
-                            </div>
-                            <div className="text-sm text-slate-500">
-                              Actual: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(group.totalActual)}</span>
-                            </div>
-                            <div className="text-sm text-slate-500">
-                              Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(group.totalEstimated)}</span>
-                            </div>
-                            <div className={`text-base font-bold mt-0.5 ${variance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                              Variance: {variance >= 0 ? "+" : ""}{formatCurrency(variance)}
-                            </div>
-                            <div 
-                              className="w-32 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1 opacity-70 cursor-help"
-                              title="Actual profit as a percentage of estimated profit"
-                            >
-                              <div 
-                                className={`h-full ${variance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} 
-                                style={{ width: `${progressPct}%` }}
-                              />
-                            </div>
-                          </div>
+                           <div className="font-medium text-slate-700 dark:text-slate-300">
+                             {group.totalInvoiced === 0 ? "-" : formatCurrency(group.totalInvoiced)}
+                           </div>
+                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                             {group.totalEstimatedInvoiced === 0 ? "-" : formatCurrency(group.totalEstimatedInvoiced)}
+                           </div>
+                           {renderProgressBar(group.totalInvoiced, group.totalEstimatedInvoiced, false, true)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                           <div className="font-medium text-slate-700 dark:text-slate-300">
+                             {group.totalCost === 0 ? "-" : formatCurrency(group.totalCost)}
+                           </div>
+                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                             {group.totalEstimatedCost === 0 ? "-" : formatCurrency(group.totalEstimatedCost)}
+                           </div>
+                           {renderProgressBar(group.totalCost, group.totalEstimatedCost)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                           <div className={`text-base font-bold ${gp >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                             {gp >= 0 ? "+" : ""}{formatCurrency(gp)}
+                           </div>
+                           <div className={`font-black text-sm mt-0.5 ${getMarginColor(groupMargin)}`}>
+                             {groupMargin > 0 ? '+' : ''}{groupMargin.toFixed(1)}%
+                           </div>
+                           {renderProgressBar(groupMargin, 100, true)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                           <div className="font-medium text-slate-700 dark:text-slate-300">
+                             {group.totalMaterials === 0 ? "-" : formatCurrency(group.totalMaterials)}
+                           </div>
+                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                             {group.totalEstimatedMaterials === 0 ? "-" : formatCurrency(group.totalEstimatedMaterials)}
+                           </div>
+                           {renderProgressBar(group.totalMaterials, group.totalEstimatedMaterials)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                           <div className="font-medium text-slate-700 dark:text-slate-300">
+                             {group.totalLabour === 0 ? "-" : formatCurrency(group.totalLabour)}
+                           </div>
+                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                             {group.totalEstimatedLabour === 0 ? "-" : formatCurrency(group.totalEstimatedLabour)}
+                           </div>
+                           {renderProgressBar(group.totalLabour, group.totalEstimatedLabour)}
                         </td>
                       </tr>
                     )}
                     
                     {/* Child Rows */}
                     {(!isCollapsed || isSingle) && group.projects.map((p) => {
-                      const pVariance = p.actualProfit - p.quotedProfit;
-                      const pProgressPct = p.quotedProfit > 0 ? Math.min(100, Math.max(0, (p.actualProfit / p.quotedProfit) * 100)) : 0;
-                      
-                      const pMargin = getMarginPct(p.quotedProfit, p.actualProfit);
+                      const pInvoiced = p.invoicedAmount || 0;
+                      const pCost = p.totalCost || 0;
+                      const pGp = pInvoiced - pCost;
+                      const pMargin = getGPMarginPct(pInvoiced, pCost);
+
+                      const pMat = (p.materialsCost || 0) + (p.purchasesCost || 0);
+                      const pLab = p.labourCost || 0;
+                      const pEstMat = p.estimatedMaterialsCost || 0;
+                      const pEstLab = p.estimatedLabourCost || 0;
+                      const pEstCost = p.estimatedTotalCost || 0;
+                      const pEstInvoiced = p.estimatedInvoicedAmount || 0;
 
                       const styleConfig = getStatusStyles(p.rawStatus);
                       const StatusIcon = styleConfig.icon;
@@ -708,34 +808,45 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                       return (
                         <tr 
                           key={p.projectNumber} 
-                          className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${!isSingle ? 'border-l-4 border-l-transparent' : ''}`}
+                          className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer`}
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('a')) return;
                             setSelectedProject(p);
                           }}
                         >
-                          <td className="px-4 py-3"></td>
-                          <td className={`px-4 py-3 ${!isSingle ? 'pl-8' : ''}`}>
-                            {p.workguruId ? (
-                              <a 
-                                href={`https://app.workguru.io/App/Projects/Detail2/${p.workguruId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 font-bold text-brand hover:underline"
-                              >
-                                {p.projectNumber}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : (
-                              <span className="font-bold text-slate-700 dark:text-slate-300">{p.projectNumber}</span>
+                          <td className="px-4 py-3 relative">
+                            {!isSingle && (
+                              <div className="absolute left-6 top-0 bottom-0 w-px bg-slate-200 dark:bg-slate-700"></div>
                             )}
-                            <div className="text-xs text-slate-500 mt-1 line-clamp-2" title={p.projectName}>
-                              {p.projectName}
-                            </div>
+                            {!isSingle && (
+                              <div className="absolute left-6 top-1/2 w-4 h-px bg-slate-200 dark:bg-slate-700"></div>
+                            )}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="font-semibold text-slate-700 dark:text-slate-300 line-clamp-1">{p.clientName || 'Unknown Client'}</div>
-                            <div className="text-xs text-slate-400 mt-1">{p.projectManager || 'No PM'}</div>
+                          <td className={`px-4 py-3 ${!isSingle ? 'pl-8 relative' : ''}`}>
+                            <div className="flex flex-col gap-0.5">
+                              {p.workguruId ? (
+                                <a 
+                                  href={`https://app.workguru.io/App/Projects/Detail2/${p.workguruId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 font-bold text-brand hover:underline"
+                                >
+                                  {p.projectNumber}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                <span className="font-bold text-slate-700 dark:text-slate-300">{p.projectNumber}</span>
+                              )}
+                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 line-clamp-2" title={p.projectName}>
+                                {p.projectName}
+                              </div>
+                              {p.clientName && (
+                                <div className="text-xs text-slate-500 line-clamp-1">{p.clientName}</div>
+                              )}
+                              {p.projectManager && (
+                                <div className="text-[11px] text-slate-400">{p.projectManager}</div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm whitespace-nowrap">
                             <div className="flex flex-col gap-1">
@@ -762,30 +873,50 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             </span>
                             <div className="text-xs text-slate-500 mt-1">{p.projectType || 'Standard'}</div>
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex flex-col items-end gap-1">
-                              <div className={`font-black text-lg ${getMarginColor(pMargin)}`}>
-                                {pMargin > 0 ? '+' : ''}{pMargin.toFixed(1)}%
-                              </div>
-                              <div className="text-sm text-slate-500">
-                                Actual: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(p.actualProfit)}</span>
-                              </div>
-                              <div className="text-sm text-slate-500">
-                                Estimated: <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">{formatCurrency(p.quotedProfit)}</span>
-                              </div>
-                              <div className={`text-base font-bold mt-0.5 ${pVariance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                Variance: {pVariance >= 0 ? "+" : ""}{formatCurrency(pVariance)}
-                              </div>
-                              <div 
-                                className="w-24 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-1.5 ml-auto opacity-70 cursor-help"
-                                title="Actual profit as a percentage of estimated profit"
-                              >
-                                <div 
-                                  className={`h-full ${pVariance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} 
-                                  style={{ width: `${pProgressPct}%` }}
-                                />
-                              </div>
+                           <td className="px-4 py-3 text-right align-top">
+                             <div className="font-medium text-slate-700 dark:text-slate-300">
+                               {pInvoiced === 0 ? "-" : formatCurrency(pInvoiced)}
+                             </div>
+                             <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                               {pEstInvoiced === 0 ? "-" : formatCurrency(pEstInvoiced)}
+                             </div>
+                             {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
+                           </td>
+                           <td className="px-4 py-3 text-right align-top">
+                             <div className="font-medium text-slate-700 dark:text-slate-300">
+                               {pCost === 0 ? "-" : formatCurrency(pCost)}
+                             </div>
+                             <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                               {pEstCost === 0 ? "-" : formatCurrency(pEstCost)}
+                             </div>
+                             {renderProgressBar(pCost, pEstCost)}
+                           </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            <div className={`text-base font-bold ${pGp >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                              {pGp >= 0 ? "+" : ""}{formatCurrency(pGp)}
                             </div>
+                            <div className={`font-black text-sm mt-0.5 ${getMarginColor(pMargin)}`}>
+                              {pMargin > 0 ? '+' : ''}{pMargin.toFixed(1)}%
+                            </div>
+                            {renderProgressBar(pMargin, 100, true)}
+                          </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">
+                              {pMat === 0 ? "-" : formatCurrency(pMat)}
+                            </div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {pEstMat === 0 ? "-" : formatCurrency(pEstMat)}
+                            </div>
+                            {renderProgressBar(pMat, pEstMat)}
+                          </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">
+                              {pLab === 0 ? "-" : formatCurrency(pLab)}
+                            </div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {pEstLab === 0 ? "-" : formatCurrency(pEstLab)}
+                            </div>
+                            {renderProgressBar(pLab, pEstLab)}
                           </td>
                         </tr>
                       );

@@ -10,6 +10,48 @@ export class ProfitabilitySyncService {
     this.client = new WorkGuruClient(apiKey, apiSecret);
   }
 
+  private sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T | null> {
+    const actualMax = Math.max(maxRetries, 50);
+
+    for (let attempt = 1; attempt <= actualMax; attempt++) {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; status?: number };
+        const status = err.response?.status || err.status;
+        const isRateLimit = status === 429;
+        const isRetryable = isRateLimit || status === 503;
+        
+        if (isRetryable && attempt < actualMax) {
+          let delay: number;
+          if (isRateLimit) {
+            delay = Math.min(30000 + (attempt * 2000), 60000);
+            console.warn(`[ProfitabilitySync] Rate limit (429) hit on ${label}. Attempt ${attempt}/${actualMax}. Waiting ${delay/1000}s before retrying SAME project...`);
+          } else {
+            delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[ProfitabilitySync] Service error (${status}) hit on ${label}. Attempt ${attempt}/${actualMax}. Retrying in ${delay/1000}s...`);
+          }
+          
+          await this.sleep(delay);
+          continue;
+        }
+        
+        if (attempt === actualMax) {
+          console.error(`[ProfitabilitySync] ${label} exhausted all ${actualMax} retries. Final error:`, error instanceof Error ? error.message : String(error));
+          return null;
+        }
+        
+        console.error(`[ProfitabilitySync] ${label} encountered non-retryable error (${status}):`, error instanceof Error ? error.message : String(error));
+        return null;
+      }
+    }
+    return null;
+  }
+
   private extractItems<T>(data: any, entityName: string): T[] {
     const result = data?.result;
     let items: T[] | undefined;
@@ -59,7 +101,7 @@ export class ProfitabilitySyncService {
       const tenYearsAgo = new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000).toISOString();
       
       console.log(`[ProfitabilitySync] Fetching active projects from WorkGuru...`);
-      const activeResponse = await this.client.getProjectProfitSummary(tenYearsAgo, now);
+      const activeResponse = await this.withRetry(() => this.client.getProjectProfitSummary(tenYearsAgo, now), 'Active Projects Summary');
       const activeItems = this.extractItems<any>(activeResponse, 'ProjectProfitSummary');
       
       // Get local projects to filter only those that exist in our WIP sync
@@ -68,17 +110,39 @@ export class ProfitabilitySyncService {
       });
       const localProjectNumbers = new Set(localProjects.map(p => p.projectNumber));
       
-        const activeRecordsToUpsert = activeItems
-        .filter(item => item.ProjectNo && localProjectNumbers.has(item.ProjectNo))
-        .map(item => ({
-          projectNumber: item.ProjectNo,
-          quotedProfit: item.ForecastDollarProfit ? Number(item.ForecastDollarProfit) : 0,
-          actualProfit: item.DollarProfit ? Number(item.DollarProfit) : 0,
-          invoicedAmount: item.TotalInvoiced ? Number(item.TotalInvoiced) : (item.Total ? Number(item.Total) : 0),
-          completionDate: null, // Active projects usually aren't completed
-          isHistorical: false,
-          lastSyncedAt: new Date()
-        }));
+      const filteredActive = activeItems.filter(item => item.ProjectNo && localProjectNumbers.has(item.ProjectNo));
+      
+      const activeRecordsToUpsert = [];
+      const batchSizeApi = 10;
+      
+      for (let i = 0; i < filteredActive.length; i += batchSizeApi) {
+          const chunk = filteredActive.slice(i, i + batchSizeApi);
+          const chunkPromises = chunk.map(async (item) => {
+              const forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+
+              return {
+                  projectNumber: item.ProjectNo,
+                  quotedProfit: item.ForecastDollarProfit ? Number(item.ForecastDollarProfit) : 0,
+                  actualProfit: item.DollarProfit ? Number(item.DollarProfit) : 0,
+                  invoicedAmount: item.TotalInvoiced ? Number(item.TotalInvoiced) : (item.Total ? Number(item.Total) : 0),
+                  totalCost: item.TotalCost ? Number(item.TotalCost) : null,
+                  labourCost: item.TaskCost != null ? Number(item.TaskCost) : null,
+                  materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
+                  purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
+                  estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
+                  estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
+                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : null,
+                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : null,
+                  completionDate: null,
+                  isHistorical: false,
+                  lastSyncedAt: new Date()
+              };
+          });
+          const resolvedChunk = await Promise.all(chunkPromises);
+          activeRecordsToUpsert.push(...resolvedChunk);
+          // Simple rate limiting (60 req / 60 sec = 1 req/sec. 10 reqs = 10 secs)
+          await new Promise(r => setTimeout(r, 2000));
+      }
 
       if (activeRecordsToUpsert.length > 0) {
         console.log(`[ProfitabilitySync] Upserting ${activeRecordsToUpsert.length} active records...`);
@@ -95,6 +159,14 @@ export class ProfitabilitySyncService {
                 quotedProfit: sql`EXCLUDED.quoted_profit`,
                 actualProfit: sql`EXCLUDED.actual_profit`,
                 invoicedAmount: sql`EXCLUDED.invoiced_amount`,
+                totalCost: sql`EXCLUDED.total_cost`,
+                labourCost: sql`EXCLUDED.labour_cost`,
+                materialsCost: sql`EXCLUDED.materials_cost`,
+                purchasesCost: sql`EXCLUDED.purchases_cost`,
+                estimatedLabourCost: sql`EXCLUDED.estimated_labour_cost`,
+                estimatedMaterialsCost: sql`EXCLUDED.estimated_materials_cost`,
+                estimatedTotalCost: sql`EXCLUDED.estimated_total_cost`,
+                estimatedInvoicedAmount: sql`EXCLUDED.estimated_invoiced_amount`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,
@@ -108,42 +180,58 @@ export class ProfitabilitySyncService {
       const fyStart = this.getAuFyStart();
       console.log(`[ProfitabilitySync] Fetching historical projects from WorkGuru (Start: ${fyStart})...`);
       
-      const historicalResponse = await this.client.getAllProjectsCompletedInDateRange(fyStart, now);
+      const historicalResponse = await this.withRetry(() => this.client.getAllProjectsCompletedInDateRange(fyStart, now), 'Historical Projects Summary');
       const historicalItems = this.extractItems<any>(historicalResponse, 'CompletedProjects');
       
-      const historicalRecordsToUpsert = historicalItems
-        .filter(item => item.ProjectNo)
-        .map(item => {
-          // Quoted Profit = Total - ForecastCost
-          // Actual Profit = Total - TotalCost
-          const total = Number(item.Total) || 0;
-          const forecastCost = Number(item.ForecastCost) || 0;
-          const totalCost = Number(item.TotalCost) || 0;
-          
-          const quotedProfit = total - forecastCost;
-          const actualProfit = total - totalCost;
-          
-          let completionDate = null;
-          if (item.ISOCompletedDate) {
-              completionDate = new Date(item.ISOCompletedDate);
-          } else if (item.CompletedDate && item.CompletedDate !== 'N/A') {
-              // try to parse DD/MM/YYYY if format is like that
-              const parts = item.CompletedDate.split('/');
-              if (parts.length === 3) {
-                  completionDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      const filteredHistorical = historicalItems.filter(item => item.ProjectNo);
+      
+      const historicalRecordsToUpsert = [];
+      const batchSizeApiHist = 10;
+      
+      for (let i = 0; i < filteredHistorical.length; i += batchSizeApiHist) {
+          const chunk = filteredHistorical.slice(i, i + batchSizeApiHist);
+          const chunkPromises = chunk.map(async (item) => {
+              const forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+
+              const total = Number(item.Total) || 0;
+              const forecastCost = Number(item.ForecastCost) || 0;
+              const totalCostSummary = Number(item.TotalCost) || 0;
+              
+              const quotedProfit = total - forecastCost;
+              const actualProfit = total - totalCostSummary;
+              
+              let completionDate = null;
+              if (item.ISOCompletedDate) {
+                  completionDate = new Date(item.ISOCompletedDate);
+              } else if (item.CompletedDate && item.CompletedDate !== 'N/A') {
+                  const parts = item.CompletedDate.split('/');
+                  if (parts.length === 3) {
+                      completionDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                  }
               }
-          }
-          
-          return {
-            projectNumber: item.ProjectNo,
-            quotedProfit: quotedProfit,
-            actualProfit: actualProfit,
-            invoicedAmount: total,
-            completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
-            isHistorical: true,
-            lastSyncedAt: new Date()
-          };
-        });
+
+              return {
+                  projectNumber: item.ProjectNo,
+                  quotedProfit: quotedProfit,
+                  actualProfit: actualProfit,
+                  invoicedAmount: total,
+                  totalCost: item.TotalCost != null ? Number(item.TotalCost) : null,
+                  labourCost: item.TaskCost != null ? Number(item.TaskCost) : null,
+                  materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
+                  purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
+                  estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
+                  estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
+                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : null,
+                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : null,
+                  completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
+                  isHistorical: true,
+                  lastSyncedAt: new Date()
+              };
+          });
+          const resolvedChunk = await Promise.all(chunkPromises);
+          historicalRecordsToUpsert.push(...resolvedChunk);
+          await new Promise(r => setTimeout(r, 2000));
+      }
 
       if (historicalRecordsToUpsert.length > 0) {
         console.log(`[ProfitabilitySync] Upserting ${historicalRecordsToUpsert.length} historical records...`);
@@ -159,6 +247,14 @@ export class ProfitabilitySyncService {
                 quotedProfit: sql`EXCLUDED.quoted_profit`,
                 actualProfit: sql`EXCLUDED.actual_profit`,
                 invoicedAmount: sql`EXCLUDED.invoiced_amount`,
+                totalCost: sql`EXCLUDED.total_cost`,
+                labourCost: sql`EXCLUDED.labour_cost`,
+                materialsCost: sql`EXCLUDED.materials_cost`,
+                purchasesCost: sql`EXCLUDED.purchases_cost`,
+                estimatedLabourCost: sql`EXCLUDED.estimated_labour_cost`,
+                estimatedMaterialsCost: sql`EXCLUDED.estimated_materials_cost`,
+                estimatedTotalCost: sql`EXCLUDED.estimated_total_cost`,
+                estimatedInvoicedAmount: sql`EXCLUDED.estimated_invoiced_amount`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,

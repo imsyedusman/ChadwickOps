@@ -51,12 +51,18 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
     return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(val);
   };
 
-  const getMarginPct = (est: number, act: number) => {
-    return est > 0 ? (act - est) / Math.abs(est) * 100 : 0;
+  const getGPMarginPct = (invoiced: number, cost: number) => {
+    if (invoiced <= 0 && cost > 0) return -100;
+    if (invoiced <= 0) return 0;
+    return ((invoiced - cost) / invoiced) * 100;
   };
   
-  const marginPct = getMarginPct(project.quotedProfit, project.actualProfit);
-  const variance = project.actualProfit - project.quotedProfit;
+  const pInvoiced = project.invoicedAmount || 0;
+  const pCost = project.totalCost || 0;
+  const gp = pInvoiced - pCost;
+  const wgEstimatedProfit = project.quotedProfit;
+  const variance = gp - wgEstimatedProfit;
+  const marginPct = getGPMarginPct(pInvoiced, pCost);
 
   return (
     <>
@@ -133,16 +139,16 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col">
-                <span className="text-xs text-slate-500 font-medium">Estimated Profit</span>
-                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(project.quotedProfit)}</span>
+                <span className="text-xs text-slate-500 font-medium">GP</span>
+                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(gp)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs text-slate-500 font-medium">Actual Profit</span>
-                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(project.actualProfit)}</span>
+                <span className="text-xs text-slate-500 font-medium">WG Estimated Profit</span>
+                <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(wgEstimatedProfit)}</span>
               </div>
               
               <div className="flex flex-col pt-3 border-t border-slate-100 dark:border-slate-800">
-                <span className="text-xs text-slate-500 font-medium">Variance</span>
+                <span className="text-xs text-slate-500 font-medium">Variance (GP vs Est)</span>
                 <span className={cn("text-lg font-black flex items-center gap-1", variance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
                   {variance >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                   {variance >= 0 ? "+" : ""}{formatCurrency(variance)}
