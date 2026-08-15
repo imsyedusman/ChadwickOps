@@ -5,6 +5,8 @@ import { X, ExternalLink, Clock, FileText, CheckCircle2, TrendingUp, TrendingDow
 import { cn } from "@/lib/utils";
 import { MergedProfitabilityProject } from "./profitability-table";
 import { getLiveProjectDetails } from "@/app/actions/profitability";
+import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
+import { AlertTriangle } from "lucide-react";
 
 interface ProjectDetailDrawerProps {
   project: MergedProfitabilityProject;
@@ -97,13 +99,37 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
   const wgEstimatedProfit = project.quotedProfit;
   const variance = gp - wgEstimatedProfit;
   const marginPct = getGPMarginPct(pInvoiced, pCost);
-  
+
   const pMat = (project.materialsCost || 0) + (project.purchasesCost || 0);
   const pLab = project.labourCost || 0;
   const pEstMat = project.estimatedMaterialsCost || 0;
   const pEstLab = project.estimatedLabourCost || 0;
   const pEstCost = project.estimatedTotalCost || 0;
   const pEstInvoiced = project.estimatedInvoicedAmount || 0;
+
+  // Calculate insights
+  const insights = React.useMemo(() => {
+    return generateProjectInsights({
+      gpActual: gp,
+      gpEstimated: pEstInvoiced - pEstCost,
+      invoicedActual: pInvoiced,
+      invoicedEstimated: pEstInvoiced,
+      materialsActual: pMat,
+      materialsEstimated: pEstMat,
+      labourActual: pLab,
+      labourEstimated: pEstLab,
+      hoursActual: liveData?.totalActualHours || 0,
+      hoursBudget: liveData?.totalBudgetHours || 0,
+      tasksCompleted: liveData?.completedTasks || 0,
+      tasksTotal: liveData?.totalTasks || 0,
+      isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered")
+    });
+  }, [gp, pInvoiced, pCost, pEstInvoiced, pEstCost, pMat, pEstMat, pLab, pEstLab, liveData, project.rawStatus]);
+
+  const severityOrder = { critical: 3, warning: 2, positive: 1, info: 0 };
+  const sortedInsights = [...insights].sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity]);
+  
+
 
   return (
     <>
@@ -361,13 +387,57 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             </>
           )}
 
-          {/* Section 6: Insights Placeholder */}
-          <div className="bg-slate-100/50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center mt-8">
-            <Target className="h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
-            <span className="text-sm font-bold text-slate-400 dark:text-slate-500">Insights coming soon</span>
-            <span className="text-xs text-slate-400 mt-1 max-w-[250px]">
-              AI-driven financial insights and anomaly detection for this project will be added in Phase 5.
-            </span>
+          {/* Section 6: Insights Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm mt-8">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Target className="h-4 w-4" /> Project Insights
+            </h3>
+            
+            <div className="flex flex-col gap-3">
+              {sortedInsights.length === 0 ? (
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-100 dark:border-slate-700 flex items-start gap-3">
+                  <div className="mt-0.5 text-emerald-500">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Tracking Normal</h4>
+                    <p className="text-xs text-slate-500 mt-1">Project metrics are within normal expectations. No notable flags to report.</p>
+                  </div>
+                </div>
+              ) : (
+                sortedInsights.map((insight, idx) => {
+                  let Icon = CheckCircle2;
+                  let bgClass = "bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-700";
+                  let iconColor = "text-slate-400";
+                  
+                  if (insight.severity === 'critical') {
+                    Icon = AlertTriangle;
+                    bgClass = "bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30";
+                    iconColor = "text-red-500";
+                  } else if (insight.severity === 'warning') {
+                    Icon = AlertTriangle;
+                    bgClass = "bg-amber-50/50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30";
+                    iconColor = "text-amber-500";
+                  } else if (insight.severity === 'positive') {
+                    Icon = CheckCircle2;
+                    bgClass = "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30";
+                    iconColor = "text-emerald-500";
+                  }
+
+                  return (
+                    <div key={idx} className={cn("rounded-lg p-4 border flex items-start gap-3", bgClass)}>
+                      <div className={cn("mt-0.5", iconColor)}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">{insight.label}</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{insight.explanation}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
         </div>

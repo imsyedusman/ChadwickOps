@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
 import { ProjectDetailDrawer } from "./project-detail-drawer";
+import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 export interface MergedProfitabilityProject {
   id: number | string;
@@ -37,7 +39,56 @@ export interface MergedProfitabilityProject {
   estimatedInvoicedAmount: number | null;
   completionDate: Date | null;
   isHistorical: boolean;
+  insights?: ProjectInsight[];
 }
+
+const InsightIndicator = ({ insights }: { insights?: ProjectInsight[] }) => {
+  if (!insights || insights.length === 0) return null;
+
+  const severityOrder = { critical: 3, warning: 2, positive: 1, info: 0 };
+  const sorted = [...insights].sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity]);
+  const highest = sorted[0];
+
+  let Icon = HelpCircle;
+  let colorClass = "text-slate-400";
+
+  if (highest.severity === 'critical') {
+    Icon = AlertTriangle;
+    colorClass = "text-red-500";
+  } else if (highest.severity === 'warning') {
+    Icon = AlertTriangle;
+    colorClass = "text-amber-500";
+  } else if (highest.severity === 'positive') {
+    Icon = CheckCircle2;
+    colorClass = "text-emerald-500";
+  }
+
+  const tooltipContent = (
+    <div className="flex flex-col gap-2 p-1.5 max-w-xs">
+      {sorted.map((insight, i) => (
+        <div key={i} className="flex flex-col gap-0.5">
+          <div className="font-bold text-xs flex items-center gap-1.5">
+            <span className={
+              insight.severity === 'critical' ? 'text-red-400' :
+              insight.severity === 'warning' ? 'text-amber-400' :
+              insight.severity === 'positive' ? 'text-emerald-400' : 'text-slate-400'
+            }>●</span> 
+            <span className="text-slate-100">{insight.label}</span>
+          </div>
+          <div className="text-[11px] text-slate-300 ml-3">{insight.explanation}</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <Tooltip content={tooltipContent}>
+      <div className="inline-flex items-center justify-center p-1 cursor-help hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors ml-1.5 align-middle">
+        <Icon className={`h-4 w-4 ${colorClass}`} />
+      </div>
+    </Tooltip>
+  );
+};
 
 const renderProgressBar = (actual: number, estimated: number, isMargin: boolean = false, isRevenue: boolean = false) => {
   if (isMargin) {
@@ -391,6 +442,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       totalEstimatedCost: number;
       totalEstimatedInvoiced: number;
       hasLoss: boolean;
+      insights?: ProjectInsight[];
     }> = {};
 
     for (const project of filteredProjects) {
@@ -435,9 +487,44 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       if ((pInvoiced - pCost) < 0) {
         groups[prefix].hasLoss = true;
       }
+      
+      project.insights = generateProjectInsights({
+        gpActual: pInvoiced - pCost,
+        gpEstimated: pEstInvoiced - pEstCost,
+        invoicedActual: pInvoiced,
+        invoicedEstimated: pEstInvoiced,
+        materialsActual: pMaterials,
+        materialsEstimated: pEstMaterials,
+        labourActual: pLabour,
+        labourEstimated: pEstLabour,
+        hoursActual: 0,
+        hoursBudget: 0,
+        tasksCompleted: 0,
+        tasksTotal: 0,
+        isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered") || filterActive === "completed"
+      });
     }
 
     const groupsArray = Object.values(groups);
+    
+    // Compute group-level insights
+    groupsArray.forEach(group => {
+      group.insights = generateProjectInsights({
+        gpActual: group.totalInvoiced - group.totalCost,
+        gpEstimated: group.totalEstimatedInvoiced - group.totalEstimatedCost,
+        invoicedActual: group.totalInvoiced,
+        invoicedEstimated: group.totalEstimatedInvoiced,
+        materialsActual: group.totalMaterials,
+        materialsEstimated: group.totalEstimatedMaterials,
+        labourActual: group.totalLabour,
+        labourEstimated: group.totalEstimatedLabour,
+        hoursActual: 0,
+        hoursBudget: 0,
+        tasksCompleted: 0,
+        tasksTotal: 0,
+        isNearCompleteOverride: filterActive === "completed"
+      });
+    });
 
     // Sort logic
     groupsArray.forEach(group => {
@@ -766,8 +853,9 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                           </div>
                         </td>
                         <td className="px-10 py-3 text-right align-top">
-                          <div className={`text-lg font-black ${getMarginColor(groupMargin)}`}>
+                          <div className={`text-lg font-black ${getMarginColor(groupMargin)} inline-flex items-center`}>
                             {groupMargin > 0 ? '+' : ''}{groupMargin.toFixed(1)}%
+                            <InsightIndicator insights={group.insights} />
                           </div>
                           <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
                             Actual: {formatCurrency(gp)}
@@ -909,8 +997,9 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             </div>
                           </td>
                           <td className="px-10 py-3 text-right align-top">
-                            <div className={`text-lg font-black ${getMarginColor(pMargin)}`}>
+                            <div className={`text-lg font-black ${getMarginColor(pMargin)} inline-flex items-center`}>
                               {pMargin > 0 ? '+' : ''}{pMargin.toFixed(1)}%
+                              <InsightIndicator insights={p.insights} />
                             </div>
                             <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
                               Actual: {formatCurrency(pGp)}
