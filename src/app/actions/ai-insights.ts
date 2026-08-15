@@ -153,3 +153,75 @@ The JSON object should have these optional fields: searchText (string), pm (stri
     return null;
   }
 }
+
+export async function generateProjectNarrative(context: Record<string, any>) {
+  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
+    const session = await validateSession();
+    if (!session) {
+      throw new Error("Unauthorized.");
+    }
+  }
+
+  try {
+    const contextString = Object.entries(context)
+      .map(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          return `- ${key}:\n${JSON.stringify(value, null, 2)}`;
+        }
+        return `- ${key}: ${value}`;
+      })
+      .join("\n");
+
+    const promptInstructions = `Write a short, plain English narrative (3 to 5 sentences) explaining the overall financial story of this project.
+CRITICAL RULES:
+1. DO NOT restate exact numbers, percentages, or dollar figures. The user can already see these in the dashboard.
+2. Focus entirely on interpretation and likely cause. Offer a plausible explanation for why this pattern occurred based on the combination of figures (e.g., if hours are wildly over budget but tasks completed is moderate, reason about whether scope was underestimated or if there were hidden complications).
+3. Explain what this specific pattern implies for the rest of the project or future similar projects if it isn't a one-off.
+4. Conclude with one concrete, specific action or question a project manager should raise (e.g., instead of "review the budget", suggest "check if the sub-assembly delays were caused by missing components").
+Dry wit is welcome, but no forced enthusiasm.
+
+OUTPUT FORMAT (CRITICAL): Only return the paragraph text. No headers, no bold formatting, no bullet points, no "key takeaways" prefixes.`;
+
+    const prompt = `You are a sharp financial analyst for Chadwick Switchboards. Based on the following project data and triggered insights, perform the analysis:
+
+${promptInstructions}
+
+Project Data:
+${contextString}
+
+Summary:`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    const response = await fetch(`${process.env.OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL,
+        prompt: prompt,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (!json.response) {
+      throw new Error("No response string from Ollama");
+    }
+
+    return { success: true, data: { narrative: json.response.trim() } };
+
+  } catch (error) {
+    console.error(`[generateProjectNarrative] Error:`, error);
+    return { success: false, error: "AI summary unavailable" };
+  }
+}

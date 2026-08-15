@@ -5,6 +5,7 @@ import { X, ExternalLink, Clock, FileText, CheckCircle2, TrendingUp, TrendingDow
 import { cn } from "@/lib/utils";
 import { MergedProfitabilityProject } from "./profitability-table";
 import { getLiveProjectDetails } from "@/app/actions/profitability";
+import { generateProjectNarrative } from "@/app/actions/ai-insights";
 import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
 import { AlertTriangle } from "lucide-react";
 
@@ -53,6 +54,10 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
   const [liveData, setLiveData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [narrative, setNarrative] = useState<string | null>(null);
+  const [isNarrativeLoading, setIsNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !project.workguruId) return;
@@ -128,6 +133,53 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
 
   const severityOrder = { critical: 3, warning: 2, positive: 1, info: 0 };
   const sortedInsights = [...insights].sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity]);
+  
+  useEffect(() => {
+    if (!isOpen || !project.workguruId || !liveData) return;
+
+    let isMounted = true;
+    setIsNarrativeLoading(true);
+    setNarrativeError(null);
+
+    const context = {
+      projectNumber: project.projectNumber,
+      projectName: project.projectName,
+      status: project.rawStatus,
+      gpActual: gp,
+      gpEstimated: pEstInvoiced - pEstCost,
+      variance,
+      marginPct,
+      invoicedActual: pInvoiced,
+      invoicedEstimated: pEstInvoiced,
+      materialsActual: pMat,
+      materialsEstimated: pEstMat,
+      labourActual: pLab,
+      labourEstimated: pEstLab,
+      hoursActual: liveData.totalActualHours,
+      hoursBudget: liveData.totalBudgetHours,
+      tasksCompleted: liveData.completedTasks,
+      tasksTotal: liveData.totalTasks,
+      triggeredInsights: insights.map(i => `${i.label} (${i.severity}): ${i.explanation}`)
+    };
+
+    generateProjectNarrative(context)
+      .then(res => {
+        if (!isMounted) return;
+        if (res && res.success && res.data) {
+          setNarrative(res.data.narrative);
+        } else {
+          setNarrativeError(res?.error || "AI summary unavailable");
+        }
+      })
+      .catch(err => {
+        if (isMounted) setNarrativeError("AI summary unavailable");
+      })
+      .finally(() => {
+        if (isMounted) setIsNarrativeLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [isOpen, project.workguruId, liveData, insights, gp, pEstInvoiced, pEstCost, variance, marginPct, pInvoiced, pMat, pEstMat, pLab, pEstLab, project.projectNumber, project.projectName, project.rawStatus]);
   
 
 
@@ -437,6 +489,25 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                   );
                 })
               )}
+            </div>
+
+            {/* Narrative AI Section */}
+            <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">AI Narrative</h4>
+              
+              {isNarrativeLoading ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-11/12"></div>
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-4/6"></div>
+                </div>
+              ) : narrativeError ? (
+                <p className="text-sm text-slate-400 italic py-1">{narrativeError}</p>
+              ) : narrative ? (
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                  {narrative}
+                </p>
+              ) : null}
             </div>
           </div>
 
