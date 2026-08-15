@@ -225,3 +225,75 @@ Summary:`;
     return { success: false, error: "AI summary unavailable" };
   }
 }
+
+export async function generateGroupNarrative(context: Record<string, any>) {
+  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
+    const session = await validateSession();
+    if (!session) {
+      throw new Error("Unauthorized.");
+    }
+  }
+
+  try {
+    const contextString = Object.entries(context)
+      .map(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          return `- ${key}:\n${JSON.stringify(value, null, 2)}`;
+        }
+        return `- ${key}: ${value}`;
+      })
+      .join("\n");
+
+    const promptInstructions = `Write a short, plain English narrative (3 to 5 sentences) explaining the overall financial story of this group of projects.
+CRITICAL RULES:
+1. DO NOT restate exact numbers, percentages, or dollar figures. The user can already see these in the dashboard.
+2. Focus on patterns across the sub-projects (e.g., if multiple sub-projects show the same type of overrun, call that out as a shared pattern worth investigating).
+3. Offer a plausible explanation for why this pattern occurred based on the combination of figures across the group.
+4. Conclude with one concrete, specific action or question a project manager should raise regarding the systemic estimating or execution of this group.
+Dry wit is welcome, but no forced enthusiasm.
+
+OUTPUT FORMAT (CRITICAL): Only return the paragraph text. No headers, no bold formatting, no bullet points, no "key takeaways" prefixes.`;
+
+    const prompt = `You are a sharp financial analyst for Chadwick Switchboards. Based on the following group project data, sub-project details, and triggered insights, perform the analysis:
+
+${promptInstructions}
+
+Group Data & Sub-projects:
+${contextString}
+
+Summary:`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for group, slightly larger data
+
+    const response = await fetch(`${process.env.OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL,
+        prompt: prompt,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (!json.response) {
+      throw new Error("No response string from Ollama");
+    }
+
+    return { success: true, data: { narrative: json.response.trim() } };
+
+  } catch (error) {
+    console.error(`[generateGroupNarrative] Error:`, error);
+    return { success: false, error: "AI summary unavailable" };
+  }
+}

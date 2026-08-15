@@ -6,12 +6,14 @@ import {
   Search, ChevronDown, ChevronRight, TrendingUp, AlertTriangle, ExternalLink,
   Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle,
   PauseCircle, Timer, CheckCircle2, Receipt, DollarSign, Truck, Archive, Ban, HelpCircle,
-  Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown
+  Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown, Info
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { cn } from "@/lib/utils";
+
 import { ProjectDetailDrawer } from "./project-detail-drawer";
+import { GroupDetailDrawer } from "./group-detail-drawer";
 import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
 import { Tooltip } from "@/components/ui/Tooltip";
 
@@ -292,6 +294,21 @@ const MONTH_NAMES = [
 
 type SortKey = "project" | "client" | "schedule" | "status" | "profit";
 
+export interface ProfitabilityGroup {
+  key: string;
+  projects: MergedProfitabilityProject[];
+  totalInvoiced: number;
+  totalCost: number;
+  totalMaterials: number;
+  totalLabour: number;
+  totalEstimatedMaterials: number;
+  totalEstimatedLabour: number;
+  totalEstimatedCost: number;
+  totalEstimatedInvoiced: number;
+  hasLoss: boolean;
+  insights?: ProjectInsight[];
+}
+
 export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[] }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState<"active" | "completed">("active");
@@ -305,6 +322,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [sortKey, setSortKey] = useState<SortKey>("profit");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedProject, setSelectedProject] = useState<MergedProfitabilityProject | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<ProfitabilityGroup | null>(null);
 
   // Reset sorting defaults when switching active/completed tabs
   useEffect(() => {
@@ -429,21 +447,10 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     };
   }, [filteredProjects]);
 
+
+
   const groupedData = useMemo(() => {
-    const groups: Record<string, {
-      key: string;
-      projects: MergedProfitabilityProject[];
-      totalInvoiced: number;
-      totalCost: number;
-      totalMaterials: number;
-      totalLabour: number;
-      totalEstimatedMaterials: number;
-      totalEstimatedLabour: number;
-      totalEstimatedCost: number;
-      totalEstimatedInvoiced: number;
-      hasLoss: boolean;
-      insights?: ProjectInsight[];
-    }> = {};
+    const groups: Record<string, ProfitabilityGroup> = {};
 
     for (const project of filteredProjects) {
       let prefix = project.projectNumber;
@@ -815,6 +822,16 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">
                               {group.projects.length} project{group.projects.length !== 1 ? 's' : ''}
                             </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroup(group);
+                              }}
+                              className="ml-2 p-1 text-slate-400 hover:text-brand hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+                              title="View Group Summary"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                         <td className="px-4 py-3 align-top"></td>
@@ -1030,6 +1047,14 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           onClose={() => setSelectedProject(null)}
           statusIcon={getStatusStyles(selectedProject.rawStatus).icon}
           statusColor={getColorClasses(getStatusStyles(selectedProject.rawStatus).color)}
+        />
+      )}
+
+      {selectedGroup && (
+        <GroupDetailDrawer
+          group={selectedGroup}
+          isOpen={true}
+          onClose={() => setSelectedGroup(null)}
         />
       )}
     </div>
