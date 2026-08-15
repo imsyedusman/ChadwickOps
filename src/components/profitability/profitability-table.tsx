@@ -2,9 +2,9 @@
 
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { format } from "date-fns";
-import { 
+import {
   Search, ChevronDown, ChevronRight, TrendingUp, AlertTriangle, ExternalLink,
-  Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle, 
+  Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle,
   PauseCircle, Timer, CheckCircle2, Receipt, DollarSign, Truck, Archive, Ban, HelpCircle,
   Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown
 } from "lucide-react";
@@ -41,34 +41,34 @@ export interface MergedProfitabilityProject {
 
 const renderProgressBar = (actual: number, estimated: number, isMargin: boolean = false, isRevenue: boolean = false) => {
   if (isMargin) {
-     const pct = Math.max(0, Math.min(100, actual));
-     return (
-       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
-         <div 
-           className={cn("h-full rounded-full transition-all duration-500", actual < 0 ? "bg-red-500" : actual <= 15 ? "bg-amber-500" : "bg-emerald-500")} 
-           style={{ width: `${pct}%` }} 
-         />
-       </div>
-     );
+    const pct = Math.max(0, Math.min(100, actual));
+    return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", actual < 0 ? "bg-red-500" : actual <= 15 ? "bg-amber-500" : "bg-emerald-500")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    );
   } else {
-     if (!estimated || estimated === 0) return (
-       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
-         <div className="h-full bg-slate-200 dark:bg-slate-700 rounded-full w-0" />
-       </div>
-     );
-     const rawPct = (actual / estimated) * 100;
-     const displayPct = Math.max(0, Math.min(100, rawPct));
-     const barColor = isRevenue 
-       ? (rawPct >= 100 ? "bg-emerald-500" : "bg-brand") 
-       : (rawPct > 100 ? "bg-red-500" : "bg-brand");
-     return (
-       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
-         <div 
-           className={cn("h-full rounded-full transition-all duration-500", barColor)} 
-           style={{ width: `${displayPct}%` }} 
-         />
-       </div>
-     );
+    if (!estimated || estimated === 0) return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div className="h-full bg-slate-200 dark:bg-slate-700 rounded-full w-0" />
+      </div>
+    );
+    const rawPct = (actual / estimated) * 100;
+    const displayPct = Math.max(0, Math.min(100, rawPct));
+    const barColor = isRevenue
+      ? (rawPct >= 100 ? "bg-emerald-500" : "bg-brand")
+      : (rawPct > 100 ? "bg-red-500" : "bg-brand");
+    return (
+      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden flex-shrink-0" style={{ height: '5px', minHeight: '5px' }}>
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", barColor)}
+          style={{ width: `${displayPct}%` }}
+        />
+      </div>
+    );
   }
 };
 
@@ -98,7 +98,7 @@ const getStatusStyles = (status: string | null) => {
 };
 
 const getColorClasses = (color: string) => {
-  const base = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-sm uppercase tracking-wider transition-all duration-200";
+  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border shadow-sm uppercase tracking-wider transition-all duration-200";
   const colors: Record<string, string> = {
     brand: "bg-brand/5 text-brand border-brand/20 dark:bg-brand/10 dark:border-brand/30",
     blue: "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-900/30",
@@ -235,7 +235,7 @@ const getMarginColor = (marginPct: number) => {
 };
 
 const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
@@ -250,7 +250,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [monthFilter, setMonthFilter] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  
+
   const [sortKey, setSortKey] = useState<SortKey>("profit");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedProject, setSelectedProject] = useState<MergedProfitabilityProject | null>(null);
@@ -304,7 +304,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     return data.filter((project) => {
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           project.projectNumber.toLowerCase().includes(lowerSearch) ||
           project.projectName.toLowerCase().includes(lowerSearch) ||
           (project.clientName && project.clientName.toLowerCase().includes(lowerSearch));
@@ -312,13 +312,13 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       }
 
       const rawStatusStr = project.rawStatus?.toLowerCase() || "";
-      const isCompletedStatus = 
-        rawStatusStr.includes("completed") || 
-        rawStatusStr.includes("delivered") || 
+      const isCompletedStatus =
+        rawStatusStr.includes("completed") ||
+        rawStatusStr.includes("delivered") ||
         rawStatusStr.includes("cancelled") ||
         rawStatusStr.includes("invoiced") ||
         rawStatusStr.includes("ready for invoicing");
-        
+
       const isCompleted = isCompletedStatus || project.isHistorical;
 
       if (filterActive === "active" && isCompleted) return false;
@@ -343,7 +343,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         if (d) {
           const mStr = MONTH_NAMES[d.getMonth()];
           const yStr = d.getFullYear().toString();
-          
+
           if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
           if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
         } else if (monthFilter.length > 0 || yearFilter.length > 0) {
@@ -436,9 +436,9 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         groups[prefix].hasLoss = true;
       }
     }
-    
+
     const groupsArray = Object.values(groups);
-    
+
     // Sort logic
     groupsArray.forEach(group => {
       group.projects.sort((a, b) => {
@@ -517,8 +517,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
 
   const renderSortIndicator = (key: SortKey) => {
     if (sortKey !== key) return <div className="w-3.5 inline-block opacity-0 group-hover:opacity-30 transition-opacity"><ArrowDown className="h-3.5 w-3.5 inline ml-1" /></div>;
-    return sortDir === "asc" 
-      ? <ArrowUp className="h-3.5 w-3.5 inline ml-1 text-brand" /> 
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3.5 w-3.5 inline ml-1 text-brand" />
       : <ArrowDown className="h-3.5 w-3.5 inline ml-1 text-brand" />;
   };
 
@@ -535,7 +535,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             {summaryData.totalProjects}
           </div>
         </div>
-        
+
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center gap-2 text-slate-500 mb-2">
             <FileText className="h-4 w-4" />
@@ -566,12 +566,12 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           </div>
         </div>
 
-        <div 
+        <div
           onClick={() => setFilterLoss(!filterLoss)}
           className={cn(
             "rounded-xl p-4 shadow-sm flex flex-col justify-between cursor-pointer transition-all border",
-            filterLoss 
-              ? "bg-red-100 dark:bg-red-900/40 border-red-400 dark:border-red-600 ring-2 ring-red-400/20" 
+            filterLoss
+              ? "bg-red-100 dark:bg-red-900/40 border-red-400 dark:border-red-600 ring-2 ring-red-400/20"
               : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800 hover:bg-red-100/50 dark:hover:bg-red-900/20"
           )}
         >
@@ -609,9 +609,9 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search projects..." 
+            <input
+              type="text"
+              placeholder="Search projects..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 pr-4 py-2 border rounded-lg text-sm w-[200px] h-10 focus:outline-none focus:ring-2 focus:ring-brand"
@@ -619,38 +619,38 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           </div>
 
           {/* Dropdown Filters */}
-          <FilterPopover 
-            label="Status" 
-            icon={Filter} 
-            options={allStatuses} 
-            selected={statusFilter} 
-            onChange={setStatusFilter} 
+          <FilterPopover
+            label="Status"
+            icon={Filter}
+            options={allStatuses}
+            selected={statusFilter}
+            onChange={setStatusFilter}
           />
-          <FilterPopover 
-            label="Type" 
-            icon={Layers} 
-            options={allTypes} 
-            selected={typeFilter} 
-            onChange={setTypeFilter} 
+          <FilterPopover
+            label="Type"
+            icon={Layers}
+            options={allTypes}
+            selected={typeFilter}
+            onChange={setTypeFilter}
           />
 
           {/* Month/Year Picker (only for completed) */}
           {filterActive === "completed" && (
             <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">Completion Date:</span>
-              <FilterPopover 
-                label="Months" 
-                icon={Calendar} 
-                options={MONTH_NAMES} 
-                selected={monthFilter} 
-                onChange={setMonthFilter} 
+              <FilterPopover
+                label="Months"
+                icon={Calendar}
+                options={MONTH_NAMES}
+                selected={monthFilter}
+                onChange={setMonthFilter}
               />
-              <FilterPopover 
-                label="Years" 
-                icon={Calendar} 
-                options={availableYears} 
-                selected={yearFilter} 
-                onChange={setYearFilter} 
+              <FilterPopover
+                label="Years"
+                icon={Calendar}
+                options={availableYears}
+                selected={yearFilter}
+                onChange={setYearFilter}
               />
             </div>
           )}
@@ -658,63 +658,55 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border shadow-sm">
+        <div className="w-full">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b text-slate-500 dark:text-slate-400 font-medium">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b text-slate-500 dark:text-slate-400 font-medium sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 font-semibold w-12"></th>
-                <th 
+                <th
                   className="px-4 py-3 font-semibold w-[20%] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("project")}
                 >
                   Project {renderSortIndicator("project")}
                 </th>
-                <th 
+                <th
                   className="px-4 py-3 font-semibold min-w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("schedule")}
                 >
                   Schedule {renderSortIndicator("schedule")}
                 </th>
-                <th 
-                  className="px-4 py-3 font-semibold w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
-                  onClick={() => toggleSort("status")}
-                >
-                  Status / Type {renderSortIndicator("status")}
-                </th>
-                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+
+                <th className="px-10 py-3 font-semibold text-right min-w-[120px]">
                   Invoiced
                 </th>
-                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
+                <th className="px-10 py-3 font-semibold text-right min-w-[120px]">
                   Cost
                 </th>
-                <th 
-                  className="px-4 py-3 font-semibold min-w-[140px] text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
+                <th className="px-10 py-3 font-semibold text-right min-w-[150px]">
+                  Cost Split
+                </th>
+                <th
+                  className="px-10 py-3 font-semibold min-w-[140px] text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("profit")}
                 >
                   GP {renderSortIndicator("profit")}
-                </th>
-                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
-                  Materials
-                </th>
-                <th className="px-4 py-3 font-semibold text-right min-w-[120px]">
-                  Labour
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {groupedData.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     No projects found matching the current filters.
                   </td>
                 </tr>
               )}
-              
+
               {groupedData.map((group) => {
                 const isSingle = group.projects.length === 1;
                 const isCollapsed = collapsedGroups.has(group.key);
-                
+
                 // Group aggregates
                 const gp = group.totalInvoiced - group.totalCost;
                 const groupMargin = getGPMarginPct(group.totalInvoiced, group.totalCost);
@@ -723,14 +715,14 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                   <React.Fragment key={group.key}>
                     {/* Parent Row (only if > 1 project) */}
                     {!isSingle && (
-                      <tr 
+                      <tr
                         className={`group hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors ${group.hasLoss ? "bg-red-50 dark:bg-red-900/20" : "bg-slate-100/50 dark:bg-slate-800/40"}`}
                         onClick={() => toggleGroup(group.key)}
                       >
-                        <td className={`px-4 py-3 ${group.hasLoss ? "border-l-4 border-l-red-500" : ""}`}>
+                        <td className={`px-4 py-3 align-top ${group.hasLoss ? "border-l-4 border-l-red-500" : ""}`}>
                           {isCollapsed ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <div className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
                             {group.key}
                             <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">
@@ -738,56 +730,59 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3"></td>
-                        <td className="px-4 py-3"></td>
-                        <td className="px-4 py-3 text-right">
-                           <div className="font-medium text-slate-700 dark:text-slate-300">
-                             {group.totalInvoiced === 0 ? "-" : formatCurrency(group.totalInvoiced)}
-                           </div>
-                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                             {group.totalEstimatedInvoiced === 0 ? "-" : formatCurrency(group.totalEstimatedInvoiced)}
-                           </div>
-                           {renderProgressBar(group.totalInvoiced, group.totalEstimatedInvoiced, false, true)}
+                        <td className="px-4 py-3 align-top"></td>
+                        <td className="px-10 py-3 text-right align-top">
+                          <div className="font-medium text-slate-700 dark:text-slate-300">
+                            {group.totalInvoiced === 0 ? "-" : formatCurrency(group.totalInvoiced)}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {group.totalEstimatedInvoiced === 0 ? "-" : formatCurrency(group.totalEstimatedInvoiced)}
+                          </div>
+                          {renderProgressBar(group.totalInvoiced, group.totalEstimatedInvoiced, false, true)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                           <div className="font-medium text-slate-700 dark:text-slate-300">
-                             {group.totalCost === 0 ? "-" : formatCurrency(group.totalCost)}
-                           </div>
-                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                             {group.totalEstimatedCost === 0 ? "-" : formatCurrency(group.totalEstimatedCost)}
-                           </div>
-                           {renderProgressBar(group.totalCost, group.totalEstimatedCost)}
+                        <td className="px-10 py-3 text-right align-top">
+                          <div className="font-medium text-slate-700 dark:text-slate-300">
+                            {group.totalCost === 0 ? "-" : formatCurrency(group.totalCost)}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {group.totalEstimatedCost === 0 ? "-" : formatCurrency(group.totalEstimatedCost)}
+                          </div>
+                          {renderProgressBar(group.totalCost, group.totalEstimatedCost)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                           <div className={`text-base font-bold ${gp >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                             {gp >= 0 ? "+" : ""}{formatCurrency(gp)}
-                           </div>
-                           <div className={`font-black text-sm mt-0.5 ${getMarginColor(groupMargin)}`}>
-                             {groupMargin > 0 ? '+' : ''}{groupMargin.toFixed(1)}%
-                           </div>
-                           {renderProgressBar(groupMargin, 100, true)}
+                        <td className="px-10 py-3 text-right align-top">
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Materials: {formatCurrency(group.totalMaterials)} <span className="text-xs text-slate-400 font-normal">/ {formatCurrency(group.totalEstimatedMaterials)}</span>
+                              </div>
+                              {renderProgressBar(group.totalMaterials, group.totalEstimatedMaterials)}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                Labour: {formatCurrency(group.totalLabour)} <span className="text-xs text-slate-400 font-normal">/ {formatCurrency(group.totalEstimatedLabour)}</span>
+                              </div>
+                              {renderProgressBar(group.totalLabour, group.totalEstimatedLabour)}
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                           <div className="font-medium text-slate-700 dark:text-slate-300">
-                             {group.totalMaterials === 0 ? "-" : formatCurrency(group.totalMaterials)}
-                           </div>
-                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                             {group.totalEstimatedMaterials === 0 ? "-" : formatCurrency(group.totalEstimatedMaterials)}
-                           </div>
-                           {renderProgressBar(group.totalMaterials, group.totalEstimatedMaterials)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                           <div className="font-medium text-slate-700 dark:text-slate-300">
-                             {group.totalLabour === 0 ? "-" : formatCurrency(group.totalLabour)}
-                           </div>
-                           <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                             {group.totalEstimatedLabour === 0 ? "-" : formatCurrency(group.totalEstimatedLabour)}
-                           </div>
-                           {renderProgressBar(group.totalLabour, group.totalEstimatedLabour)}
+                        <td className="px-10 py-3 text-right align-top">
+                          <div className={`text-lg font-black ${getMarginColor(groupMargin)}`}>
+                            {groupMargin > 0 ? '+' : ''}{groupMargin.toFixed(1)}%
+                          </div>
+                          <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
+                            Actual: {formatCurrency(gp)}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            Est: {formatCurrency(group.totalEstimatedInvoiced - group.totalEstimatedCost)}
+                          </div>
+                          <div className={`text-sm font-bold mt-0.5 ${gp - (group.totalEstimatedInvoiced - group.totalEstimatedCost) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            Variance: {gp - (group.totalEstimatedInvoiced - group.totalEstimatedCost) >= 0 ? "+" : ""}{formatCurrency(gp - (group.totalEstimatedInvoiced - group.totalEstimatedCost))}
+                          </div>
+                          {renderProgressBar(groupMargin, 100, true)}
                         </td>
                       </tr>
                     )}
-                    
+
                     {/* Child Rows */}
                     {(!isCollapsed || isSingle) && group.projects.map((p) => {
                       const pInvoiced = p.invoicedAmount || 0;
@@ -806,15 +801,15 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                       const StatusIcon = styleConfig.icon;
 
                       return (
-                        <tr 
-                          key={p.projectNumber} 
+                        <tr
+                          key={p.projectNumber}
                           className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer`}
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('a')) return;
                             setSelectedProject(p);
                           }}
                         >
-                          <td className="px-4 py-3 relative">
+                          <td className="px-4 py-3 relative align-top">
                             {!isSingle && (
                               <div className="absolute left-6 top-0 bottom-0 w-px bg-slate-200 dark:bg-slate-700"></div>
                             )}
@@ -822,10 +817,10 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                               <div className="absolute left-6 top-1/2 w-4 h-px bg-slate-200 dark:bg-slate-700"></div>
                             )}
                           </td>
-                          <td className={`px-4 py-3 ${!isSingle ? 'pl-8 relative' : ''}`}>
-                            <div className="flex flex-col gap-0.5">
+                          <td className={`px-4 py-3 align-top ${!isSingle ? 'pl-8 relative' : ''}`}>
+                            <div className="flex flex-col gap-1">
                               {p.workguruId ? (
-                                <a 
+                                <a
                                   href={`https://app.workguru.io/App/Projects/Detail2/${p.workguruId}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -837,18 +832,30 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                               ) : (
                                 <span className="font-bold text-slate-700 dark:text-slate-300">{p.projectNumber}</span>
                               )}
-                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 line-clamp-2" title={p.projectName}>
+                              <div className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2" title={p.projectName}>
                                 {p.projectName}
                               </div>
-                              {p.clientName && (
-                                <div className="text-xs text-slate-500 line-clamp-1">{p.clientName}</div>
+                              {(p.clientName || p.projectManager) && (
+                                <div className="text-[11px] text-slate-400 mt-0.5 flex items-center flex-wrap gap-1.5">
+                                  {p.clientName && <span className="line-clamp-1 truncate max-w-[150px]" title={p.clientName}>{p.clientName}</span>}
+                                  {p.clientName && p.projectManager && <span>&bull;</span>}
+                                  {p.projectManager && <span>{p.projectManager}</span>}
+                                </div>
                               )}
-                              {p.projectManager && (
-                                <div className="text-[11px] text-slate-400">{p.projectManager}</div>
-                              )}
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={getColorClasses(styleConfig.color)}>
+                                  <StatusIcon className="h-2.5 w-2.5" />
+                                  {p.rawStatus?.replace(/^[\d.]+ - /, '').trim() || 'Unknown'}
+                                </span>
+                                {p.projectType && (
+                                  <span className="inline-flex px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-500 font-medium align-middle leading-none">
+                                    {p.projectType}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <td className="px-4 py-3 text-sm whitespace-nowrap align-top">
                             <div className="flex flex-col gap-1">
                               <div className="text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-400 font-medium mr-1">Start:</span>
@@ -866,57 +873,55 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={getColorClasses(styleConfig.color)}>
-                              <StatusIcon className="h-3 w-3" />
-                              {p.rawStatus?.replace(/^[\d.]+ - /, '').trim() || 'Unknown'}
-                            </span>
-                            <div className="text-xs text-slate-500 mt-1">{p.projectType || 'Standard'}</div>
-                          </td>
-                           <td className="px-4 py-3 text-right align-top">
-                             <div className="font-medium text-slate-700 dark:text-slate-300">
-                               {pInvoiced === 0 ? "-" : formatCurrency(pInvoiced)}
-                             </div>
-                             <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                               {pEstInvoiced === 0 ? "-" : formatCurrency(pEstInvoiced)}
-                             </div>
-                             {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
-                           </td>
-                           <td className="px-4 py-3 text-right align-top">
-                             <div className="font-medium text-slate-700 dark:text-slate-300">
-                               {pCost === 0 ? "-" : formatCurrency(pCost)}
-                             </div>
-                             <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                               {pEstCost === 0 ? "-" : formatCurrency(pEstCost)}
-                             </div>
-                             {renderProgressBar(pCost, pEstCost)}
-                           </td>
-                          <td className="px-4 py-3 text-right align-top">
-                            <div className={`text-base font-bold ${pGp >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                              {pGp >= 0 ? "+" : ""}{formatCurrency(pGp)}
+
+                          <td className="px-10 py-3 text-right align-top">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">
+                              {pInvoiced === 0 ? "-" : formatCurrency(pInvoiced)}
                             </div>
-                            <div className={`font-black text-sm mt-0.5 ${getMarginColor(pMargin)}`}>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {pEstInvoiced === 0 ? "-" : formatCurrency(pEstInvoiced)}
+                            </div>
+                            {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
+                          </td>
+                          <td className="px-10 py-3 text-right align-top">
+                            <div className="font-medium text-slate-700 dark:text-slate-300">
+                              {pCost === 0 ? "-" : formatCurrency(pCost)}
+                            </div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {pEstCost === 0 ? "-" : formatCurrency(pEstCost)}
+                            </div>
+                            {renderProgressBar(pCost, pEstCost)}
+                          </td>
+                          <td className="px-10 py-3 text-right align-top">
+                            <div className="flex flex-col gap-2">
+                              <div>
+                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                  Materials: {formatCurrency(pMat)} <span className="text-xs text-slate-400 font-normal">/ {formatCurrency(pEstMat)}</span>
+                                </div>
+                                {renderProgressBar(pMat, pEstMat)}
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                  Labour: {formatCurrency(pLab)} <span className="text-xs text-slate-400 font-normal">/ {formatCurrency(pEstLab)}</span>
+                                </div>
+                                {renderProgressBar(pLab, pEstLab)}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-10 py-3 text-right align-top">
+                            <div className={`text-lg font-black ${getMarginColor(pMargin)}`}>
                               {pMargin > 0 ? '+' : ''}{pMargin.toFixed(1)}%
                             </div>
+                            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
+                              Actual: {formatCurrency(pGp)}
+                            </div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              Est: {formatCurrency(pEstInvoiced - pEstCost)}
+                            </div>
+                            <div className={`text-sm font-bold mt-0.5 ${pGp - (pEstInvoiced - pEstCost) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                              Variance: {pGp - (pEstInvoiced - pEstCost) >= 0 ? "+" : ""}{formatCurrency(pGp - (pEstInvoiced - pEstCost))}
+                            </div>
                             {renderProgressBar(pMargin, 100, true)}
-                          </td>
-                          <td className="px-4 py-3 text-right align-top">
-                            <div className="font-medium text-slate-700 dark:text-slate-300">
-                              {pMat === 0 ? "-" : formatCurrency(pMat)}
-                            </div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                              {pEstMat === 0 ? "-" : formatCurrency(pEstMat)}
-                            </div>
-                            {renderProgressBar(pMat, pEstMat)}
-                          </td>
-                          <td className="px-4 py-3 text-right align-top">
-                            <div className="font-medium text-slate-700 dark:text-slate-300">
-                              {pLab === 0 ? "-" : formatCurrency(pLab)}
-                            </div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                              {pEstLab === 0 ? "-" : formatCurrency(pEstLab)}
-                            </div>
-                            {renderProgressBar(pLab, pEstLab)}
                           </td>
                         </tr>
                       );
@@ -930,7 +935,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       </div>
 
       {selectedProject && (
-        <ProjectDetailDrawer 
+        <ProjectDetailDrawer
           project={selectedProject}
           isOpen={true}
           onClose={() => setSelectedProject(null)}
