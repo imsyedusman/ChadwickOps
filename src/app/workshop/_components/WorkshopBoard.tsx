@@ -346,7 +346,7 @@ function Bay({ number, projects }: { number: number, projects: any[] }) {
 
     const isEmpty = !projects || projects.length === 0;
     const totalJobs = isEmpty ? 0 : projects.length;
-    const itemsPerPage = 2;
+    const itemsPerPage = 3;
     const totalPages = Math.ceil(totalJobs / itemsPerPage);
 
     useEffect(() => {
