@@ -113,12 +113,15 @@ export class ProfitabilitySyncService {
       const filteredActive = activeItems.filter(item => item.ProjectNo && localProjectNumbers.has(item.ProjectNo));
       
       const activeRecordsToUpsert = [];
+      const processedActiveProjectNumbers = new Set<string>();
       const batchSizeApi = 10;
       
       for (let i = 0; i < filteredActive.length; i += batchSizeApi) {
           const chunk = filteredActive.slice(i, i + batchSizeApi);
           const chunkPromises = chunk.map(async (item) => {
               const forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+
+              processedActiveProjectNumbers.add(item.ProjectNo);
 
               return {
                   projectNumber: item.ProjectNo,
@@ -183,7 +186,7 @@ export class ProfitabilitySyncService {
       const historicalResponse = await this.withRetry(() => this.client.getAllProjectsCompletedInDateRange(fyStart, now), 'Historical Projects Summary');
       const historicalItems = this.extractItems<any>(historicalResponse, 'CompletedProjects');
       
-      const filteredHistorical = historicalItems.filter(item => item.ProjectNo);
+      const filteredHistorical = historicalItems.filter(item => item.ProjectNo && !processedActiveProjectNumbers.has(item.ProjectNo));
       
       const historicalRecordsToUpsert = [];
       const batchSizeApiHist = 10;
