@@ -772,19 +772,67 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                 </th>
 
                 <th className="px-10 py-3 font-semibold text-right min-w-[120px]">
-                  Invoiced
+                  <div className="flex items-center justify-end gap-1.5">
+                    Invoiced
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Actual amount invoiced to date from WorkGuru. The grey figure below is the total invoiceable amount expected.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: TotalInvoiced / Total (Actual), TotalForecastRevenue (Est)
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </div>
                 </th>
                 <th className="px-10 py-3 font-semibold text-right min-w-[120px]">
-                  Cost
+                  <div className="flex items-center justify-end gap-1.5">
+                    Cost
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Total actual cost to date from WorkGuru (labour + materials + purchases). The grey figure below is WorkGuru's forecast total cost.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: TotalCost (Actual), TotalForecastCost (Est)
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </div>
                 </th>
                 <th className="px-10 py-3 font-semibold text-right min-w-[150px]">
-                  Cost Split
+                  <div className="flex items-center justify-end gap-1.5">
+                    Cost Split
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Materials is WorkGuru's Product + Purchase Order costs (combined since parts are usually bought specifically for the build). Labour is WorkGuru's Task/Timesheet cost.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: ProductCost + PurchaseCost, TaskCost
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </div>
                 </th>
                 <th
                   className="px-10 py-3 font-semibold min-w-[140px] text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group select-none"
                   onClick={() => toggleSort("profit")}
                 >
-                  GP {renderSortIndicator("profit")}
+                  <div className="flex items-center justify-end gap-1.5">
+                    GP {renderSortIndicator("profit")}
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Calculated locally as Invoiced minus Cost (not pulled directly from WorkGuru).</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          Local Calculation: Invoiced - Cost
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </div>
                 </th>
               </tr>
             </thead>

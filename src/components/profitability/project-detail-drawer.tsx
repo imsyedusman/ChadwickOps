@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { X, ExternalLink, Clock, FileText, CheckCircle2, TrendingUp, TrendingDown, Layers, Target, CheckSquare, DollarSign, Briefcase } from "lucide-react";
+import { X, ExternalLink, Clock, FileText, CheckCircle2, TrendingUp, TrendingDown, Layers, Target, CheckSquare, DollarSign, Briefcase, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MergedProfitabilityProject } from "./profitability-table";
 import { getLiveProjectDetails } from "@/app/actions/profitability";
 import { generateProjectNarrative } from "@/app/actions/ai-insights";
 import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
 import { AlertTriangle } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface ProjectDetailDrawerProps {
   project: MergedProfitabilityProject;
@@ -258,11 +259,35 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col">
-                <span className="text-xs text-slate-500 font-medium">GP</span>
+                <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                  GP
+                  <Tooltip content={
+                    <div className="flex flex-col gap-1.5">
+                      <span>Calculated locally as Invoiced minus Cost. Not pulled directly from WorkGuru.</span>
+                      <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                        Local Calculation: Invoiced - Cost
+                      </span>
+                    </div>
+                  }>
+                    <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                  </Tooltip>
+                </span>
                 <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(gp)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs text-slate-500 font-medium">WG Estimated Profit</span>
+                <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                  WG Estimated Profit
+                  <Tooltip content={
+                    <div className="flex flex-col gap-1.5">
+                      <span>WorkGuru's own separate profit calculation (Quoted Profit) provided for comparison.</span>
+                      <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                        API: ProjectPivotReport | Field: ForecastDollarProfit
+                      </span>
+                    </div>
+                  }>
+                    <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                  </Tooltip>
+                </span>
                 <span className="text-lg font-bold text-slate-700 dark:text-slate-300">{formatCurrency(wgEstimatedProfit)}</span>
               </div>
               
@@ -293,7 +318,19 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Invoiced</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    Total Invoiced
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>The actual amount invoiced to date, sourced from WorkGuru. The estimated figure below is the total invoiceable amount expected for the project.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: TotalInvoiced / Total (Actual), TotalForecastRevenue (Est)
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pInvoiced)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
@@ -305,7 +342,19 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
               
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Cost To Date</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    Total Cost To Date
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Total actual cost to date from WorkGuru (labour plus materials plus purchases). The estimated figure below is WorkGuru's forecast total cost.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: TotalCost (Actual), TotalForecastCost (Est)
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pCost)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
@@ -326,7 +375,19 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Materials & Purchases</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    Materials & Purchases
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Combined figure of WorkGuru's Product cost and Purchase Order cost (actual and forecast). They are combined because raw materials and parts are typically purchased specifically for the build.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: ProductCost + PurchaseCost, ProductForecastCost + PurchaseForecastCost
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pMat)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
@@ -338,7 +399,19 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
               
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-end mb-1">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Labour</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    Labour
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>This is WorkGuru's Task/Timesheet cost, showing both actual cost to date and the total forecast cost.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectPivotReport | Fields: TaskCost (Actual), TaskForecastCost (Est)
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
+                  </span>
                   <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pLab)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
@@ -373,6 +446,16 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                   <Clock className="h-4 w-4" /> Hours Tracking
+                  <Tooltip content={
+                    <div className="flex flex-col gap-1.5">
+                      <span>Actual hours are pulled from submitted WorkGuru timesheets for this project. Budgeted hours are from WorkGuru's task forecasts.</span>
+                      <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                        API: ProjectDetail | Fields: totalTime (Actual), forecastTime (Est)
+                      </span>
+                    </div>
+                  }>
+                    <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                  </Tooltip>
                 </h3>
                 
                 <div className="flex flex-col gap-2">
@@ -419,6 +502,16 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                   <div className="flex items-center gap-2 text-slate-400 mb-2">
                     <CheckSquare className="h-4 w-4" />
                     <span className="text-xs font-bold uppercase tracking-wider">Tasks</span>
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Shows the number of individual tasks marked as 'Completed' in WorkGuru versus the total number of tasks on the project.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectTasks | Fields: Status / status === 'Completed'
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
                   </div>
                   <div className="flex items-end gap-1.5">
                     <span className="text-2xl font-black text-slate-900 dark:text-white">{liveData.completedTasks}</span>
@@ -430,6 +523,16 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                   <div className="flex items-center gap-2 text-slate-400 mb-2">
                     <Layers className="h-4 w-4" />
                     <span className="text-xs font-bold uppercase tracking-wider">WIP Value</span>
+                    <Tooltip content={
+                      <div className="flex flex-col gap-1.5">
+                        <span>Work In Progress value from WorkGuru representing un-invoiced actual costs. Shows '--' when no live data is available.</span>
+                        <span className="text-[10px] text-slate-400 opacity-80 border-t border-slate-700/50 pt-1.5">
+                          API: ProjectDetail | Field: wipByActual
+                        </span>
+                      </div>
+                    }>
+                      <Info className="h-3.5 w-3.5 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
+                    </Tooltip>
                   </div>
                   <div className="text-2xl font-black text-slate-900 dark:text-white">
                     {liveData.wipValue > 0 ? formatCurrency(liveData.wipValue) : '--'}
