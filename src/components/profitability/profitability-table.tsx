@@ -367,6 +367,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     const years = new Set<string>();
     data.forEach(p => {
       if (p.completionDate) years.add(new Date(p.completionDate).getFullYear().toString());
+      if (p.deliveryDate) years.add(new Date(p.deliveryDate).getFullYear().toString());
     });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [data]);
@@ -411,18 +412,19 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         if (!typeFilter.includes(t)) return false;
       }
 
-      if (filterActive === "completed") {
-        const d = project.completionDate ? new Date(project.completionDate) : null;
-        if (d) {
-          const mStr = MONTH_NAMES[d.getMonth()];
-          const yStr = d.getFullYear().toString();
+      const d = filterActive === "completed" 
+        ? (project.completionDate ? new Date(project.completionDate) : null)
+        : (project.deliveryDate ? new Date(project.deliveryDate) : null);
+        
+      if (d) {
+        const mStr = MONTH_NAMES[d.getMonth()];
+        const yStr = d.getFullYear().toString();
 
-          if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
-          if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
-        } else if (monthFilter.length > 0 || yearFilter.length > 0) {
-          // If filtering by dates but project has no date, exclude it
-          return false;
-        }
+        if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
+        if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
+      } else if (monthFilter.length > 0 || yearFilter.length > 0) {
+        // If filtering by dates but project has no date, exclude it
+        return false;
       }
 
       return true;
@@ -732,49 +734,66 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             onChange={setTypeFilter}
           />
 
-          {/* Month/Year Picker (only for completed) */}
-          {filterActive === "completed" && (
-            <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">Completion Date:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    if (monthFilter.length === 1) {
-                      const idx = MONTH_NAMES.indexOf(monthFilter[0]);
-                      if (idx > 0) setMonthFilter([MONTH_NAMES[idx - 1]]);
-                      else setMonthFilter([MONTH_NAMES[11]]);
-                    } else if (monthFilter.length === 0) {
-                      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-                    }
-                  }}
-                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                  title="Previous Month"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <FilterPopover
-                  label="Months"
-                  icon={Calendar}
-                  options={MONTH_NAMES}
-                  selected={monthFilter}
-                  onChange={setMonthFilter}
-                />
-                <button
-                  onClick={() => {
-                    if (monthFilter.length === 1) {
-                      const idx = MONTH_NAMES.indexOf(monthFilter[0]);
-                      if (idx < 11) setMonthFilter([MONTH_NAMES[idx + 1]]);
-                      else setMonthFilter([MONTH_NAMES[0]]);
-                    } else if (monthFilter.length === 0) {
-                      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-                    }
-                  }}
-                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                  title="Next Month"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+          {/* Month/Year Picker */}
+          <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">
+              {filterActive === "completed" ? "Completion Date:" : "Due Date:"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (monthFilter.length === 1) {
+                    const idx = MONTH_NAMES.indexOf(monthFilter[0]);
+                    if (idx > 0) setMonthFilter([MONTH_NAMES[idx - 1]]);
+                    else setMonthFilter([MONTH_NAMES[11]]);
+                  } else if (monthFilter.length === 0) {
+                    setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+                  }
+                }}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                title="Previous Month"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <FilterPopover
+                label="Months"
+                icon={Calendar}
+                options={MONTH_NAMES}
+                selected={monthFilter}
+                onChange={setMonthFilter}
+              />
+              <button
+                onClick={() => {
+                  if (monthFilter.length === 1) {
+                    const idx = MONTH_NAMES.indexOf(monthFilter[0]);
+                    if (idx < 11) setMonthFilter([MONTH_NAMES[idx + 1]]);
+                    else setMonthFilter([MONTH_NAMES[0]]);
+                  } else if (monthFilter.length === 0) {
+                    setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+                  }
+                }}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                title="Next Month"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (yearFilter.length === 1 && availableYears.length > 0) {
+                    const idx = availableYears.indexOf(yearFilter[0]);
+                    if (idx < availableYears.length - 1) setYearFilter([availableYears[idx + 1]]);
+                  } else if (yearFilter.length === 0 && availableYears.length > 0) {
+                    setYearFilter([new Date().getFullYear().toString()]);
+                  }
+                }}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                title="Previous Year"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
               <FilterPopover
                 label="Years"
                 icon={Calendar}
@@ -782,8 +801,22 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                 selected={yearFilter}
                 onChange={setYearFilter}
               />
+              <button
+                onClick={() => {
+                  if (yearFilter.length === 1 && availableYears.length > 0) {
+                    const idx = availableYears.indexOf(yearFilter[0]);
+                    if (idx > 0) setYearFilter([availableYears[idx - 1]]);
+                  } else if (yearFilter.length === 0 && availableYears.length > 0) {
+                    setYearFilter([new Date().getFullYear().toString()]);
+                  }
+                }}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                title="Next Year"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
