@@ -316,7 +316,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [monthFilter, setMonthFilter] = useState<string[]>([MONTH_NAMES[new Date().getMonth()]]);
-  const [yearFilter, setYearFilter] = useState<string[]>([]);
+  const [yearFilter, setYearFilter] = useState<string[]>([new Date().getFullYear().toString()]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const [sortKey, setSortKey] = useState<SortKey>("profit");
@@ -329,11 +329,13 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     if (filterActive === "active") {
       setSortKey("profit");
       setSortDir("asc"); // Worst performing at the top
-      setMonthFilter([]);
+      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+      setYearFilter([new Date().getFullYear().toString()]);
     } else {
       setSortKey("schedule");
       setSortDir("desc"); // Newest completed at the top
       setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+      setYearFilter([new Date().getFullYear().toString()]);
     }
   }, [filterActive]);
 
