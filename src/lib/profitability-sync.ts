@@ -125,6 +125,16 @@ export class ProfitabilitySyncService {
 
               processedActiveProjectNumbers.add(item.ProjectNo);
 
+              let completionDate = null;
+              if (item.ISOCompletedDate) {
+                  completionDate = new Date(item.ISOCompletedDate);
+              } else if (item.CompletedDate && item.CompletedDate !== 'N/A') {
+                  const parts = item.CompletedDate.split('/');
+                  if (parts.length === 3) {
+                      completionDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                  }
+              }
+
               const record = {
                   projectNumber: item.ProjectNo,
                   quotedProfit: item.ForecastDollarProfit ? Number(item.ForecastDollarProfit) : 0,
@@ -138,7 +148,7 @@ export class ProfitabilitySyncService {
                   estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
                   estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
                   estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
-                  completionDate: null,
+                  completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
                   isHistorical: false,
                   lastSyncedAt: new Date()
               };
