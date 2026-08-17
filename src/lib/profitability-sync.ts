@@ -89,7 +89,9 @@ export class ProfitabilitySyncService {
     
     const stats = {
       activeProcessed: 0,
+      activePartial: 0,
       historicalProcessed: 0,
+      historicalPartial: 0,
       errors: 0
     };
 
@@ -123,23 +125,34 @@ export class ProfitabilitySyncService {
 
               processedActiveProjectNumbers.add(item.ProjectNo);
 
-              return {
+              const record = {
                   projectNumber: item.ProjectNo,
                   quotedProfit: item.ForecastDollarProfit ? Number(item.ForecastDollarProfit) : 0,
                   actualProfit: item.DollarProfit ? Number(item.DollarProfit) : 0,
-                  invoicedAmount: item.TotalInvoiced ? Number(item.TotalInvoiced) : (item.Total ? Number(item.Total) : 0),
-                  totalCost: item.TotalCost ? Number(item.TotalCost) : null,
+                  invoicedAmount: item.TotalInvoiced != null ? Number(item.TotalInvoiced) : (item.TotalRevenue != null ? Number(item.TotalRevenue) : 0),
+                  totalCost: item.TotalCost != null ? Number(item.TotalCost) : null,
                   labourCost: item.TaskCost != null ? Number(item.TaskCost) : null,
                   materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
                   purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
                   estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
                   estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
-                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : null,
-                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : null,
+                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
+                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
                   completionDate: null,
                   isHistorical: false,
                   lastSyncedAt: new Date()
               };
+              
+              const hasActualRev = record.invoicedAmount > 0;
+              const hasEstRev = (record.estimatedInvoicedAmount || 0) > 0;
+              if (hasActualRev && hasEstRev) {
+                // Fully synced
+              } else {
+                console.warn(`[ProfitabilitySync] Active Project ${record.projectNumber} has partial data: Actual Revenue = ${record.invoicedAmount}, Est Revenue = ${record.estimatedInvoicedAmount}`);
+                stats.activePartial++;
+              }
+              
+              return record;
           });
           const resolvedChunk = await Promise.all(chunkPromises);
           activeRecordsToUpsert.push(...resolvedChunk);
@@ -214,23 +227,34 @@ export class ProfitabilitySyncService {
                   }
               }
 
-              return {
+              const record = {
                   projectNumber: item.ProjectNo,
                   quotedProfit: quotedProfit,
                   actualProfit: actualProfit,
-                  invoicedAmount: total,
+                  invoicedAmount: item.TotalInvoiced != null ? Number(item.TotalInvoiced) : (item.TotalRevenue != null ? Number(item.TotalRevenue) : 0),
                   totalCost: item.TotalCost != null ? Number(item.TotalCost) : null,
                   labourCost: item.TaskCost != null ? Number(item.TaskCost) : null,
                   materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
                   purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
                   estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
                   estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
-                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : null,
-                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : null,
+                  estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
+                  estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
                   completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
                   isHistorical: true,
                   lastSyncedAt: new Date()
               };
+              
+              const hasActualRev = record.invoicedAmount > 0;
+              const hasEstRev = (record.estimatedInvoicedAmount || 0) > 0;
+              if (hasActualRev && hasEstRev) {
+                // Fully synced
+              } else {
+                console.warn(`[ProfitabilitySync] Historical Project ${record.projectNumber} has partial data: Actual Revenue = ${record.invoicedAmount}, Est Revenue = ${record.estimatedInvoicedAmount}`);
+                stats.historicalPartial++;
+              }
+              
+              return record;
           });
           const resolvedChunk = await Promise.all(chunkPromises);
           historicalRecordsToUpsert.push(...resolvedChunk);
@@ -268,7 +292,7 @@ export class ProfitabilitySyncService {
         }
       }
       
-      console.log(`[ProfitabilitySync] Sync complete. Active: ${stats.activeProcessed}, Historical: ${stats.historicalProcessed}`);
+      console.log(`[ProfitabilitySync] Sync complete. Active: ${stats.activeProcessed} (Partial: ${stats.activePartial}), Historical: ${stats.historicalProcessed} (Partial: ${stats.historicalPartial})`);
       return { success: true, stats };
       
     } catch (error) {
