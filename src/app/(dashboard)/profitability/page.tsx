@@ -47,7 +47,7 @@ export default async function ProfitabilityPage() {
         
         quotedProfit: profitRecord.quotedProfit,
         actualProfit: profitRecord.actualProfit,
-        invoicedAmount: wipProject?.total || profitRecord.invoicedAmount || 0,
+        invoicedAmount: profitRecord.invoicedAmount || 0,
         totalCost: profitRecord.totalCost,
         labourCost: profitRecord.labourCost,
         materialsCost: profitRecord.materialsCost,
