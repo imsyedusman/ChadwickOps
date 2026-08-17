@@ -331,13 +331,13 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                       <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-help" />
                     </Tooltip>
                   </span>
-                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pInvoiced)}</span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(pEstInvoiced)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
                   <span>Estimated Invoiced</span>
-                  <span>{formatCurrency(pEstInvoiced)}</span>
+                  <span>{formatCurrency(pInvoiced)}</span>
                 </div>
-                {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
+                {renderProgressBar(pEstInvoiced, pInvoiced, false, true)}
               </div>
               
               <div className="flex flex-col gap-1">

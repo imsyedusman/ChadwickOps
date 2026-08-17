@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import {
-  Search, ChevronDown, ChevronRight, TrendingUp, AlertTriangle, ExternalLink,
+  Search, ChevronDown, ChevronRight, ChevronLeft, TrendingUp, AlertTriangle, ExternalLink,
   Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle,
   PauseCircle, Timer, CheckCircle2, Receipt, DollarSign, Truck, Archive, Ban, HelpCircle,
   Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown, Info
@@ -209,7 +209,7 @@ function FilterPopover({
       >
         <Icon className={cn("h-3.5 w-3.5", selected.length > 0 ? "text-brand" : "text-slate-400")} />
         <span className={cn("text-[11px] font-bold whitespace-nowrap", selected.length > 0 ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400")}>
-          {selected.length === 0 ? label : `${label}: ${selected.length}`}
+          {selected.length === 0 ? label : selected.length === 1 ? selected[0] : `${label}: ${selected.length}`}
         </span>
       </button>
 
@@ -315,7 +315,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [filterLoss, setFilterLoss] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  const [monthFilter, setMonthFilter] = useState<string[]>([]);
+  const [monthFilter, setMonthFilter] = useState<string[]>([MONTH_NAMES[new Date().getMonth()]]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
@@ -329,9 +329,11 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
     if (filterActive === "active") {
       setSortKey("profit");
       setSortDir("asc"); // Worst performing at the top
+      setMonthFilter([]);
     } else {
       setSortKey("schedule");
       setSortDir("desc"); // Newest completed at the top
+      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
     }
   }, [filterActive]);
 
@@ -381,10 +383,12 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       }
 
       const rawStatusStr = project.rawStatus?.toLowerCase() || "";
+      
+      if (rawStatusStr.includes("cancelled")) return false; // Exclude cancelled completely
+
       const isCompletedStatus =
         rawStatusStr.includes("completed") ||
         rawStatusStr.includes("delivered") ||
-        rawStatusStr.includes("cancelled") ||
         rawStatusStr.includes("invoiced") ||
         rawStatusStr.includes("ready for invoicing");
 
@@ -732,13 +736,45 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           {filterActive === "completed" && (
             <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">Completion Date:</span>
-              <FilterPopover
-                label="Months"
-                icon={Calendar}
-                options={MONTH_NAMES}
-                selected={monthFilter}
-                onChange={setMonthFilter}
-              />
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    if (monthFilter.length === 1) {
+                      const idx = MONTH_NAMES.indexOf(monthFilter[0]);
+                      if (idx > 0) setMonthFilter([MONTH_NAMES[idx - 1]]);
+                      else setMonthFilter([MONTH_NAMES[11]]);
+                    } else if (monthFilter.length === 0) {
+                      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+                    }
+                  }}
+                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <FilterPopover
+                  label="Months"
+                  icon={Calendar}
+                  options={MONTH_NAMES}
+                  selected={monthFilter}
+                  onChange={setMonthFilter}
+                />
+                <button
+                  onClick={() => {
+                    if (monthFilter.length === 1) {
+                      const idx = MONTH_NAMES.indexOf(monthFilter[0]);
+                      if (idx < 11) setMonthFilter([MONTH_NAMES[idx + 1]]);
+                      else setMonthFilter([MONTH_NAMES[0]]);
+                    } else if (monthFilter.length === 0) {
+                      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
+                    }
+                  }}
+                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
+                  title="Next Month"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
               <FilterPopover
                 label="Years"
                 icon={Calendar}
@@ -885,12 +921,12 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                         <td className="px-4 py-3 align-top"></td>
                         <td className="px-10 py-3 text-right align-top">
                           <div className="font-medium text-slate-700 dark:text-slate-300">
-                            {group.totalInvoiced === 0 ? "-" : formatCurrency(group.totalInvoiced)}
-                          </div>
-                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                             {group.totalEstimatedInvoiced === 0 ? "-" : formatCurrency(group.totalEstimatedInvoiced)}
                           </div>
-                          {renderProgressBar(group.totalInvoiced, group.totalEstimatedInvoiced, false, true)}
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {group.totalInvoiced === 0 ? "-" : formatCurrency(group.totalInvoiced)}
+                          </div>
+                          {renderProgressBar(group.totalEstimatedInvoiced, group.totalInvoiced, false, true)}
                         </td>
                         <td className="px-10 py-3 text-right align-top">
                           <div className="font-medium text-slate-700 dark:text-slate-300">
@@ -1029,12 +1065,12 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
 
                           <td className="px-10 py-3 text-right align-top">
                             <div className="font-medium text-slate-700 dark:text-slate-300">
-                              {pInvoiced === 0 ? "-" : formatCurrency(pInvoiced)}
-                            </div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                               {pEstInvoiced === 0 ? "-" : formatCurrency(pEstInvoiced)}
                             </div>
-                            {renderProgressBar(pInvoiced, pEstInvoiced, false, true)}
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {pInvoiced === 0 ? "-" : formatCurrency(pInvoiced)}
+                            </div>
+                            {renderProgressBar(pEstInvoiced, pInvoiced, false, true)}
                           </td>
                           <td className="px-10 py-3 text-right align-top">
                             <div className="font-medium text-slate-700 dark:text-slate-300">

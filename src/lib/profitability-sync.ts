@@ -180,10 +180,11 @@ export class ProfitabilitySyncService {
       }
 
       // 2. Fetch Historical Projects
-      const fyStart = this.getAuFyStart();
-      console.log(`[ProfitabilitySync] Fetching historical projects from WorkGuru (Start: ${fyStart})...`);
+      // Use the same 10-year window as active projects to catch older completions
+      const tenYearsAgoHistorical = new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000).toISOString();
+      console.log(`[ProfitabilitySync] Fetching historical projects from WorkGuru (Start: ${tenYearsAgoHistorical})...`);
       
-      const historicalResponse = await this.withRetry(() => this.client.getAllProjectsCompletedInDateRange(fyStart, now), 'Historical Projects Summary');
+      const historicalResponse = await this.withRetry(() => this.client.getAllProjectsCompletedInDateRange(tenYearsAgoHistorical, now), 'Historical Projects Summary');
       const historicalItems = this.extractItems<any>(historicalResponse, 'CompletedProjects');
       
       const filteredHistorical = historicalItems.filter(item => item.ProjectNo && !processedActiveProjectNumbers.has(item.ProjectNo));
