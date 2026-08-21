@@ -1,0 +1,1 @@
+ALTER TABLE "profitability_data" ADD COLUMN "has_billable_estimate_anomaly" boolean DEFAULT false NOT NULL;
