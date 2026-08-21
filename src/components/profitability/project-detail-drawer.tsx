@@ -108,7 +108,8 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
 
   const pMat = (project.materialsCost || 0) + (project.purchasesCost || 0);
   const pLab = project.labourCost || 0;
-  const pEstMat = project.estimatedMaterialsCost || 0;
+  const pEstMatRaw = project.estimatedMaterialsCost;
+  const pEstMat = pEstMatRaw || 0;
   const pEstLab = project.estimatedLabourCost || 0;
   const pEstCost = project.estimatedTotalCost || 0;
   const pEstInvoiced = project.estimatedInvoicedAmount || 0;
@@ -393,7 +394,7 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500">
                   <span>Estimated</span>
-                  <span>{formatCurrency(pEstMat)}</span>
+                  <span>{pEstMatRaw != null ? formatCurrency(pEstMatRaw) : '--'}</span>
                 </div>
                 {renderProgressBar(pMat, pEstMat)}
               </div>

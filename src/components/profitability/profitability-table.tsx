@@ -1122,7 +1122,7 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
                             <div className="flex flex-col gap-2">
                               <div>
                                 <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                  Materials: {formatCurrency(pMat)} <span className="text-xs text-slate-400 font-normal">/ {formatCurrency(pEstMat)}</span>
+                                  Materials: {formatCurrency(pMat)} <span className="text-xs text-slate-400 font-normal">/ {p.estimatedMaterialsCost != null ? formatCurrency(p.estimatedMaterialsCost) : '--'}</span>
                                 </div>
                                 {renderProgressBar(pMat, pEstMat)}
                               </div>

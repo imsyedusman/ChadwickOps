@@ -122,7 +122,7 @@ export class ProfitabilitySyncService {
       for (let i = 0; i < filteredActive.length; i += batchSizeApi) {
           const chunk = filteredActive.slice(i, i + batchSizeApi);
           const chunkPromises = chunk.map(async (item) => {
-              let forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let forecastMaterialsCost: number | null = null;
               let hasBillableEstimateAnomaly = false;
 
               const wgId = localProjectMap.get(item.ProjectNo);
@@ -180,7 +180,7 @@ export class ProfitabilitySyncService {
                   materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
                   purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
                   estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
-                  estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
+                  estimatedMaterialsCost: forecastMaterialsCost,
                   estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
                   estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
                   hasBillableEstimateAnomaly: hasBillableEstimateAnomaly,
@@ -255,7 +255,7 @@ export class ProfitabilitySyncService {
       for (let i = 0; i < filteredHistorical.length; i += batchSizeApiHist) {
           const chunk = filteredHistorical.slice(i, i + batchSizeApiHist);
           const chunkPromises = chunk.map(async (item) => {
-              let forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let forecastMaterialsCost: number | null = null;
               let hasBillableEstimateAnomaly = false;
 
               const wgId = localProjectMap.get(item.ProjectNo);
@@ -318,7 +318,7 @@ export class ProfitabilitySyncService {
                   materialsCost: item.ProductCost != null ? Number(item.ProductCost) : null,
                   purchasesCost: item.PurchaseCost != null ? Number(item.PurchaseCost) : null,
                   estimatedLabourCost: item.TaskForecastCost != null ? Number(item.TaskForecastCost) : null,
-                  estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
+                  estimatedMaterialsCost: forecastMaterialsCost,
                   estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
                   estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
                   hasBillableEstimateAnomaly: hasBillableEstimateAnomaly,
