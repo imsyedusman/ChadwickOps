@@ -387,6 +387,7 @@ export const profitabilityData = pgTable('profitability_data', {
   estimatedMaterialsCost: doublePrecision('estimated_materials_cost'),
   estimatedTotalCost: doublePrecision('estimated_total_cost'),
   estimatedInvoicedAmount: doublePrecision('estimated_invoiced_amount'),
+  hasBillableEstimateAnomaly: boolean('has_billable_estimate_anomaly').default(false).notNull(),
   completionDate: timestamp('completion_date'),
   isHistorical: boolean('is_historical').default(false).notNull(),
   lastSyncedAt: timestamp('last_synced_at').defaultNow().notNull(),

@@ -128,9 +128,10 @@ export function ProjectDetailDrawer({ project, isOpen, onClose, statusIcon: Stat
       hoursBudget: liveData?.totalBudgetHours || 0,
       tasksCompleted: liveData?.completedTasks || 0,
       tasksTotal: liveData?.totalTasks || 0,
-      isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered")
+      isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered"),
+      hasBillableEstimateAnomaly: (project as any).hasBillableEstimateAnomaly || false
     });
-  }, [gp, pInvoiced, pCost, pEstInvoiced, pEstCost, pMat, pEstMat, pLab, pEstLab, liveData, project.rawStatus]);
+  }, [gp, pInvoiced, pCost, pEstInvoiced, pEstCost, pMat, pEstMat, pLab, pEstLab, liveData, project.rawStatus, (project as any).hasBillableEstimateAnomaly]);
 
   const severityOrder = { critical: 3, warning: 2, positive: 1, info: 0 };
   const sortedInsights = [...insights].sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity]);

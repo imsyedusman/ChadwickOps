@@ -108,9 +108,10 @@ export class ProfitabilitySyncService {
       
       // Get local projects to filter only those that exist in our WIP sync
       const localProjects = await db.query.projects.findMany({
-        columns: { projectNumber: true, id: true }
+        columns: { projectNumber: true, id: true, workguruId: true }
       });
       const localProjectNumbers = new Set(localProjects.map(p => p.projectNumber));
+      const localProjectMap = new Map(localProjects.map(p => [p.projectNumber, p.workguruId]));
       
       const filteredActive = activeItems.filter(item => item.ProjectNo && localProjectNumbers.has(item.ProjectNo));
       
@@ -121,7 +122,41 @@ export class ProfitabilitySyncService {
       for (let i = 0; i < filteredActive.length; i += batchSizeApi) {
           const chunk = filteredActive.slice(i, i + batchSizeApi);
           const chunkPromises = chunk.map(async (item) => {
-              const forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let hasBillableEstimateAnomaly = false;
+
+              const wgId = localProjectMap.get(item.ProjectNo);
+              if (wgId) {
+                try {
+                  const detailRes = await this.client.getProjectDetails(wgId);
+                  const detailData = detailRes?.result;
+                  const products = detailData?.productLineItems || detailData?.ProductLineItems || [];
+                  
+                  for (const prod of products) {
+                    const name = prod.name || prod.Name || '';
+                    const sku = prod.productCode || prod.ProductCode || prod.sku || prod.SKU || prod.productID || prod.ProductID || ''; 
+                    const isEstMaterial = (sku && String(sku).toLowerCase() === 'mat-est') || /est(?:imated|\.?)?\s+mat(?:erials?)?|mat(?:erials?)?\s+est(?:imate|\.?)?/i.test(name);
+                    
+                    if (isEstMaterial) {
+                      const cost = Number(prod.unitCost || prod.UnitCost) || 0;
+                      forecastMaterialsCost = cost;
+                      const isBillable = prod.billable !== undefined ? prod.billable : prod.Billable;
+                      const invoicedAmt = Number(prod.invoicedAmount || prod.InvoicedAmount || prod.lineAmount || prod.LineAmount || prod.unitAmount || prod.UnitAmount) || 0;
+                      
+                      if (isBillable) {
+                        if (invoicedAmt > 0) {
+                          hasBillableEstimateAnomaly = true;
+                        } else {
+                          console.warn(`[ProfitabilitySync] Project ${item.ProjectNo} has a billable estimate line item but it was invoiced for 0. Logging warning.`);
+                        }
+                      }
+                      break; // Found the line item
+                    }
+                  }
+                } catch (e) {
+                  console.warn(`[ProfitabilitySync] Failed to fetch details for ${item.ProjectNo} to get estimate line:`, e);
+                }
+              }
 
               processedActiveProjectNumbers.add(item.ProjectNo);
 
@@ -148,6 +183,7 @@ export class ProfitabilitySyncService {
                   estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
                   estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
                   estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
+                  hasBillableEstimateAnomaly: hasBillableEstimateAnomaly,
                   completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
                   isHistorical: false,
                   lastSyncedAt: new Date()
@@ -193,6 +229,7 @@ export class ProfitabilitySyncService {
                 estimatedMaterialsCost: sql`EXCLUDED.estimated_materials_cost`,
                 estimatedTotalCost: sql`EXCLUDED.estimated_total_cost`,
                 estimatedInvoicedAmount: sql`EXCLUDED.estimated_invoiced_amount`,
+                hasBillableEstimateAnomaly: sql`EXCLUDED.has_billable_estimate_anomaly`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,
@@ -218,7 +255,41 @@ export class ProfitabilitySyncService {
       for (let i = 0; i < filteredHistorical.length; i += batchSizeApiHist) {
           const chunk = filteredHistorical.slice(i, i + batchSizeApiHist);
           const chunkPromises = chunk.map(async (item) => {
-              const forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let forecastMaterialsCost = (Number(item.ProductForecastCost) || 0) + (Number(item.PurchaseForecastCost) || 0);
+              let hasBillableEstimateAnomaly = false;
+
+              const wgId = localProjectMap.get(item.ProjectNo);
+              if (wgId) {
+                try {
+                  const detailRes = await this.client.getProjectDetails(wgId);
+                  const detailData = detailRes?.result;
+                  const products = detailData?.productLineItems || detailData?.ProductLineItems || [];
+                  
+                  for (const prod of products) {
+                    const name = prod.name || prod.Name || '';
+                    const sku = prod.productCode || prod.ProductCode || prod.sku || prod.SKU || prod.productID || prod.ProductID || ''; 
+                    const isEstMaterial = (sku && String(sku).toLowerCase() === 'mat-est') || /est(?:imated|\.?)?\s+mat(?:erials?)?|mat(?:erials?)?\s+est(?:imate|\.?)?/i.test(name);
+                    
+                    if (isEstMaterial) {
+                      const cost = Number(prod.unitCost || prod.UnitCost) || 0;
+                      forecastMaterialsCost = cost;
+                      const isBillable = prod.billable !== undefined ? prod.billable : prod.Billable;
+                      const invoicedAmt = Number(prod.invoicedAmount || prod.InvoicedAmount || prod.lineAmount || prod.LineAmount || prod.unitAmount || prod.UnitAmount) || 0;
+                      
+                      if (isBillable) {
+                        if (invoicedAmt > 0) {
+                          hasBillableEstimateAnomaly = true;
+                        } else {
+                          console.warn(`[ProfitabilitySync] Project ${item.ProjectNo} has a billable estimate line item but it was invoiced for 0. Logging warning.`);
+                        }
+                      }
+                      break; // Found the line item
+                    }
+                  }
+                } catch (e) {
+                  console.warn(`[ProfitabilitySync] Failed to fetch details for ${item.ProjectNo} to get estimate line:`, e);
+                }
+              }
 
               const total = Number(item.Total) || 0;
               const forecastCost = Number(item.ForecastCost) || 0;
@@ -250,6 +321,7 @@ export class ProfitabilitySyncService {
                   estimatedMaterialsCost: forecastMaterialsCost > 0 ? forecastMaterialsCost : null,
                   estimatedTotalCost: item.TotalForecastCost != null ? Number(item.TotalForecastCost) : (item.ForecastCost != null ? Number(item.ForecastCost) : null),
                   estimatedInvoicedAmount: item.TotalForecastRevenue != null ? Number(item.TotalForecastRevenue) : (item.Total != null ? Number(item.Total) : null),
+                  hasBillableEstimateAnomaly: hasBillableEstimateAnomaly,
                   completionDate: completionDate && !isNaN(completionDate.getTime()) ? completionDate : null,
                   isHistorical: true,
                   lastSyncedAt: new Date()
@@ -293,6 +365,7 @@ export class ProfitabilitySyncService {
                 estimatedMaterialsCost: sql`EXCLUDED.estimated_materials_cost`,
                 estimatedTotalCost: sql`EXCLUDED.estimated_total_cost`,
                 estimatedInvoicedAmount: sql`EXCLUDED.estimated_invoiced_amount`,
+                hasBillableEstimateAnomaly: sql`EXCLUDED.has_billable_estimate_anomaly`,
                 completionDate: sql`EXCLUDED.completion_date`,
                 isHistorical: sql`EXCLUDED.is_historical`,
                 lastSyncedAt: sql`EXCLUDED.last_synced_at`,

@@ -58,6 +58,7 @@ export default async function ProfitabilityPage() {
         estimatedInvoicedAmount: profitRecord.estimatedInvoicedAmount,
         completionDate: profitRecord.completionDate ? new Date(profitRecord.completionDate) : null,
         isHistorical: profitRecord.isHistorical,
+        hasBillableEstimateAnomaly: profitRecord.hasBillableEstimateAnomaly,
       };
     });
 

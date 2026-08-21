@@ -21,6 +21,7 @@ export interface ProfitabilityInsightData {
   tasksTotal: number;
   // Optional override, otherwise computed based on tasks/hours > 80%
   isNearCompleteOverride?: boolean;
+  hasBillableEstimateAnomaly?: boolean;
 }
 
 const THRESHOLDS = {
@@ -58,6 +59,14 @@ export function generateProjectInsights(data: ProfitabilityInsightData): Project
 
   // Determine if project is near completion
   const isNearComplete = isNearCompleteOverride ?? (hoursPct >= THRESHOLDS.NEAR_COMPLETION_PCT || tasksPct >= THRESHOLDS.NEAR_COMPLETION_PCT);
+
+  if (data.hasBillableEstimateAnomaly) {
+    insights.push({
+      label: 'Billed Estimate Discrepancy',
+      severity: 'warning',
+      explanation: 'An "Estimated Material" line item was invoiced for a real amount, inflating project revenue with phantom income.'
+    });
+  }
 
   // 1 & 2 & 3. Cost Overruns
   const isLabourOver = labourEstimated > 0 && (labourActual / labourEstimated) >= THRESHOLDS.COST_OVERRUN_RATIO;

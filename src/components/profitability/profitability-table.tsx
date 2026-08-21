@@ -41,6 +41,7 @@ export interface MergedProfitabilityProject {
   estimatedInvoicedAmount: number | null;
   completionDate: Date | null;
   isHistorical: boolean;
+  hasBillableEstimateAnomaly?: boolean;
   insights?: ProjectInsight[];
 }
 
@@ -516,7 +517,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         hoursBudget: 0,
         tasksCompleted: 0,
         tasksTotal: 0,
-        isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered") || filterActive === "completed"
+        isNearCompleteOverride: project.rawStatus?.includes("Completed") || project.rawStatus?.includes("Delivered") || filterActive === "completed",
+        hasBillableEstimateAnomaly: project.hasBillableEstimateAnomaly
       });
     }
 
