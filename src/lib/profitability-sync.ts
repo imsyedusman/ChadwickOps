@@ -128,7 +128,7 @@ export class ProfitabilitySyncService {
               const wgId = localProjectMap.get(item.ProjectNo);
               if (wgId) {
                 try {
-                  const detailRes = await this.client.getProjectDetails(wgId);
+                  const detailRes = await this.withRetry(() => this.client.getProjectDetails(wgId), `Project Details ${item.ProjectNo}`);
                   const detailData = detailRes?.result;
                   const products = detailData?.productLineItems || detailData?.ProductLineItems || [];
                   
@@ -261,7 +261,7 @@ export class ProfitabilitySyncService {
               const wgId = localProjectMap.get(item.ProjectNo);
               if (wgId) {
                 try {
-                  const detailRes = await this.client.getProjectDetails(wgId);
+                  const detailRes = await this.withRetry(() => this.client.getProjectDetails(wgId), `Project Details ${item.ProjectNo}`);
                   const detailData = detailRes?.result;
                   const products = detailData?.productLineItems || detailData?.ProductLineItems || [];
                   
