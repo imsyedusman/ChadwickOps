@@ -293,7 +293,7 @@ const MONTH_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
-type SortKey = "project" | "client" | "schedule" | "status" | "profit";
+type SortKey = "project" | "client" | "schedule" | "status" | "profit" | "gp_amount";
 
 export interface ProfitabilityGroup {
   key: string;
@@ -312,7 +312,7 @@ export interface ProfitabilityGroup {
 
 export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[] }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterActive, setFilterActive] = useState<"active" | "completed">("completed");
+  const [filterActive, setFilterActive] = useState<"active" | "completed" | "all">("completed");
   const [filterLoss, setFilterLoss] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -332,11 +332,15 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       setSortDir("asc"); // Worst performing at the top
       setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
       setYearFilter([new Date().getFullYear().toString()]);
-    } else {
+    } else if (filterActive === "completed") {
       setSortKey("schedule");
       setSortDir("desc"); // Newest completed at the top
       setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
       setYearFilter([new Date().getFullYear().toString()]);
+    } else {
+      // all tab
+      setSortKey("schedule");
+      setSortDir("asc");
     }
   }, [filterActive]);
 
@@ -419,15 +423,17 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         ? (project.completionDate ? new Date(project.completionDate) : null)
         : (project.deliveryDate ? new Date(project.deliveryDate) : null);
         
-      if (d) {
-        const mStr = MONTH_NAMES[d.getMonth()];
-        const yStr = d.getFullYear().toString();
+      if (filterActive !== "all") {
+        if (d) {
+          const mStr = MONTH_NAMES[d.getMonth()];
+          const yStr = d.getFullYear().toString();
 
-        if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
-        if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
-      } else if (monthFilter.length > 0 || yearFilter.length > 0) {
-        // If filtering by dates but project has no date, exclude it
-        return false;
+          if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
+          if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
+        } else if (monthFilter.length > 0 || yearFilter.length > 0) {
+          // If filtering by dates but project has no date, exclude it
+          return false;
+        }
       }
 
       return true;
@@ -568,6 +574,10 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             valA = getGPMarginPct(a.invoicedAmount || 0, a.totalCost || 0);
             valB = getGPMarginPct(b.invoicedAmount || 0, b.totalCost || 0);
             return sortDir === "asc" ? valA - valB : valB - valA;
+          case "gp_amount":
+            valA = (a.invoicedAmount || 0) - (a.totalCost || 0);
+            valB = (b.invoicedAmount || 0) - (b.totalCost || 0);
+            return sortDir === "asc" ? valA - valB : valB - valA;
           default:
             return 0;
         }
@@ -596,6 +606,10 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         case "profit":
           valA = getGPMarginPct(a.totalInvoiced, a.totalCost);
           valB = getGPMarginPct(b.totalInvoiced, b.totalCost);
+          return sortDir === "asc" ? valA - valB : valB - valA;
+        case "gp_amount":
+          valA = a.totalInvoiced - a.totalCost;
+          valB = b.totalInvoiced - b.totalCost;
           return sortDir === "asc" ? valA - valB : valB - valA;
         default:
           return 0;
@@ -695,6 +709,12 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           {/* Active / Completed Toggle */}
           <div className="flex items-center rounded-lg border p-1 bg-slate-50 dark:bg-slate-800 h-10">
             <button
+              onClick={() => setFilterActive("all")}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all h-full ${filterActive === "all" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              All
+            </button>
+            <button
               onClick={() => setFilterActive("active")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all h-full ${filterActive === "active" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700"}`}
             >
@@ -739,10 +759,11 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           />
 
           {/* Month/Year Picker */}
-          <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">
-              {filterActive === "completed" ? "Completion Date:" : "Due Date:"}
-            </span>
+          {filterActive !== "all" && (
+            <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">
+                {filterActive === "completed" ? "Completion Date:" : "Due Date:"}
+              </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
@@ -821,6 +842,35 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
               </button>
             </div>
           </div>
+          )}
+
+          {/* Sort Dropdown for All tab */}
+          {filterActive === "all" && (
+            <div className="ml-auto">
+              <Select
+                value={`${sortKey}-${sortDir}`}
+                onValueChange={(val) => {
+                  const [key, dir] = val.split('-');
+                  setSortKey(key as SortKey);
+                  setSortDir(dir as "asc" | "desc");
+                }}
+              >
+                <SelectTrigger className="w-[180px] h-10 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                  <SelectValue placeholder="Sort by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="profit-asc">Margin (Lowest First)</SelectItem>
+                  <SelectItem value="profit-desc">Margin (Highest First)</SelectItem>
+                  <SelectItem value="gp_amount-asc">GP $ (Lowest First)</SelectItem>
+                  <SelectItem value="gp_amount-desc">GP $ (Highest First)</SelectItem>
+                  <SelectItem value="schedule-asc">Due Date (Earliest First)</SelectItem>
+                  <SelectItem value="schedule-desc">Due Date (Latest First)</SelectItem>
+                  <SelectItem value="project-asc">Project # (A-Z)</SelectItem>
+                  <SelectItem value="project-desc">Project # (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </div>
 
