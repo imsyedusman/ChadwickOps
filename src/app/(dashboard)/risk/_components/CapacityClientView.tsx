@@ -106,6 +106,37 @@ function FormulaTooltip({ title, explanation, formula, dynamicCalculation }: { t
     );
 }
 
+function SimpleInfoTooltip({ title, explanation }: { title: string, explanation: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open}>
+            <PopoverTrigger asChild>
+                <div 
+                    className="relative inline-flex items-center ml-1" 
+                    onMouseEnter={() => setOpen(true)} 
+                    onMouseLeave={() => setOpen(false)}
+                >
+                    <div className="bg-slate-200/50 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full p-[3px] cursor-help transition-colors">
+                        <Info className="h-3 w-3" />
+                    </div>
+                </div>
+            </PopoverTrigger>
+            <PopoverContent 
+                className="w-72 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl normal-case pointer-events-none z-[9999]" 
+                side="top" 
+                sideOffset={8}
+                onOpenAutoFocus={e => e.preventDefault()}
+                onInteractOutside={e => e.preventDefault()}
+            >
+                <div>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-xs mb-2">{title}</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed font-normal">{explanation}</p>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default function CapacityClientView({ initialSettings, allProjects }: CapacityClientViewProps) {
     const [settings, setSettings] = useState<CapacitySettings>(initialSettings);
     const [isSaving, setIsSaving] = useState(false);
@@ -115,6 +146,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
     const [customEnd, setCustomEnd] = useState<string>(format(addMonths(new Date(), 5), 'yyyy-MM'));
 
     const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'all' | 'confirmed'>('all');
 
     const handleSave = async () => {
         try {
@@ -194,6 +226,11 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                 data[m].totalValue += (Number(p.total) || 0);
 
                 if (isActiveWorkStatus(p.rawStatus)) {
+                    // Exclude not drawn or drawings submitted statuses if in "Confirmed Only" mode
+                    if (viewMode === 'confirmed' && (p.rawStatus === '1.1 - Not Drawn' || p.rawStatus === '1.2 - Drawings Submitted')) {
+                        return;
+                    }
+
                     const adjustedActual = p.actualHours * (settings.actualsFactor ?? 0.7);
                     const calculatedRemaining = p.budgetHours - adjustedActual;
                     const modifiedProject = { ...p, actualHours: adjustedActual, remainingHours: calculatedRemaining };
@@ -215,7 +252,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
         });
 
         return data;
-    }, [allProjects, months, settings.actualsFactor]);
+    }, [allProjects, months, settings.actualsFactor, viewMode]);
 
     const chartData = useMemo(() => {
         return months.map(m => {
@@ -303,6 +340,25 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                             <input type="month" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1" />
                         </div>
                     )}
+                    <div className="flex p-1 bg-white dark:bg-slate-950 rounded-xl shadow-sm border border-slate-200/50 dark:border-slate-800/50 gap-1">
+                        {['all', 'confirmed'].map((vm) => (
+                            <div key={vm} className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setViewMode(vm as 'all' | 'confirmed')}
+                                    className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all capitalize", viewMode === vm ? "bg-slate-900 text-white dark:bg-slate-700 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}
+                                >
+                                    {vm === 'all' ? 'All Active Jobs' : 'Drawings Approved Jobs'}
+                                </button>
+                                <SimpleInfoTooltip 
+                                    title={vm === 'all' ? 'All Active Jobs' : 'Drawings Approved Jobs'}
+                                    explanation={vm === 'all' 
+                                        ? 'Includes every active job status from Not Drawn through to Invoiced. Excludes Delivered, Completed, and Cancelled jobs.'
+                                        : 'Same as All Active Jobs, but excludes jobs still at Not Drawn or Drawings Submitted stage, since these haven\'t started in the workshop yet.'
+                                    }
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300">
@@ -333,7 +389,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                 <span>Active Jobs</span>
                                                 {exData && <FormulaTooltip 
                                                     title="Active Jobs"
-                                                    explanation="Jobs with an active production status due this month. Internal 99-series jobs excluded."
+                                                    explanation={`Jobs with an active production status due this month. Internal 99-series jobs excluded.${viewMode === 'confirmed' ? ' In Confirmed Only mode, excludes projects with status "1.1 - Not Drawn" or "1.2 - Drawings Submitted".' : ''}`}
                                                     formula="Count of active productive jobs"
                                                     dynamicCalculation={`For ${exMonthStr}: ${exData.activeJobs}`}
                                                 />}
@@ -366,7 +422,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                 <span>Budget</span>
                                                 {exData && <FormulaTooltip 
                                                     title="Budget"
-                                                    explanation="Total budgeted hours across all active productive jobs due this month."
+                                                    explanation={`Total budgeted hours across all active productive jobs due this month.${viewMode === 'confirmed' ? ' In Confirmed Only mode, excludes projects with status "1.1 - Not Drawn" or "1.2 - Drawings Submitted".' : ''}`}
                                                     formula="Sum of budgeted hours"
                                                     dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.budget)} hrs`}
                                                 />}
@@ -388,7 +444,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                 <span>Remaining</span>
                                                 {exData && <FormulaTooltip 
                                                     title="Remaining"
-                                                    explanation="Estimated hours still to complete."
+                                                    explanation={`Estimated hours still to complete.${viewMode === 'confirmed' ? ' In Confirmed Only mode, excludes projects with status "1.1 - Not Drawn" or "1.2 - Drawings Submitted".' : ''}`}
                                                     formula="Budget Hours − (Logged Hours × Actuals Factor)"
                                                     dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.budget)} - ${formatHours(exData.actual)} = ${formatHours(exData.remaining)} hrs`}
                                                 />}
@@ -399,7 +455,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                 <span>Available</span>
                                                 {exData && <FormulaTooltip 
                                                     title="Available"
-                                                    explanation="Team capacity remaining after demand. Negative means overloaded."
+                                                    explanation={`Team capacity remaining after demand. Negative means overloaded.${viewMode === 'confirmed' ? ' In Confirmed Only mode, demand excludes projects with status "1.1 - Not Drawn" or "1.2 - Drawings Submitted". Capacity itself does not change.' : ''}`}
                                                     formula={`Monthly Capacity − Remaining Hours\n\n${exMonth === currentMonthStr ? 'Monthly Capacity = Remaining Working Days × (Staff × Hrs/Wk × Efficiency ÷ 5)' : 'Monthly Capacity = Staff × Hrs/Wk × Wks/Mo × Efficiency'}`}
                                                     dynamicCalculation={exMonth === currentMonthStr 
                                                         ? `For ${exMonthStr}:\nCapacity = ${remainingWorkingDays}d × (${settings.staff} × ${settings.hoursPerWeek} × ${settings.efficiency} ÷ 5) = ${formatHours(exMonthCap)} hrs\nAvailable = ${formatHours(exMonthCap)} - ${formatHours(exData.remaining)} = ${formatHours(exMonthCap - exData.remaining)} hrs`
@@ -412,7 +468,7 @@ export default function CapacityClientView({ initialSettings, allProjects }: Cap
                                                 <span>Capacity Utilization</span>
                                                 {exData && <FormulaTooltip 
                                                     title="Capacity Utilisation"
-                                                    explanation="Remaining demand as a percentage of available capacity."
+                                                    explanation={`Remaining demand as a percentage of available capacity.${viewMode === 'confirmed' ? ' In Confirmed Only mode, demand excludes projects with status "1.1 - Not Drawn" or "1.2 - Drawings Submitted".' : ''}`}
                                                     formula="Remaining Hours ÷ Monthly Capacity × 100"
                                                     dynamicCalculation={`For ${exMonthStr}: ${formatHours(exData.remaining)} ÷ ${formatHours(exMonthCap)} × 100 = ${exMonthCap > 0 ? Math.round((exData.remaining / exMonthCap) * 100) : 0}%`}
                                                 />}
