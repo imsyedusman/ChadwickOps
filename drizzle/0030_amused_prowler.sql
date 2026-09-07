@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "expected_drawing_approval_date" timestamp;

@@ -85,6 +85,7 @@ interface Project {
   deliveryDate: Date | string | null;
   description: string | null;
   drawingApprovalDate: Date | string | null;
+  expectedDrawingApprovalDate: Date | string | null;
   drawingSubmittedDate: Date | string | null;
   bayLocation: string | null;
   projectType: string | null;
@@ -358,15 +359,15 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     const hides: Record<string, string[]> = {
       Engineering: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate'],
       Operations: [],
-      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
-      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      Production: ['drawingSubmittedDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
+      Procurement: ['budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'drawingSubmittedDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'total', 'projectManager', 'deliveryDate'],
       'Project Managers': ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation'],
-      Management: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation', 'drawingSubmittedDate', 'drawingApprovalDate']
+      Management: ['sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate', 'bayLocation', 'drawingSubmittedDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate']
     };
 
     const ALL_COLUMNS = [
       'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'startDate',
-      'bayLocation', 'projectType', 'deliveryDate', 'drawingApprovalDate', 'drawingSubmittedDate',
+      'bayLocation', 'projectType', 'deliveryDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'drawingSubmittedDate',
       'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate',
       'budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'total'
     ];
@@ -423,6 +424,8 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   const [clientFilter, setClientFilter] = useState("");
   const [dueFilterStart, setDueFilterStart] = useState("");
   const [dueFilterEnd, setDueFilterEnd] = useState("");
+  const [expectedApprovalFilterStart, setExpectedApprovalFilterStart] = useState("");
+  const [expectedApprovalFilterEnd, setExpectedApprovalFilterEnd] = useState("");
   const [startFilterStart, setStartFilterStart] = useState("");
   const [startFilterEnd, setStartFilterEnd] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState<string[]>([]);
@@ -457,6 +460,8 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setClientFilter("");
     setDueFilterStart("");
     setDueFilterEnd("");
+    setExpectedApprovalFilterStart("");
+    setExpectedApprovalFilterEnd("");
     setStartFilterStart("");
     setStartFilterEnd("");
     setSearch("");
@@ -464,7 +469,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     setActiveNlFilter("");
   };
 
-  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || projectTypeFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
+  const hasActiveFilters = pmFilter.length > 0 || statusFilter.length > 0 || scheduleFilter.length > 0 || projectTypeFilter.length > 0 || clientFilter !== "" || dueFilterStart !== "" || dueFilterEnd !== "" || expectedApprovalFilterStart !== "" || expectedApprovalFilterEnd !== "" || startFilterStart !== "" || startFilterEnd !== "" || search !== "";
 
   const [isScrolled, setIsScrolled] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -580,6 +585,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const matchesDueDate = (!dueFilterStart || (pDueDate && format(pDueDate, 'yyyy-MM-dd') >= dueFilterStart)) &&
         (!dueFilterEnd || (pDueDate && format(pDueDate, 'yyyy-MM-dd') <= dueFilterEnd));
 
+      const pExpectedApprovalDate = p.expectedDrawingApprovalDate ? new Date(p.expectedDrawingApprovalDate) : null;
+      const matchesExpectedApprovalDate = (!expectedApprovalFilterStart || (pExpectedApprovalDate && format(pExpectedApprovalDate, 'yyyy-MM-dd') >= expectedApprovalFilterStart)) &&
+        (!expectedApprovalFilterEnd || (pExpectedApprovalDate && format(pExpectedApprovalDate, 'yyyy-MM-dd') <= expectedApprovalFilterEnd));
+
       const pStartDate = p.startDate ? new Date(p.startDate) : null;
       const matchesStartDate = (!startFilterStart || (pStartDate && format(pStartDate, 'yyyy-MM-dd') >= startFilterStart)) &&
         (!startFilterEnd || (pStartDate && format(pStartDate, 'yyyy-MM-dd') <= startFilterEnd));
@@ -589,7 +598,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const matchesSchedule = scheduleFilter.length === 0 || scheduleFilter.includes(sStatus);
       const matchesProjectType = projectTypeFilter.length === 0 || (p.projectType && projectTypeFilter.includes(p.projectType));
 
-      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDueDate && matchesStartDate && matchesSchedule && matchesProjectType;
+      return matchesSearch && matchesPm && matchesStatus && matchesClient && matchesDueDate && matchesExpectedApprovalDate && matchesStartDate && matchesSchedule && matchesProjectType;
     });
 
     if (sortConfig) {
@@ -604,6 +613,10 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
           case 'drawingApprovalDate':
             aVal = a.drawingApprovalDate ? new Date(a.drawingApprovalDate).getTime() : 0;
             bVal = b.drawingApprovalDate ? new Date(b.drawingApprovalDate).getTime() : 0;
+            break;
+          case 'expectedDrawingApprovalDate':
+            aVal = a.expectedDrawingApprovalDate ? new Date(a.expectedDrawingApprovalDate).getTime() : 0;
+            bVal = b.expectedDrawingApprovalDate ? new Date(b.expectedDrawingApprovalDate).getTime() : 0;
             break;
           case 'drawingSubmittedDate':
             aVal = a.drawingSubmittedDate ? new Date(a.drawingSubmittedDate).getTime() : 0;
@@ -830,6 +843,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       projectType: "Project Type",
       deliveryDate: "Due Date",
       drawingApprovalDate: "Drawing Approval",
+      expectedDrawingApprovalDate: "Expected Approval",
       drawingSubmittedDate: "Drawing Submitted",
       sheetmetalOrderedDate: "SM Ordered",
       sheetmetalDeliveredDate: "SM Delivered",
@@ -845,7 +859,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
 
     const orderedColumnKeys = [
       'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'bayLocation', 'projectType',
-      'startDate', 'deliveryDate', 'drawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate',
+      'startDate', 'deliveryDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate',
       'switchgearOrderedDate', 'switchgearDeliveredDate', 'budgetHours', 'actualHours', 'remainingHours',
       'progressPercent', 'total'
     ];
@@ -867,6 +881,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
         else if (key === 'deliveryDate') val = project.deliveryDate ? format(new Date(project.deliveryDate), 'dd MMM yyyy') : '';
         else if (key === 'startDate') val = project.startDate ? formatSydneyDate(project.startDate) : '';
         else if (key === 'drawingApprovalDate') val = project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yyyy') : '';
+        else if (key === 'expectedDrawingApprovalDate') val = project.expectedDrawingApprovalDate ? format(new Date(project.expectedDrawingApprovalDate), 'dd MMM yyyy') : '';
         else if (key === 'drawingSubmittedDate') val = project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yyyy') : '';
         else if (key === 'sheetmetalOrderedDate') val = project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yyyy') : '';
         else if (key === 'sheetmetalDeliveredDate') val = project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yyyy') : '';
@@ -976,7 +991,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     if (activeNlFilter) {
       setActiveNlFilter("");
     }
-  }, [pmFilter, statusFilter, projectTypeFilter, dueFilterStart, dueFilterEnd, startFilterStart, startFilterEnd, search]);
+  }, [pmFilter, statusFilter, projectTypeFilter, dueFilterStart, dueFilterEnd, expectedApprovalFilterStart, expectedApprovalFilterEnd, startFilterStart, startFilterEnd, search]);
 
   // Adjust handleNlSearch to use the ref
   const handleNlSearchWithRef = async () => {
@@ -1158,6 +1173,16 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               }}
             />
 
+            <DateRangePicker
+              label="Filter by Expected Approval"
+              startDate={expectedApprovalFilterStart}
+              endDate={expectedApprovalFilterEnd}
+              onRangeChange={(start, end) => {
+                setExpectedApprovalFilterStart(start);
+                setExpectedApprovalFilterEnd(end);
+              }}
+            />
+
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
@@ -1244,6 +1269,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           projectType: "Project Type",
                           deliveryDate: "Due Date",
                           drawingApprovalDate: "Drawing Approval",
+                          expectedDrawingApprovalDate: "Expected Approval",
                           drawingSubmittedDate: "Drawing Submitted",
                           sheetmetalOrderedDate: "SM Ordered",
                           sheetmetalDeliveredDate: "SM Delivered",
@@ -1426,6 +1452,14 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     onClick={() => handleSort('drawingApprovalDate')}
                   >
                     <div className="flex items-center justify-center">Drawing Approval <SortIcon column="drawingApprovalDate" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.expectedDrawingApprovalDate && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                    onClick={() => handleSort('expectedDrawingApprovalDate')}
+                  >
+                    <div className="flex items-center justify-center">Expected Approval <SortIcon column="expectedDrawingApprovalDate" sortConfig={sortConfig} /></div>
                   </th>
                 )}
                 {columnVisibility.sheetmetalOrderedDate && (
@@ -1690,6 +1724,13 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                         <td className="px-4 py-3 text-center">
                           <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                             {project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.expectedDrawingApprovalDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.expectedDrawingApprovalDate ? format(new Date(project.expectedDrawingApprovalDate), 'dd MMM yy') : '—'}
                           </span>
                         </td>
                       )}

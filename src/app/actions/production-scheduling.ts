@@ -45,6 +45,7 @@ export type ProjectSchedulingData = {
   deliveryDate: Date | null;
   startDate: Date | null;
   drawingApprovalDate: Date | null;
+  expectedDrawingApprovalDate: Date | null;
   sheetmetalDeliveredDate: Date | null;
   switchgearDeliveredDate: Date | null;
   budgetHours: number;
@@ -217,6 +218,7 @@ export async function getProductionSchedulingData() {
         deliveryDate: p.deliveryDate,
         startDate: p.startDate,
         drawingApprovalDate: p.drawingApprovalDate,
+        expectedDrawingApprovalDate: p.expectedDrawingApprovalDate,
         sheetmetalDeliveredDate: p.sheetmetalDeliveredDate,
         switchgearDeliveredDate: p.switchgearDeliveredDate,
         budgetHours: p.budgetHours,

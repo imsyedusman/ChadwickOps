@@ -43,6 +43,7 @@ export const projects = pgTable('projects', {
   deliveryDate: timestamp('delivery_date'),
   description: text('description'),
   drawingApprovalDate: timestamp('drawing_approval_date'),
+  expectedDrawingApprovalDate: timestamp('expected_drawing_approval_date'),
   drawingSubmittedDate: timestamp('drawing_submitted_date'),
   drawingStatus: varchar('drawing_status', { length: 100 }),
   bayLocation: text('bay_location'),

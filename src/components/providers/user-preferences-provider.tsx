@@ -23,6 +23,7 @@ const defaultPreferences: UserPreferences = {
     deliveryDate: true,
     bayLocation: true,
     drawingApprovalDate: false,
+    expectedDrawingApprovalDate: false,
     drawingSubmittedDate: false,
     sheetmetalOrderedDate: false,
     sheetmetalDeliveredDate: false,

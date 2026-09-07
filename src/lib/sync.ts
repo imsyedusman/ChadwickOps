@@ -9,6 +9,7 @@ const CF_IDS = {
     BAY_LOCATION: 8925,
     PROJECT_TYPE: 8926,
     DRAWING_APPROVAL_DATE: 9450,
+    EXPECTED_DRAWING_APPROVAL_DATE: 10914,
     DRAWING_SUBMITTED_DATE: 9451,
     SHEETMETAL_ORDERED_DATE: 9487,
     SHEETMETAL_DELIVERED_DATE: 9488,
@@ -506,6 +507,9 @@ export class SyncService {
         
     if (lowerKey === 'clientdrawingapprovaldate' || lowerKey === 'drawing approval date')
         return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_APPROVAL_DATE);
+
+    if (lowerKey === 'expecteddrawingapprovaldate' || lowerKey === 'expected drawing approval date' || lowerKey === 'expected-drawing-approval-date')
+        return this.getCustomFieldValueById(remote, CF_IDS.EXPECTED_DRAWING_APPROVAL_DATE);
         
     if (lowerKey === 'drawingsubmitteddate' || lowerKey === 'drawing submitted date')
         return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_SUBMITTED_DATE);
@@ -772,6 +776,7 @@ export class SyncService {
         const bayLocation = this.getCustomFieldValue(remoteDetails, 'BayLocation');
         const projectType = this.getCustomFieldValue(remoteDetails, 'ProjectType');
         const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
+        const expectedDrawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ExpectedDrawingApprovalDate'));
         const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
         const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
         const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
@@ -851,6 +856,7 @@ export class SyncService {
             bayLocation,
             projectType,
             drawingApprovalDate,
+            expectedDrawingApprovalDate,
             drawingSubmittedDate,
             sheetmetalOrderedDate,
             sheetmetalDeliveredDate,
