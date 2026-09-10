@@ -11,6 +11,9 @@ const CF_IDS = {
     DRAWING_APPROVAL_DATE: 9450,
     EXPECTED_DRAWING_APPROVAL_DATE: 10914,
     DRAWING_SUBMITTED_DATE: 9451,
+    DRAWING_ISSUED_DATE: 10930,
+    DRAWING_REVISION: 10931,
+    ISSUED_TO: 10932,
     SHEETMETAL_ORDERED_DATE: 9487,
     SHEETMETAL_DELIVERED_DATE: 9488,
     SWITCHGEAR_ORDERED_DATE: 9489,
@@ -487,7 +490,7 @@ export class SyncService {
     const values = remote.customFieldValues || remote.CustomFieldValues || [];
     if (Array.isArray(values)) {
         const found = values.find((v: any) => v.customFieldId === id || v.CustomFieldID === id) as any;
-        if (found) return found.value || found.Value || null;
+        if (found) return found.value || found.Value || found.displayValue || found.DisplayValue || null;
     }
     
     return null;
@@ -514,6 +517,15 @@ export class SyncService {
     if (lowerKey === 'drawingsubmitteddate' || lowerKey === 'drawing submitted date')
         return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_SUBMITTED_DATE);
         
+    if (lowerKey === 'drawingissueddate' || lowerKey === 'drawing-issued-to-production' || lowerKey === 'drawing issued to production' || lowerKey === 'drawing issued date' || lowerKey === 'dwg issued date')
+        return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_ISSUED_DATE);
+
+    if (lowerKey === 'drawingrevision' || lowerKey === 'drawing-revision' || lowerKey === 'drawing revision' || lowerKey === 'dwg rev')
+        return this.getCustomFieldValueById(remote, CF_IDS.DRAWING_REVISION);
+
+    if (lowerKey === 'issuedto' || lowerKey === 'issued-to' || lowerKey === 'issued to')
+        return this.getCustomFieldValueById(remote, CF_IDS.ISSUED_TO);
+
     if (lowerKey === 'sheetmetalordereddate' || lowerKey === 'sheetmetal ordered date')
         return this.getCustomFieldValueById(remote, CF_IDS.SHEETMETAL_ORDERED_DATE);
         
@@ -778,6 +790,9 @@ export class SyncService {
         const drawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ClientDrawingApprovalDate'));
         const expectedDrawingApprovalDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'ExpectedDrawingApprovalDate'));
         const drawingSubmittedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingSubmittedDate'));
+        const drawingIssuedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'DrawingIssuedDate'));
+        const drawingRevision = this.getCustomFieldValue(remoteDetails, 'DrawingRevision');
+        const issuedTo = this.getCustomFieldValue(remoteDetails, 'IssuedTo');
         const sheetmetalOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalOrderedDate'));
         const sheetmetalDeliveredDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SheetmetalDeliveredDate'));
         const switchgearOrderedDate = this.parseDate(this.getCustomFieldValue(remoteDetails, 'SwitchgearOrderedDate'));
@@ -858,6 +873,9 @@ export class SyncService {
             drawingApprovalDate,
             expectedDrawingApprovalDate,
             drawingSubmittedDate,
+            drawingIssuedDate,
+            drawingRevision,
+            issuedTo,
             sheetmetalOrderedDate,
             sheetmetalDeliveredDate,
             switchgearOrderedDate,

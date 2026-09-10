@@ -218,6 +218,13 @@
       "when": 1788759846785,
       "tag": "0030_amused_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789011319541,
+      "tag": "0031_youthful_thanos",
+      "breakpoints": true
     }
   ]
 }

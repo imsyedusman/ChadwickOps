@@ -21,9 +21,9 @@ export interface WorkGuruProject {
   description?: string;
   Description?: string;
   projectManager?: string | { name?: string; Name?: string };
-  customFieldValues?: Array<{ customFieldId: number; value?: string; Value?: string }>;
-  CustomFieldValues?: Array<{ CustomFieldID: number; Value?: string }>;
-  customFields?: Array<{ key?: string; Key?: string; name?: string; Name?: string; value?: string; Value?: string; customField?: { name?: string; Name?: string } }>;
+  customFieldValues?: Array<{ customFieldId: number; value?: string; Value?: string; displayValue?: string; DisplayValue?: string }>;
+  CustomFieldValues?: Array<{ CustomFieldID: number; Value?: string; DisplayValue?: string }>;
+  customFields?: Array<{ key?: string; Key?: string; name?: string; Name?: string; value?: string; Value?: string; displayValue?: string; DisplayValue?: string; customField?: { name?: string; Name?: string } }>;
   lastModificationTime?: string;
   LastModificationTime?: string;
   lastModifierTime?: string;

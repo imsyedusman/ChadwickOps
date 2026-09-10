@@ -87,6 +87,9 @@ interface Project {
   drawingApprovalDate: Date | string | null;
   expectedDrawingApprovalDate: Date | string | null;
   drawingSubmittedDate: Date | string | null;
+  drawingIssuedDate: Date | string | null;
+  drawingRevision: string | null;
+  issuedTo: string | null;
   bayLocation: string | null;
   projectType: string | null;
   sheetmetalOrderedDate: Date | string | null;
@@ -368,6 +371,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
     const ALL_COLUMNS = [
       'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'startDate',
       'bayLocation', 'projectType', 'deliveryDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'drawingSubmittedDate',
+      'drawingIssuedDate', 'drawingRevision', 'issuedTo',
       'sheetmetalOrderedDate', 'sheetmetalDeliveredDate', 'switchgearOrderedDate', 'switchgearDeliveredDate',
       'budgetHours', 'actualHours', 'remainingHours', 'progressPercent', 'total'
     ];
@@ -575,7 +579,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       const matchesSearch =
         p.name?.toLowerCase().includes(searchLower) ||
         p.projectNumber?.toLowerCase().includes(searchLower) ||
-        p.client?.name?.toLowerCase().includes(searchLower);
+        p.client?.name?.toLowerCase().includes(searchLower) ||
+        p.drawingRevision?.toLowerCase().includes(searchLower) ||
+        p.issuedTo?.toLowerCase().includes(searchLower);
 
       const matchesPm = pmFilter.length === 0 || (p.projectManager && pmFilter.includes(p.projectManager));
       const matchesStatus = statusFilter.length === 0 || (p.rawStatus && statusFilter.includes(p.rawStatus));
@@ -621,6 +627,18 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
           case 'drawingSubmittedDate':
             aVal = a.drawingSubmittedDate ? new Date(a.drawingSubmittedDate).getTime() : 0;
             bVal = b.drawingSubmittedDate ? new Date(b.drawingSubmittedDate).getTime() : 0;
+            break;
+          case 'drawingIssuedDate':
+            aVal = a.drawingIssuedDate ? new Date(a.drawingIssuedDate).getTime() : 0;
+            bVal = b.drawingIssuedDate ? new Date(b.drawingIssuedDate).getTime() : 0;
+            break;
+          case 'drawingRevision':
+            aVal = a.drawingRevision || "";
+            bVal = b.drawingRevision || "";
+            break;
+          case 'issuedTo':
+            aVal = a.issuedTo || "";
+            bVal = b.issuedTo || "";
             break;
           case 'sheetmetalOrderedDate':
             aVal = a.sheetmetalOrderedDate ? new Date(a.sheetmetalOrderedDate).getTime() : 0;
@@ -845,6 +863,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       drawingApprovalDate: "Drawing Approval",
       expectedDrawingApprovalDate: "Expected Approval",
       drawingSubmittedDate: "Drawing Submitted",
+      drawingIssuedDate: "Dwg Issued Date",
+      drawingRevision: "Dwg Rev",
+      issuedTo: "Issued To",
       sheetmetalOrderedDate: "SM Ordered",
       sheetmetalDeliveredDate: "SM Delivered",
       switchgearOrderedDate: "SG Ordered",
@@ -859,7 +880,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
 
     const orderedColumnKeys = [
       'projectNumber', 'projectName', 'itemName', 'projectManager', 'status', 'bayLocation', 'projectType',
-      'startDate', 'deliveryDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'sheetmetalOrderedDate', 'sheetmetalDeliveredDate',
+      'startDate', 'deliveryDate', 'drawingApprovalDate', 'expectedDrawingApprovalDate', 'drawingSubmittedDate',
+      'drawingIssuedDate', 'drawingRevision', 'issuedTo',
+      'sheetmetalOrderedDate', 'sheetmetalDeliveredDate',
       'switchgearOrderedDate', 'switchgearDeliveredDate', 'budgetHours', 'actualHours', 'remainingHours',
       'progressPercent', 'total'
     ];
@@ -883,6 +906,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
         else if (key === 'drawingApprovalDate') val = project.drawingApprovalDate ? format(new Date(project.drawingApprovalDate), 'dd MMM yyyy') : '';
         else if (key === 'expectedDrawingApprovalDate') val = project.expectedDrawingApprovalDate ? format(new Date(project.expectedDrawingApprovalDate), 'dd MMM yyyy') : '';
         else if (key === 'drawingSubmittedDate') val = project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yyyy') : '';
+        else if (key === 'drawingIssuedDate') val = project.drawingIssuedDate ? format(new Date(project.drawingIssuedDate), 'dd MMM yyyy') : '';
+        else if (key === 'drawingRevision') val = project.drawingRevision || '';
+        else if (key === 'issuedTo') val = project.issuedTo || '';
         else if (key === 'sheetmetalOrderedDate') val = project.sheetmetalOrderedDate ? format(new Date(project.sheetmetalOrderedDate), 'dd MMM yyyy') : '';
         else if (key === 'sheetmetalDeliveredDate') val = project.sheetmetalDeliveredDate ? format(new Date(project.sheetmetalDeliveredDate), 'dd MMM yyyy') : '';
         else if (key === 'switchgearOrderedDate') val = project.switchgearOrderedDate ? format(new Date(project.switchgearOrderedDate), 'dd MMM yyyy') : '';
@@ -1271,6 +1297,9 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                           drawingApprovalDate: "Drawing Approval",
                           expectedDrawingApprovalDate: "Expected Approval",
                           drawingSubmittedDate: "Drawing Submitted",
+                          drawingIssuedDate: "Dwg Issued Date",
+                          drawingRevision: "Dwg Rev",
+                          issuedTo: "Issued To",
                           sheetmetalOrderedDate: "SM Ordered",
                           sheetmetalDeliveredDate: "SM Delivered",
                           switchgearOrderedDate: "SG Ordered",
@@ -1460,6 +1489,38 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                     onClick={() => handleSort('expectedDrawingApprovalDate')}
                   >
                     <div className="flex items-center justify-center">Expected Approval <SortIcon column="expectedDrawingApprovalDate" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.drawingSubmittedDate && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                    onClick={() => handleSort('drawingSubmittedDate')}
+                  >
+                    <div className="flex items-center justify-center">Drawing Submitted <SortIcon column="drawingSubmittedDate" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.drawingIssuedDate && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[150px]"
+                    onClick={() => handleSort('drawingIssuedDate')}
+                  >
+                    <div className="flex items-center justify-center">Dwg Issued Date <SortIcon column="drawingIssuedDate" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.drawingRevision && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[110px]"
+                    onClick={() => handleSort('drawingRevision')}
+                  >
+                    <div className="flex items-center justify-center">Dwg Rev <SortIcon column="drawingRevision" sortConfig={sortConfig} /></div>
+                  </th>
+                )}
+                {columnVisibility.issuedTo && (
+                  <th
+                    className="px-4 py-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100/50 transition-colors text-center min-w-[130px]"
+                    onClick={() => handleSort('issuedTo')}
+                  >
+                    <div className="flex items-center justify-center">Issued To <SortIcon column="issuedTo" sortConfig={sortConfig} /></div>
                   </th>
                 )}
                 {columnVisibility.sheetmetalOrderedDate && (
@@ -1731,6 +1792,34 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
                         <td className="px-4 py-3 text-center">
                           <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                             {project.expectedDrawingApprovalDate ? format(new Date(project.expectedDrawingApprovalDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.drawingSubmittedDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.drawingSubmittedDate ? format(new Date(project.drawingSubmittedDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.drawingIssuedDate && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {project.drawingIssuedDate ? format(new Date(project.drawingIssuedDate), 'dd MMM yy') : '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.drawingRevision && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+                            {project.drawingRevision || '—'}
+                          </span>
+                        </td>
+                      )}
+                      {columnVisibility.issuedTo && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+                            {project.issuedTo || '—'}
                           </span>
                         </td>
                       )}
