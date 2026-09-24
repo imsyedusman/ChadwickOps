@@ -141,19 +141,19 @@ export default async function DashboardPage({
     ? projectsWithRisk.filter(p => isProductiveProject(p.projectNumber) && isActiveWorkStatus(p.rawStatus))
     : filter === "due_this_week" 
     ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
         const d = new Date(p.deliveryDate);
         return d >= todayStart && d <= weekEnd;
       })
     : filter === "overdue"
     ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
         const d = new Date(p.deliveryDate);
         return d < todayStart;
       })
     : filter === "this_month"
     ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
         const d = new Date(p.deliveryDate);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       })
