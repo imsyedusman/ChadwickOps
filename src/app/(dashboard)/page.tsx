@@ -4,12 +4,12 @@ import { projects, clients, displayStages, syncLogs } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { DeliveryRiskService } from "@/lib/risk";
 import { format, isSameWeek, addWeeks, startOfWeek, endOfWeek } from "date-fns";
-import { 
-  AlertTriangle, 
-  Clock, 
-  CheckCircle2, 
-  ExternalLink, 
-  TrendingUp, 
+import {
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  ExternalLink,
+  TrendingUp,
   ArrowUpRight,
   Info,
   Layers,
@@ -48,35 +48,35 @@ export default async function DashboardPage({
   );
 
   console.log(`[UI] Fetched ${projectsWithRisk.length} projects for display.`);
-  
+
   const projectsWithBay = projectsWithRisk.filter(p => p.bayLocation);
   if (projectsWithBay.length > 0) {
-      console.log(`[UI] Found ${projectsWithBay.length} projects with Bay Location:`);
-      projectsWithBay.slice(0, 5).forEach(p => {
-          console.log(`- ${p.projectNumber}: ${p.bayLocation}`);
-      });
+    console.log(`[UI] Found ${projectsWithBay.length} projects with Bay Location:`);
+    projectsWithBay.slice(0, 5).forEach(p => {
+      console.log(`- ${p.projectNumber}: ${p.bayLocation}`);
+    });
   } else {
-      console.log(`[UI] No projects found with Bay Location data (checked ${projectsWithRisk.length} projects).`);
+    console.log(`[UI] No projects found with Bay Location data (checked ${projectsWithRisk.length} projects).`);
   }
-  
+
   if (projectsWithRisk.length > 0) {
-      console.log(`[UI] Sample project:`, JSON.stringify(projectsWithRisk[0]).substring(0, 200));
+    console.log(`[UI] Sample project:`, JSON.stringify(projectsWithRisk[0]).substring(0, 200));
   }
 
   const latestSync = await db.query.syncLogs.findFirst({
     orderBy: [desc(syncLogs.timestamp)],
   });
 
-  const lastUpdatedText = latestSync 
+  const lastUpdatedText = latestSync
     ? new Date(latestSync.timestamp).toLocaleString('en-AU', {
-        timeZone: 'Australia/Sydney',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
+      timeZone: 'Australia/Sydney',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
     : "Never";
 
   const now = new Date();
@@ -139,45 +139,45 @@ export default async function DashboardPage({
 
   const displayedProjects = filter === "active"
     ? projectsWithRisk.filter(p => isProductiveProject(p.projectNumber) && isActiveWorkStatus(p.rawStatus))
-    : filter === "due_this_week" 
-    ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
+    : filter === "due_this_week"
+      ? projectsWithRisk.filter(p => {
+        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
         const d = new Date(p.deliveryDate);
         return d >= todayStart && d <= weekEnd;
       })
-    : filter === "overdue"
-    ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
-        const d = new Date(p.deliveryDate);
-        return d < todayStart;
-      })
-    : filter === "this_month"
-    ? projectsWithRisk.filter(p => {
-        if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus) || !isProductiveProject(p.projectNumber)) return false;
-        const d = new Date(p.deliveryDate);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      })
-    : projectsWithRisk;
+      : filter === "overdue"
+        ? projectsWithRisk.filter(p => {
+          if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+          const d = new Date(p.deliveryDate);
+          return d < todayStart;
+        })
+        : filter === "this_month"
+          ? projectsWithRisk.filter(p => {
+            if (!p.deliveryDate || !isActiveWorkStatus(p.rawStatus)) return false;
+            const d = new Date(p.deliveryDate);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          })
+          : projectsWithRisk;
 
   const initialTableFilter = "";
 
   const activeProjectsList = productiveProjects.filter(p => isActiveWorkStatus(p.rawStatus));
-  
+
   const overdueOrPastDueCount = activeProjectsList.filter(p => {
     const isOverdueStatus = p.rawStatus?.toLowerCase().includes("overdue");
     const isPastDue = p.deliveryDate && new Date(p.deliveryDate) < todayStart;
     return isOverdueStatus || isPastDue;
   }).length;
-  
+
   const overBudgetCount = activeProjectsList.filter(p => (p.remainingHours || 0) < 0).length;
   const totalRemainingHours = activeProjectsList.reduce((sum, p) => sum + (p.remainingHours || 0), 0);
-  
+
   const statusCounts = activeProjectsList.reduce((acc, p) => {
     const status = p.rawStatus || "Unknown";
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  
+
   const topStatuses = Object.entries(statusCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -207,7 +207,7 @@ export default async function DashboardPage({
       </div>
 
       <div className="relative z-10">
-        <DashboardSummaries 
+        <DashboardSummaries
           totalCount={stats.activeJobs}
           allCount={stats.total}
           dueThisWeekCount={stats.dueThisWeek}
@@ -221,60 +221,60 @@ export default async function DashboardPage({
 
       <div className="space-y-8">
         <div className="w-full">
-           <ProjectTable 
-             projects={displayedProjects} 
-             initialFilter={initialTableFilter} 
-             lastUpdated={lastUpdatedText}
-           />
+          <ProjectTable
+            projects={displayedProjects}
+            initialFilter={initialTableFilter}
+            lastUpdated={lastUpdatedText}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">
           <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm p-6 space-y-6">
             <div className="flex items-center justify-between">
-               <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase tracking-widest flex items-center gap-2">
-                 <Layers className="h-4 w-4 text-indigo-500" />
-                 Stage Bottlenecks
-               </h2>
-               <Info className="h-3.5 w-3.5 text-slate-300" />
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase tracking-widest flex items-center gap-2">
+                <Layers className="h-4 w-4 text-indigo-500" />
+                Stage Bottlenecks
+              </h2>
+              <Info className="h-3.5 w-3.5 text-slate-300" />
             </div>
 
             <div className="space-y-4">
-               {sortedStages.length > 0 ? sortedStages.map((s, i) => (
-                 <div key={i} className="space-y-1.5 group">
-                   <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
-                     <span className="text-slate-500">{s.name}</span>
-                     <span className="text-slate-900 dark:text-white tabular-nums">{s.count} jobs</span>
-                   </div>
-                   <div className="h-2 w-full bg-slate-50 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-100 dark:border-slate-800">
-                     <div 
-                       className="h-full rounded-full transition-all duration-1000 group-hover:brightness-110 shadow-sm"
-                       style={{ 
-                         width: `${(s.count / stats.total) * 100}%`,
-                         backgroundColor: s.color 
-                       }}
-                     />
-                   </div>
-                 </div>
-               )) : (
-                 <p className="text-xs text-slate-400 italic">No stage data available.</p>
-               )}
+              {sortedStages.length > 0 ? sortedStages.map((s, i) => (
+                <div key={i} className="space-y-1.5 group">
+                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                    <span className="text-slate-500">{s.name}</span>
+                    <span className="text-slate-900 dark:text-white tabular-nums">{s.count} jobs</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-50 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-100 dark:border-slate-800">
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 group-hover:brightness-110 shadow-sm"
+                      style={{
+                        width: `${(s.count / stats.total) * 100}%`,
+                        backgroundColor: s.color
+                      }}
+                    />
+                  </div>
+                </div>
+              )) : (
+                <p className="text-xs text-slate-400 italic">No stage data available.</p>
+              )}
             </div>
-            
+
             <div className="pt-2">
-               <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
-                 <p className="text-[10px] font-medium text-slate-500 leading-relaxed italic">
-                   &quot;The bottleneck is currently in <span className="font-bold text-slate-700 dark:text-slate-300">{sortedStages[0]?.name || 'N/A'}</span> with {sortedStages[0]?.count || 0} active jobs awaiting processing.&quot;
-                 </p>
-               </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
+                <p className="text-[10px] font-medium text-slate-500 leading-relaxed italic">
+                  &quot;The bottleneck is currently in <span className="font-bold text-slate-700 dark:text-slate-300">{sortedStages[0]?.name || 'N/A'}</span> with {sortedStages[0]?.count || 0} active jobs awaiting processing.&quot;
+                </p>
+              </div>
             </div>
           </section>
 
-            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-6">
-               <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest mb-4">Operations Tip</h3>
-               <p className="text-xs text-slate-500 leading-relaxed font-medium italic">
-                 &quot;Data freshness is tracked per-project. If a project is flagged as <span className="text-amber-500 font-bold uppercase tracking-tighter">Stale</span>, use <span className="font-bold whitespace-nowrap">Quick Sync</span> to prioritize its refresh.&quot;
-               </p>
-            </section>
+          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-6">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest mb-4">Operations Tip</h3>
+            <p className="text-xs text-slate-500 leading-relaxed font-medium italic">
+              &quot;Data freshness is tracked per-project. If a project is flagged as <span className="text-amber-500 font-bold uppercase tracking-tighter">Stale</span>, use <span className="font-bold whitespace-nowrap">Quick Sync</span> to prioritize its refresh.&quot;
+            </p>
+          </section>
         </div>
       </div>
     </div>
@@ -298,12 +298,12 @@ function StatCard({ title, value, icon, trend, trendColor, description }: StatCa
       </div>
       <div className="flex items-center justify-between mb-4">
         <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700/50 group-hover:border-brand/20 transition-colors">
-           {icon}
+          {icon}
         </div>
         {trend && (
-           <div className={cn("text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 ring-1 ring-inset transition-all", trendColor)}>
-              {trend}
-           </div>
+          <div className={cn("text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 ring-1 ring-inset transition-all", trendColor)}>
+            {trend}
+          </div>
         )}
       </div>
       <div className="space-y-1">
@@ -330,7 +330,7 @@ function RiskBadge({ risk }: { risk: string }) {
       "inline-flex items-center px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest border transition-all duration-300 shadow-sm uppercase shrink-0",
       config.classes
     )}>
-       {config.label}
+      {config.label}
     </span>
   );
 }

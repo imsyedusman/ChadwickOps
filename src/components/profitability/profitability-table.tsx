@@ -3,10 +3,10 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import {
-  Search, ChevronDown, ChevronRight, ChevronLeft, TrendingUp, AlertTriangle, ExternalLink,
+  Search, ChevronDown, ChevronRight, TrendingUp, AlertTriangle, ExternalLink,
   Clock, FileText, FileCheck, ShoppingCart, PlayCircle, ShieldAlert, XCircle,
   PauseCircle, Timer, CheckCircle2, Receipt, DollarSign, Truck, Archive, Ban, HelpCircle,
-  Filter, Layers, Check, Briefcase, TrendingDown, Calendar, ArrowUp, ArrowDown, Info
+  Filter, Layers, Check, Briefcase, TrendingDown, ArrowUp, ArrowDown, Info
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -16,6 +16,7 @@ import { ProjectDetailDrawer } from "./project-detail-drawer";
 import { GroupDetailDrawer } from "./group-detail-drawer";
 import { generateProjectInsights, ProjectInsight } from "@/lib/profitability-insights";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 export interface MergedProfitabilityProject {
   id: number | string;
@@ -288,11 +289,6 @@ const getMarginColor = (marginPct: number) => {
   return "text-emerald-600 dark:text-emerald-400";
 };
 
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-];
-
 type SortKey = "project" | "client" | "schedule" | "status" | "profit" | "gp_amount";
 
 export interface ProfitabilityGroup {
@@ -316,33 +312,20 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
   const [filterLoss, setFilterLoss] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  const [monthFilter, setMonthFilter] = useState<string[]>([MONTH_NAMES[new Date().getMonth()]]);
-  const [yearFilter, setYearFilter] = useState<string[]>([new Date().getFullYear().toString()]);
+
+  // Due date range filter (WIP-style), defaults to the current month
+  const now = new Date();
+  const defaultDueStart = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
+  const defaultDueEnd = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), "yyyy-MM-dd");
+  const [dueDateStart, setDueDateStart] = useState(defaultDueStart);
+  const [dueDateEnd, setDueDateEnd] = useState(defaultDueEnd);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
-  const [sortKey, setSortKey] = useState<SortKey>("profit");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<SortKey>("schedule");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedProject, setSelectedProject] = useState<MergedProfitabilityProject | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<ProfitabilityGroup | null>(null);
-
-  // Reset sorting defaults when switching active/completed tabs
-  useEffect(() => {
-    if (filterActive === "active") {
-      setSortKey("profit");
-      setSortDir("asc"); // Worst performing at the top
-      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-      setYearFilter([new Date().getFullYear().toString()]);
-    } else if (filterActive === "completed") {
-      setSortKey("schedule");
-      setSortDir("desc"); // Newest completed at the top
-      setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-      setYearFilter([new Date().getFullYear().toString()]);
-    } else {
-      // all tab
-      setSortKey("schedule");
-      setSortDir("asc");
-    }
-  }, [filterActive]);
+  // Note: the due date range is preserved when switching between All / Active / Completed tabs.
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -368,15 +351,6 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
       t.add(p.projectType || 'Standard');
     });
     return Array.from(t).sort();
-  }, [data]);
-
-  const availableYears = useMemo(() => {
-    const years = new Set<string>();
-    data.forEach(p => {
-      if (p.completionDate) years.add(new Date(p.completionDate).getFullYear().toString());
-      if (p.deliveryDate) years.add(new Date(p.deliveryDate).getFullYear().toString());
-    });
-    return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [data]);
 
   const filteredProjects = useMemo(() => {
@@ -419,26 +393,14 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
         if (!typeFilter.includes(t)) return false;
       }
 
-      const d = filterActive === "completed" 
-        ? (project.completionDate ? new Date(project.completionDate) : null)
-        : (project.deliveryDate ? new Date(project.deliveryDate) : null);
-        
-      if (filterActive !== "all") {
-        if (d) {
-          const mStr = MONTH_NAMES[d.getMonth()];
-          const yStr = d.getFullYear().toString();
-
-          if (monthFilter.length > 0 && !monthFilter.includes(mStr)) return false;
-          if (yearFilter.length > 0 && !yearFilter.includes(yStr)) return false;
-        } else if (monthFilter.length > 0 || yearFilter.length > 0) {
-          // If filtering by dates but project has no date, exclude it
-          return false;
-        }
-      }
+      // Due date range filter (WIP-style; applies on all tabs)
+      const dueDateStr = project.deliveryDate ? format(new Date(project.deliveryDate), "yyyy-MM-dd") : null;
+      if (dueDateStart && (!dueDateStr || dueDateStr < dueDateStart)) return false;
+      if (dueDateEnd && (!dueDateStr || dueDateStr > dueDateEnd)) return false;
 
       return true;
     });
-  }, [data, searchTerm, filterActive, filterLoss, statusFilter, typeFilter, monthFilter, yearFilter]);
+  }, [data, searchTerm, filterActive, filterLoss, statusFilter, typeFilter, dueDateStart, dueDateEnd]);
 
   const summaryData = useMemo(() => {
     let totalInvoiced = 0;
@@ -563,8 +525,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             valB = b.clientName || "";
             return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
           case "schedule":
-            valA = filterActive === "completed" ? (a.completionDate?.getTime() || 0) : (a.startDate?.getTime() || 0);
-            valB = filterActive === "completed" ? (b.completionDate?.getTime() || 0) : (b.startDate?.getTime() || 0);
+            valA = a.deliveryDate?.getTime() || 0;
+            valB = b.deliveryDate?.getTime() || 0;
             return sortDir === "asc" ? valA - valB : valB - valA;
           case "status":
             valA = a.rawStatus || "";
@@ -596,8 +558,8 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
           valB = b.projects[0]?.clientName || "";
           return sortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
         case "schedule":
-          valA = filterActive === "completed" ? (a.projects[0]?.completionDate?.getTime() || 0) : (a.projects[0]?.startDate?.getTime() || 0);
-          valB = filterActive === "completed" ? (b.projects[0]?.completionDate?.getTime() || 0) : (b.projects[0]?.startDate?.getTime() || 0);
+          valA = a.projects[0]?.deliveryDate?.getTime() || 0;
+          valB = b.projects[0]?.deliveryDate?.getTime() || 0;
           return sortDir === "asc" ? valA - valB : valB - valA;
         case "status":
           valA = a.projects[0]?.rawStatus || "";
@@ -631,6 +593,18 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const dateFilterChanged = dueDateStart !== defaultDueStart || dueDateEnd !== defaultDueEnd;
+  const hasActiveFilters = searchTerm !== "" || statusFilter.length > 0 || typeFilter.length > 0 || filterLoss || dateFilterChanged;
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter([]);
+    setTypeFilter([]);
+    setFilterLoss(false);
+    setDueDateStart(defaultDueStart);
+    setDueDateEnd(defaultDueEnd);
   };
 
   const renderSortIndicator = (key: SortKey) => {
@@ -758,90 +732,26 @@ export function ProfitabilityTable({ data }: { data: MergedProfitabilityProject[
             onChange={setTypeFilter}
           />
 
-          {/* Month/Year Picker */}
-          {filterActive !== "all" && (
-            <div className="flex items-center gap-3 ml-auto bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-2 pr-1">
-                {filterActive === "completed" ? "Completion Date:" : "Due Date:"}
-              </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  if (monthFilter.length === 1) {
-                    const idx = MONTH_NAMES.indexOf(monthFilter[0]);
-                    if (idx > 0) setMonthFilter([MONTH_NAMES[idx - 1]]);
-                    else setMonthFilter([MONTH_NAMES[11]]);
-                  } else if (monthFilter.length === 0) {
-                    setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-                  }
-                }}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                title="Previous Month"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <FilterPopover
-                label="Months"
-                icon={Calendar}
-                options={MONTH_NAMES}
-                selected={monthFilter}
-                onChange={setMonthFilter}
-              />
-              <button
-                onClick={() => {
-                  if (monthFilter.length === 1) {
-                    const idx = MONTH_NAMES.indexOf(monthFilter[0]);
-                    if (idx < 11) setMonthFilter([MONTH_NAMES[idx + 1]]);
-                    else setMonthFilter([MONTH_NAMES[0]]);
-                  } else if (monthFilter.length === 0) {
-                    setMonthFilter([MONTH_NAMES[new Date().getMonth()]]);
-                  }
-                }}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                title="Next Month"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  if (yearFilter.length === 1 && availableYears.length > 0) {
-                    const idx = availableYears.indexOf(yearFilter[0]);
-                    if (idx < availableYears.length - 1) setYearFilter([availableYears[idx + 1]]);
-                  } else if (yearFilter.length === 0 && availableYears.length > 0) {
-                    setYearFilter([new Date().getFullYear().toString()]);
-                  }
-                }}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                title="Previous Year"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <FilterPopover
-                label="Years"
-                icon={Calendar}
-                options={availableYears}
-                selected={yearFilter}
-                onChange={setYearFilter}
-              />
-              <button
-                onClick={() => {
-                  if (yearFilter.length === 1 && availableYears.length > 0) {
-                    const idx = availableYears.indexOf(yearFilter[0]);
-                    if (idx > 0) setYearFilter([availableYears[idx - 1]]);
-                  } else if (yearFilter.length === 0 && availableYears.length > 0) {
-                    setYearFilter([new Date().getFullYear().toString()]);
-                  }
-                }}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center justify-center"
-                title="Next Year"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          {/* Due Date Range Picker (WIP-style) - applies on all tabs */}
+          <DateRangePicker
+            label="Filter by Due Date"
+            startDate={dueDateStart}
+            endDate={dueDateEnd}
+            onRangeChange={(start, end) => {
+              setDueDateStart(start);
+              setDueDateEnd(end);
+            }}
+          />
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-slate-500 hover:text-red-500 transition-colors"
+              title="Clear All Filters"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Clear
+            </button>
           )}
 
           {/* Sort Dropdown for All tab */}
