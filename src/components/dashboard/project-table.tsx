@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { isProductiveProject, INTERNAL_WORK_DESCRIPTION } from "@/lib/project-utils";
+import { WORKGURU_PROJECT_STATUSES } from "@/lib/constants";
 import {
   getProjectScheduleStatus,
   isProjectBacklog,
@@ -249,13 +250,15 @@ function FilterPopover({
   icon: Icon,
   options,
   selected,
-  onChange
+  onChange,
+  counts
 }: {
   label: string;
   icon: any;
   options: string[];
   selected: string[];
   onChange: (selected: string[]) => void;
+  counts?: Record<string, number>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -291,7 +294,10 @@ function FilterPopover({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-56 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className={cn(
+          "absolute left-0 mt-2 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200",
+          counts ? "w-80" : "w-56"
+        )}>
           <div className="space-y-3">
             <input
               type="text"
@@ -317,26 +323,44 @@ function FilterPopover({
             </div>
 
             <div className="space-y-0.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-              {filteredOptions.length > 0 ? filteredOptions.map((opt) => (
-                <div
-                  key={opt}
-                  onClick={() => {
-                    const next = selected.includes(opt)
-                      ? selected.filter(s => s !== opt)
-                      : [...selected, opt];
-                    onChange(next);
-                  }}
-                  className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer group transition-colors"
-                >
-                  <Checkbox checked={selected.includes(opt)} onChange={() => { }} className="pointer-events-none" />
-                  <span className={cn(
-                    "text-[11px] font-medium transition-colors line-clamp-1",
-                    selected.includes(opt) ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"
-                  )}>
-                    {opt}
-                  </span>
-                </div>
-              )) : (
+              {filteredOptions.length > 0 ? filteredOptions.map((opt) => {
+                const count = counts ? (counts[opt] || 0) : undefined;
+                const isSelected = selected.includes(opt);
+                return (
+                  <div
+                    key={opt}
+                    onClick={() => {
+                      const next = isSelected
+                        ? selected.filter(s => s !== opt)
+                        : [...selected, opt];
+                      onChange(next);
+                    }}
+                    className="flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer group transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <Checkbox checked={isSelected} onChange={() => { }} className="pointer-events-none shrink-0" />
+                      <span className={cn(
+                        "text-[11px] font-medium transition-colors truncate",
+                        isSelected ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"
+                      )}
+                      title={opt}
+                      >
+                        {opt}
+                      </span>
+                    </div>
+                    {count !== undefined && (
+                      <span className={cn(
+                        "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md shrink-0 transition-colors",
+                        count > 0
+                          ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                          : "text-slate-300 dark:text-slate-600 bg-slate-50/50 dark:bg-slate-900/50"
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                  </div>
+                );
+              }) : (
                 <div className="py-4 text-center text-[10px] text-slate-400 font-medium italic">No results found</div>
               )}
             </div>
@@ -544,14 +568,22 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
   // Extract unique values for filters
   const filterOptions = useMemo(() => {
     const pms = new Set<string>();
-    const statuses = new Set<string>();
+    const statuses = new Set<string>(WORKGURU_PROJECT_STATUSES);
     const clients = new Set<string>();
     const projectTypes = new Set<string>();
     const months = new Set<string>();
+    const statusCounts: Record<string, number> = {};
+
+    WORKGURU_PROJECT_STATUSES.forEach(s => {
+      statusCounts[s] = 0;
+    });
 
     projects.forEach(p => {
       if (p.projectManager) pms.add(p.projectManager);
-      if (p.rawStatus) statuses.add(p.rawStatus);
+      if (p.rawStatus) {
+        statuses.add(p.rawStatus);
+        statusCounts[p.rawStatus] = (statusCounts[p.rawStatus] || 0) + 1;
+      }
       if (p.client?.name) clients.add(p.client.name);
       if (p.projectType) projectTypes.add(p.projectType);
       if (p.deliveryDate) {
@@ -559,9 +591,24 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
       }
     });
 
+    const canonicalOrder = WORKGURU_PROJECT_STATUSES as readonly string[];
+    const sortedStatuses = Array.from(statuses).sort((a, b) => {
+      const indexA = canonicalOrder.indexOf(a as any);
+      const indexB = canonicalOrder.indexOf(b as any);
+
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+
+      return a.localeCompare(b, undefined, { numeric: true });
+    });
+
     return {
       pms: Array.from(pms).sort(),
-      statuses: Array.from(statuses).sort(),
+      statuses: sortedStatuses,
+      statusCounts,
       clients: Array.from(clients).sort(),
       projectTypes: Array.from(projectTypes).sort(),
       months: Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()),
@@ -1088,57 +1135,60 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               />
             </div>
 
-            <div className="relative" ref={nlPopoverRef}>
-              <button
-                onClick={() => setIsNlPopoverOpen(!isNlPopoverOpen)}
-                className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-brand" />
-                <span className="text-[11px] font-bold whitespace-nowrap text-brand">
-                  Chadwick AI Search
-                </span>
-              </button>
+            {/* Chadwick AI Search - hidden; re-enable by removing false && */}
+            {false && (
+              <div className="relative" ref={nlPopoverRef}>
+                <button
+                  onClick={() => setIsNlPopoverOpen(!isNlPopoverOpen)}
+                  className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-300 dark:hover:border-slate-700"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-brand" />
+                  <span className="text-[11px] font-bold whitespace-nowrap text-brand">
+                    Chadwick AI Search
+                  </span>
+                </button>
 
-              {isNlPopoverOpen && (
-                <div className="absolute left-0 mt-2 w-80 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex flex-col gap-2">
-                    <div className="relative flex items-center">
-                      <div className="absolute left-3 flex items-center justify-center">
-                        {isNlLoading ? (
-                          <Loader2 className="h-4 w-4 text-brand animate-spin" />
-                        ) : (
-                          <Sparkles className="h-4 w-4 text-brand" />
-                        )}
+                {isNlPopoverOpen && (
+                  <div className="absolute left-0 mt-2 w-80 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex flex-col gap-2">
+                      <div className="relative flex items-center">
+                        <div className="absolute left-3 flex items-center justify-center">
+                          {isNlLoading ? (
+                            <Loader2 className="h-4 w-4 text-brand animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4 text-brand" />
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder='e.g. "Nithin&apos;s IFC jobs with less than 50 hours left"'
+                          value={nlQuery}
+                          onChange={(e) => setNlQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleNlSearchWithRef();
+                          }}
+                          disabled={isNlLoading}
+                          className="w-full pl-9 pr-14 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px] font-medium focus:ring-2 focus:ring-brand/10 focus:border-brand/40 outline-none transition-all disabled:opacity-50"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleNlSearchWithRef}
+                          disabled={isNlLoading || !nlQuery.trim()}
+                          className="absolute right-1.5 px-2 py-1 bg-brand text-white rounded-lg text-[10px] font-bold hover:bg-brand/90 transition-colors disabled:opacity-50"
+                        >
+                          Ask
+                        </button>
                       </div>
-                      <input
-                        type="text"
-                        placeholder='e.g. "Nithin&apos;s IFC jobs with less than 50 hours left"'
-                        value={nlQuery}
-                        onChange={(e) => setNlQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleNlSearchWithRef();
-                        }}
-                        disabled={isNlLoading}
-                        className="w-full pl-9 pr-14 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px] font-medium focus:ring-2 focus:ring-brand/10 focus:border-brand/40 outline-none transition-all disabled:opacity-50"
-                        autoFocus
-                      />
-                      <button
-                        onClick={handleNlSearchWithRef}
-                        disabled={isNlLoading || !nlQuery.trim()}
-                        className="absolute right-1.5 px-2 py-1 bg-brand text-white rounded-lg text-[10px] font-bold hover:bg-brand/90 transition-colors disabled:opacity-50"
-                      >
-                        Ask
-                      </button>
+                      {nlError && (
+                        <span className="text-[10px] font-medium text-red-500 animate-in fade-in zoom-in duration-200 px-1">
+                          {nlError}
+                        </span>
+                      )}
                     </div>
-                    {nlError && (
-                      <span className="text-[10px] font-medium text-red-500 animate-in fade-in zoom-in duration-200 px-1">
-                        {nlError}
-                      </span>
-                    )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {activeNlFilter && (
               <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 px-2 py-1.5 rounded-xl text-[11px] font-semibold animate-in fade-in zoom-in duration-200 border border-blue-200 dark:border-blue-500/30 shadow-sm ml-1">
@@ -1168,6 +1218,7 @@ export function ProjectTable({ projects, initialFilter = "", lastUpdated }: Proj
               options={filterOptions.statuses}
               selected={statusFilter}
               onChange={setStatusFilter}
+              counts={filterOptions.statusCounts}
             />
 
             <FilterPopover

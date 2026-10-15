@@ -95,3 +95,41 @@ test('isActiveWorkStatus excludes invalid, empty, or non-production statuses', (
   assert.equal(isActiveWorkStatus('Lost'), false);
   assert.equal(isActiveWorkStatus('Random Unknown Status'), false);
 });
+
+test('WORKGURU_PROJECT_STATUSES maintains canonical workflow order and treats 2.4 statuses separately', () => {
+  import('../src/lib/constants').then(({ WORKGURU_PROJECT_STATUSES }) => {
+    // Stage 2.1 has WorkGuru typo
+    assert.ok(WORKGURU_PROJECT_STATUSES.includes('2.1 - Sheetmetal and switchgear ordrered'));
+    
+    // Both 2.4 statuses exist and are distinct
+    assert.ok(WORKGURU_PROJECT_STATUSES.includes('2.4 - Tested Defective'));
+    assert.ok(WORKGURU_PROJECT_STATUSES.includes('2.4 - Tested Passed'));
+    assert.notEqual('2.4 - Tested Defective', '2.4 - Tested Passed');
+
+    const idxDefective = WORKGURU_PROJECT_STATUSES.indexOf('2.4 - Tested Defective');
+    const idxPassed = WORKGURU_PROJECT_STATUSES.indexOf('2.4 - Tested Passed');
+    assert.ok(idxDefective < idxPassed, 'Tested Defective should come before Tested Passed');
+
+    // Sequential workflow order
+    const expectedOrder = [
+      '1.1 - Not Drawn',
+      '1.2 - Drawings Submitted',
+      '1.3 - Drawings Approved',
+      '2.1 - Sheetmetal and switchgear ordrered',
+      '2.2 - In Progress',
+      '2.3 - Ready for Testing',
+      '2.4 - Tested Defective',
+      '2.4 - Tested Passed',
+      '2.6 - Ready for Invoicing',
+      '3.1 - Invoiced',
+      '3.2 - Delivered',
+      'Waiting to Start',
+      'On Hold',
+      'Cancelled',
+      'Completed'
+    ];
+
+    assert.deepEqual([...WORKGURU_PROJECT_STATUSES], expectedOrder);
+  });
+});
+
