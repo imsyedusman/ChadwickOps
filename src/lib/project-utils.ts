@@ -1,3 +1,5 @@
+import { normalizeStatus } from './constants';
+
 /**
  * Logic for identifying unproductive/junk projects.
  * Any project number starting with "99" is considered Internal (Leave, Non-project work).
@@ -33,6 +35,7 @@ export const ACTIVE_STATUSES = [
   'Drawings Submitted',
   'Drawings Approved',
   'Ordered',
+  'Sheetmetal and Switchgear Ordered',
   'In Progress',
   'Ready for Testing',
   'Tested Defective',
@@ -55,17 +58,23 @@ export const EXCLUDED_WIP_STATUSES = [
 
 /**
  * Returns true if the project status represents active production work (WIP).
- * Handles WorkGuru prefixes like "1.1 - Not Drawn" by cleaning the status string.
+ * Handles WorkGuru prefixes like "1.1 - Not Drawn" or "2.1 - Sheetmetal and switchgear ordrered"
+ * by cleaning and normalizing the status string using shared normalization rules.
  * Normalizes case and trimming to ensure robust matching.
  */
 export function isActiveWorkStatus(status: string | null): boolean {
   if (!status) return false;
 
-  // Strip numeric prefix (e.g., "1.1 - ", "2 - "), trim, and lowercase
-  const cleaned = status.replace(/^[\d.]+ - /, '').trim().toLowerCase();
+  // Use shared normalization to strip numeric prefixes, handle typos like "ordrered", etc.
+  const normalized = normalizeStatus(status).trim().toLowerCase();
+
+  // Explicitly ensure finished/cancelled statuses are excluded
+  if (EXCLUDED_WIP_STATUSES.some(s => s.toLowerCase() === normalized)) {
+    return false;
+  }
 
   // Check against active list (more precise than checking exclusions)
-  return ACTIVE_STATUSES.some(s => s.toLowerCase() === cleaned);
+  return ACTIVE_STATUSES.some(s => s.toLowerCase() === normalized);
 }
 
 

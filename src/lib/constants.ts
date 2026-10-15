@@ -26,7 +26,7 @@ export function normalizeStatus(status: string | null | undefined): string {
   // 2. Handle specific typos or inconsistent naming from WorkGuru
   const lower = normalized.toLowerCase();
   
-  if (lower.includes('sheetmetal') && lower.includes('ordrered')) {
+  if (lower.includes('sheetmetal') && (lower.includes('ordrered') || lower.includes('ordered'))) {
     return 'Sheetmetal and Switchgear Ordered';
   }
 
