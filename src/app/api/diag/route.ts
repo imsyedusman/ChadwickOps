@@ -5,12 +5,12 @@ import { decrypt } from '@/lib/crypto';
 import { eq, isNotNull } from 'drizzle-orm';
 import { SyncService } from '@/lib/sync';
 import axios from 'axios';
-import { validateSession } from '@/lib/auth-helpers';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function GET() {
   const session = await validateSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session || !hasRole(session, 'admin')) {
+    return NextResponse.json({ error: 'Unauthorized. Administrator role required.' }, { status: 401 });
   }
 
   try {

@@ -9,11 +9,23 @@ import { getCapacitySettings } from '@/actions/capacity';
  */
 
 export class DeliveryRiskService {
+  private cachedSettings: Awaited<ReturnType<typeof getCapacitySettings>> | null = null;
+
+  async getSettings() {
+    if (!this.cachedSettings) {
+      this.cachedSettings = await getCapacitySettings();
+    }
+    return this.cachedSettings;
+  }
+
   /**
    * Calculates risk status for a project based on remaining hours and business days.
    */
-  async calculateProjectRisk(project: typeof projects.$inferSelect) {
-    const settings = await getCapacitySettings();
+  async calculateProjectRisk(
+    project: typeof projects.$inferSelect,
+    preloadedSettings?: Awaited<ReturnType<typeof getCapacitySettings>>
+  ) {
+    const settings = preloadedSettings || await this.getSettings();
     
     // Unified Daily Capacity = (Staff * Hrs/Wk * Efficiency) / 5 (Assuming 5 work days/week)
     const dailyCapacity = (settings.staff * settings.hoursPerWeek * settings.efficiency) / 5;

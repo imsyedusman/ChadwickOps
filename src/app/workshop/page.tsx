@@ -5,8 +5,15 @@ import WorkshopBoard from "./_components/WorkshopBoard";
 import { db } from "@/db";
 import { syncLogs } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import { validateSession } from "@/lib/auth-helpers";
+import { redirect } from "next/navigation";
 
 export default async function WorkshopPage() {
+    const session = await validateSession();
+    if (!session) {
+        redirect("/login");
+    }
+
     const arrivals = await getWorkshopArrivals();
     const inProgress = await getWorkshopInProgress();
     const departures = await getWorkshopDepartures();

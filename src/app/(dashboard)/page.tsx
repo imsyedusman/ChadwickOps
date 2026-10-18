@@ -31,6 +31,7 @@ export default async function DashboardPage({
 }) {
   const { filter = "" } = await searchParams;
   const riskService = new DeliveryRiskService();
+  const capacitySettings = await riskService.getSettings();
   const allProjects = await db.query.projects.findMany({
     with: {
       client: true,
@@ -43,7 +44,7 @@ export default async function DashboardPage({
   const projectsWithRisk = await Promise.all(
     allProjects.map(async (p) => ({
       ...p,
-      risk: await riskService.calculateProjectRisk(p),
+      risk: await riskService.calculateProjectRisk(p, capacitySettings),
     }))
   );
 

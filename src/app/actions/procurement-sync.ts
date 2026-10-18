@@ -6,8 +6,14 @@ import { ProcurementSyncService } from '@/lib/procurement-sync';
 import { decrypt } from '@/lib/crypto';
 import { eq, desc, inArray, count } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' | 'RETRY_FAILED' = 'INCREMENTAL') {
+  const session = await validateSession();
+  if (!session || !hasRole(session, 'admin')) {
+    return { success: false, error: 'Unauthorized. Administrator role required.' };
+  }
+
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),

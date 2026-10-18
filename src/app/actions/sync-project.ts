@@ -6,8 +6,14 @@ import { db } from '@/db';
 import { systemConfig } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { decrypt } from '@/lib/crypto';
+import { validateSession } from '@/lib/auth-helpers';
 
 export async function handleSyncProject(workguruId: string) {
+  const session = await validateSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized. Please log in.' };
+  }
+
   console.log(`[Action] Triggering manual sync for WG ID: ${workguruId}`);
 
   try {

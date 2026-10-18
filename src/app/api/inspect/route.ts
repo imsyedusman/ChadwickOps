@@ -4,12 +4,12 @@ import { systemConfig } from '@/db/schema';
 import { decrypt } from '@/lib/crypto';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
-import { validateSession } from '@/lib/auth-helpers';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function GET() {
   const session = await validateSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session || !hasRole(session, 'admin')) {
+    return NextResponse.json({ error: 'Unauthorized. Administrator role required.' }, { status: 401 });
   }
 
   try {

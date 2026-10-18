@@ -5,8 +5,14 @@ import { purchaseOrders, purchaseOrderLines, projects } from '@/db/schema';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { determineLineAction } from '@/lib/procurement-logic';
 import { differenceInDays, startOfDay } from 'date-fns';
+import { validateSession } from '@/lib/auth-helpers';
 
 export async function getWorkshopArrivals() {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
+
     // Arrivals: open purchase orders where supplier is exactly "HI SWITCH" or "PM SWITCHBOARDS(NSW)P/L"
     const arrivalsData = await db.select({
         line: purchaseOrderLines,
@@ -68,6 +74,10 @@ export async function getWorkshopArrivals() {
 }
 
 export async function getWorkshopInProgress() {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
     const inProgressProjects = await db.select()
         .from(projects)
         .where(eq(projects.isArchived, false)); // Drop inactive projects
@@ -114,6 +124,10 @@ export async function getWorkshopInProgress() {
 }
 
 export async function getWorkshopDepartures() {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
     const dispatchProjects = await db.select()
         .from(projects)
         .where(and(
@@ -195,6 +209,10 @@ export async function getWorkshopDepartures() {
 }
 
 export async function getWorkshopTesting() {
+    const session = await validateSession();
+    if (!session) {
+        throw new Error("Unauthorized");
+    }
     const testingProjects = await db.select()
         .from(projects)
         .where(and(

@@ -32,6 +32,7 @@ const navigation = [
   { name: 'Workshop Board', href: '/workshop', icon: Monitor },
   { name: 'Procurement', href: '/procurement', icon: Truck },
   { name: 'Capacity & Risk', href: '/risk', icon: SlidersHorizontal },
+  { name: 'Capacity & Risk V2', href: '/risk-v2', icon: Activity, beta: true },
   { name: 'Production Scheduling', href: '/production-scheduling', icon: CalendarDays },
   { name: 'Reports', href: '/reports', icon: ChartPie },
   { name: 'Profitability', href: '/profitability', icon: TrendingUp },
@@ -154,6 +155,7 @@ interface SidebarLinkProps {
     name: string;
     href: string;
     icon: any;
+    beta?: boolean;
   };
   isActive: boolean;
   isCollapsed: boolean;
@@ -178,14 +180,24 @@ function SidebarLink({ item, isActive, isCollapsed }: SidebarLinkProps) {
         )}
       />
       {!isCollapsed && (
-        <span className="truncate animate-in slide-in-from-left-2 duration-300">
+        <span className="truncate animate-in slide-in-from-left-2 duration-300 flex items-center gap-2 flex-1">
           {item.name}
+          {item.beta && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              Beta
+            </span>
+          )}
         </span>
       )}
       
       {isCollapsed && (
-        <div className="absolute left-full ml-2 px-2.5 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-xl border border-white/10 translate-x-1 group-hover:translate-x-0">
-           {item.name}
+        <div className="absolute left-full ml-2 px-2.5 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-xl border border-white/10 translate-x-1 group-hover:translate-x-0 flex items-center gap-1.5">
+           <span>{item.name}</span>
+           {item.beta && (
+             <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.2 rounded bg-amber-500/20 text-amber-300">
+               Beta
+             </span>
+           )}
            {/* Tooltip Arrow */}
            <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-900 rotate-45 border-l border-b border-white/5" />
         </div>
