@@ -58,4 +58,10 @@ next-env.d.ts
 /final_validation_diag.ts
 /fetch_raw.js
 /merge_test.js
+/all_files.txt
+/workshop_data_output*.json
+/diag_deep_response.json
+/eslint-report.json
+/lint_output.txt
+*.log
 
