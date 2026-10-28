@@ -57,9 +57,21 @@ function harness(current, options = {}) {
     }])),
   };
   const helper = compile('src/lib/auth-helpers.ts', {
-    './permissions': permissions, react: { cache: fn => fn }, '@/auth': { auth: async () => current },
+    './permissions': permissions, react: { cache: fn => fn },
+    '@/auth': { auth: options.auth || (async () => current) },
     '@/db': { db }, '@/db/schema': schema, 'drizzle-orm': { eq: () => null },
-    'next/navigation': { redirect: () => { throw new Error('Unauthorized'); } },
+    'next/navigation': {
+      redirect: () => { throw new Error('Unauthorized'); },
+      // Same contract as Next.js: framework control-flow signals must escape a
+      // user try/catch instead of being converted into an "unauthenticated" result.
+      unstable_rethrow: (error) => {
+        const digest = error && typeof error === 'object' ? error.digest : undefined;
+        if (typeof digest === 'string' && (
+          digest === 'DYNAMIC_SERVER_USAGE' || digest === 'NEXT_REDIRECT' ||
+          digest === 'NEXT_NOT_FOUND' || digest.startsWith('NEXT_HTTP_ERROR_FALLBACK')
+        )) throw error;
+      },
+    },
   });
   // By default exercise the real validator with authoritative database roles.
   if (!Object.hasOwn(options, 'dbUser')) options.dbUser = current && {
@@ -157,6 +169,21 @@ for (const state of [undefined, { isActive: false, sessionVersion: 3 }, { isActi
   });
 }
 
+test('framework dynamic-rendering signals are not swallowed by session validation', async () => {
+  const signal = Object.assign(new Error('Dynamic server usage: route could not be rendered statically'), {
+    digest: 'DYNAMIC_SERVER_USAGE',
+  });
+  const h = harness(null, { auth: async () => { throw signal; } });
+  await assert.rejects(h.helper.validateSession(), error => error === signal);
+  await assert.rejects(h.helper.requireSession(), error => error === signal);
+});
+
+test('genuine session lookup failures still fail closed', async () => {
+  const h = harness(null, { auth: async () => { throw new Error('session store unavailable'); } });
+  assert.equal(await h.helper.validateSession(), null);
+  await assert.rejects(h.helper.requireSession(), /Unauthorized/);
+});
+
 test('database memberships replace stale session roles', async () => {
   const h = harness(session(['admin']), { dbUser: { isActive: true, sessionVersion: 3, role: 'admin', userRoles: [] } });
   assert.equal(await h.helper.getAuthorizedSession('sync'), null);
@@ -235,7 +262,8 @@ test('session validation fails closed on authentication database errors', async 
     './permissions': permissions, react: { cache: fn => fn },
     '@/auth': { auth: async () => session(['admin']) },
     '@/db': { db: { query: { users: { findFirst: async () => { throw new Error('DB unavailable'); } } } } },
-    '@/db/schema': { users: { id: 'id' } }, 'drizzle-orm': { eq() {} }, 'next/navigation': {},
+    '@/db/schema': { users: { id: 'id' } }, 'drizzle-orm': { eq() {} },
+    'next/navigation': { unstable_rethrow: () => {} },
   });
   assert.equal(await helper.validateSession(), null);
 });

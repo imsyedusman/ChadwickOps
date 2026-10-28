@@ -8,6 +8,16 @@ import { db } from "@/db";
 import { syncLogs } from "@/db/schema";
 import { desc } from "drizzle-orm";
 
+/**
+ * Every route below this layout is authenticated and reads per-request session
+ * state plus live database data. None of it may be evaluated during `next build`:
+ * there is no session and the build host has no database access.
+ *
+ * Route segment config on a layout applies to every child segment, so this is
+ * the single place that keeps the whole dashboard group dynamic.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: Readonly<{

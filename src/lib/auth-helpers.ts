@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Session } from "next-auth";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 // Request-scoped React cache ensures this DB call runs exactly ONCE per page load
 export const validateSession = cache(async () => {
@@ -33,6 +33,11 @@ export const validateSession = cache(async () => {
 
     return session;
   } catch (error) {
+    // `auth()`/`headers()`/`cookies()` throw Next.js control-flow errors (for
+    // example DYNAMIC_SERVER_USAGE) to bail out of static rendering. Swallowing
+    // them here would make Next continue prerendering an authenticated route,
+    // so rethrow framework signals before treating anything as a real failure.
+    unstable_rethrow(error);
     console.error("[validateSession] Error verifying session:", error);
     return null;
   }
