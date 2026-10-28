@@ -36,7 +36,8 @@ export const identityStore: IdentityStore = {
   async findIdentity(id) {
     return db.query.users.findFirst({
       where: eq(users.id, id),
-      columns: { id: true, isActive: true, sessionVersion: true },
+      // Profile fields are returned only after the active/version checks pass.
+      columns: { id: true, isActive: true, sessionVersion: true, username: true, name: true },
     });
   },
 };

@@ -42,11 +42,20 @@ Revalidate request fields:
 | `userId` | string | Positive decimal Ops ID previously returned by authenticate. |
 | `sessionVersion` | integer | Positive version previously returned by authenticate. |
 
-Each successful response is exactly an object containing `userId` (string) and `sessionVersion` (integer). No name, email, username, password hash, Ops permissions, password, session cookie or session token is returned. Revalidation never selects the password hash. Unexpected fields are rejected. Requests are limited to 4096 actual streamed body bytes, including when Content-Length is absent or misleading, with a five-second body-read deadline.
+Each successful response from **both** endpoints is exactly an object containing four fields, built by one shared response path:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `userId` | string | Positive decimal Ops ID, unchanged. |
+| `sessionVersion` | integer | Positive Ops session version, unchanged. |
+| `username` | string | Fresh `users.username` from the same verified database read. |
+| `displayName` | string | Fresh `users.name` (full name) from that read. |
+
+No name, email, password hash, Ops permissions, password, session cookie or session token is returned beyond those four fields. `username`/`displayName` are profile data only: they are never used for lookup, authorization or rate-limit keys, and clients must not treat them as proof of identity. Both fields must be nonempty strings of at most 255 characters without control characters; otherwise the response fails closed as a generic 401 rather than returning a partial or unverified identity. Authenticate uses its final identity reread (after the active/version recheck) for the profile, so a change made during password comparison is reflected. Revalidation selects only `id`, `isActive`, `sessionVersion`, `username` and `name`; revalidation still never selects the password hash. Unexpected request fields are rejected. Requests are limited to 4096 actual streamed body bytes, including when Content-Length is absent or misleading, with a five-second body-read deadline.
 
 | Status | Meaning / body |
 | --- | --- |
-| 200 | Credentials/identity verified; minimal identity tuple. |
+| 200 | Credentials/identity verified; minimal identity tuple plus verified username and display name. |
 | 401 | Missing/wrong service key, invalid input, wrong password, unknown/inactive/deleted/revoked account: `{"error":"Identity verification failed"}`. |
 | 429 | Shared rate limit exceeded: `{"error":"Too many requests"}`, plus `Retry-After` seconds. |
 | 503 | Missing/invalid secret configuration, database/limiter failure or internal verification error: `{"error":"Identity service unavailable"}`. Fail closed. |
@@ -62,6 +71,14 @@ All handler responses include `Cache-Control: no-store, private, max-age=0`, `Pr
 5. Rate-limit public login submissions in Production as well. This Ops-side limiter is an additional shared boundary. Do not automatically retry wrong credentials. Honor Retry-After on throttling.
 
 The bridge cannot enforce these client-side-of-the-integration responsibilities from this repository. Chadwick Production was not edited or contacted. Password changes that bypass the established `sessionVersion` increment will not revoke a stored identity tuple; use existing account-management paths.
+
+## Backward compatibility
+
+The successful payload grew from two fields to four on the same unversioned endpoints. Request contract, URL, service-key authentication, status codes, rate limits and no-store headers are unchanged, so request-side clients are unaffected; only strict response parsers matter.
+
+- Chadwick Production Phase 14C accepts **either** the exact two-field object or the exact four-field object and validates the profile fields itself, using `Ops user <ID>` labels when the profile is absent. No Production change is required.
+- A Production build from Phase 14B (or any client that enforces exactly `{userId, sessionVersion}`) rejects the extended response. Roll Production forward to Phase 14C before this Ops change is deployed.
+- A repository-wide search of both checkouts found no other consumer of `/api/production/v1/identity/*`. If an unknown external client exists, add a versioned response path instead of relaxing validation.
 
 ## Distributed rate limiting and operational tradeoffs
 
@@ -82,14 +99,13 @@ Final verification results:
 
 | Exact command | Result |
 | --- | --- |
-| `node --test --test-reporter=spec tests/production-identity.test.cjs` | **60 passed, 0 failed**. |
-| `node --test --test-reporter=spec tests/production-identity.test.cjs tests/authorization.test.cjs` | **209 passed, 0 failed**: 60 identity + 149 existing authorization tests. |
+| `node --test --test-reporter=spec tests/production-identity.test.cjs` | **87 passed, 0 failed** (27 added for the profile extension). |
+| `node --test --test-reporter=spec tests/production-identity.test.cjs tests/authorization.test.cjs` | **236 passed, 0 failed**: 87 identity + 149 existing authorization tests. |
 | `node --import tsx --test tests/sync-safety.test.ts tests/production-api.test.ts tests/status-utils.test.ts` | **49 passed, 0 failed**. Node emitted the existing tsx loader deprecation warning. |
 | `node node_modules/typescript/bin/tsc --noEmit --incremental false` | **Passed**, normal project configuration. |
 | `node node_modules/eslint/bin/eslint.js src/lib/production-identity.ts src/lib/production-identity-store.ts src/app/api/production/v1/identity/authenticate/route.ts src/app/api/production/v1/identity/revalidate/route.ts` | **Passed**, no warnings or errors. |
-| `git diff --check` and a whitespace/credential-pattern scan of all six new files | **Passed**, no trailing whitespace or credential-pattern matches. Synthetic test passwords/hashes are generated/used only within isolated tests. |
 
-Total final suite coverage: **258 tests passed**. No real authentication request, production database access, WorkGuru request, migration, user change, infrastructure change, commit, push or deployment occurred. The secret was not configured. SQL adapter execution on PostgreSQL, proxy/APM redaction and the Production-side session integration remain unverified.
+Total final suite coverage: **285 tests passed**. No real authentication request, production database access, WorkGuru request, migration, user change, infrastructure change, commit, push or deployment occurred. The secret was not configured. SQL adapter execution on PostgreSQL, proxy/APM redaction and the Production-side session integration remain unverified.
 
 Exact files added (no existing tracked files modified):
 
@@ -100,13 +116,20 @@ Exact files added (no existing tracked files modified):
 - `tests/production-identity.test.cjs`
 - `docs/production-identity.md`
 
+Files changed by the Phase 14C verified-profile extension (same four, no new files; route handlers unchanged):
+
+- `src/lib/production-identity.ts` — `VerifiedIdentity` type, profile validation and one shared `identityResponse` used by both operations.
+- `src/lib/production-identity-store.ts` — `findIdentity` also selects `username` and `name`; `findCredentials` still returns only `id`, `passwordHash`, `isActive`, `sessionVersion`.
+- `tests/production-identity.test.cjs` — extended DTO assertions, profile reread/name-change coverage, 24 malformed-profile cases across both endpoints and stricter column-projection checks.
+- `docs/production-identity.md` — response contract, backward-compatibility note and verification results.
+
 ## Manual verification (instructions only)
 
 Use a disposable local/staging database and fixture users only, with two app instances sharing that database. Keep real credentials and production URLs out of the test client and its logs. None of these HTTP calls were performed for this change.
 
 1. With no identity secret configured, submit a fixture request: expect 503. Existing Ops login and the read-only Provider API should continue behaving as before.
 2. Configure an independent random identity secret in both test backends. Call either identity endpoint with no key, the Provider key or a wrong identity key: expect 401, no user queries and no counter writes.
-3. Authenticate an active fixture account with its correct password: expect 200 with only userId/sessionVersion, no Set-Cookie and no-store headers. Confirm lastLoginAt and user/role rows did not change; only counter metadata may change.
+3. Authenticate an active fixture account with its correct password: expect 200 with `userId`, `sessionVersion`, `username` and `displayName` only, matching the fixture account's stored values, no Set-Cookie and no-store headers. Confirm lastLoginAt and user/role rows did not change; only counter metadata may change. Change the fixture name/username and repeat: expect the new values with no Production-side edits.
 4. Try wrong passwords, nonexistent fixture names and an inactive fixture: expect the same 401 JSON. Inspect client/app/APM logs and confirm they contain no bodies, passwords or service secrets.
 5. Revalidate a successful fixture identity tuple: expect 200. Using fixture-only account management, deactivate it or increment its version; the old tuple must return the same generic 401 and Production must clear/deny its session. Do not test this against actual users.
 6. Across the two test instances, make six attempts for one normalized username within five minutes: only the first five proceed to password checking; the sixth gets 429 and Retry-After. Changing forwarded IP headers must not help. After the window, attempts are allowed again.

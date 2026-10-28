@@ -31,7 +31,8 @@ const { createIdentityHandler } = compile('src/lib/production-identity.ts', {
 const secret = crypto.createHash('sha256').update('isolated identity fixture key').digest('hex');
 const password = 'identity-fixture-only';
 const hash = bcrypt.hashSync(password, 4);
-const active = { id: 17, sessionVersion: 3, isActive: true, passwordHash: hash, role: 'admin', name: 'Never expose' };
+const active = { id: 17, sessionVersion: 3, isActive: true, passwordHash: hash, role: 'admin',
+  username: 'test@chadwickswitchboards.com.au', name: 'Fixture Planner' };
 const goodBody = { username: ' Test@ChadwickSwitchboards.com.au ', password };
 
 function request(body = goodBody, options = {}) {
@@ -94,13 +95,30 @@ async function assertNoStore(response) {
   return response.json();
 }
 
-test('real bcrypt validates the existing password; DTO excludes usernames, hashes, roles and tokens', async () => {
+test('real bcrypt validates the existing password; verified profile excludes hashes, roles and tokens', async () => {
   const f = fixture();
   const response = await f.authenticate(request());
   assert.equal(response.status, 200);
-  assert.deepEqual(await assertNoStore(response), { userId: '17', sessionVersion: 3 });
+  const body = await assertNoStore(response);
+  assert.deepEqual(body, {
+    userId: '17', sessionVersion: 3,
+    username: 'test@chadwickswitchboards.com.au', displayName: 'Fixture Planner',
+  });
+  assert.deepEqual(Object.keys(body).sort(), ['displayName', 'sessionVersion', 'userId', 'username']);
+  assert.equal(JSON.stringify(body).includes(hash), false);
+  assert.doesNotMatch(JSON.stringify(body), /passwordHash|role|token/i);
   assert.deepEqual(f.calls.filter(c => c[0] === 'credentials'), [['credentials', 'test@chadwickswitchboards.com.au']]);
   assert.equal(f.calls.at(-1)[0], 'identity');
+});
+
+test('authenticate returns the profile from the final identity reread, not the login input', async () => {
+  const f = fixture({ latest: { ...active, username: 'renamed@chadwickswitchboards.com.au', name: 'Renamed Person' } });
+  const response = await f.authenticate(request());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await assertNoStore(response), {
+    userId: '17', sessionVersion: 3,
+    username: 'renamed@chadwickswitchboards.com.au', displayName: 'Renamed Person',
+  });
 });
 
 test('production comparator and lazy dummy hash fail safely for an unknown account', async () => {
@@ -277,9 +295,60 @@ test('active identity with matching sessionVersion revalidates without loading p
   const f = fixture();
   const response = await f.revalidate(request({ userId: '17', sessionVersion: 3 }));
   assert.equal(response.status, 200);
-  assert.deepEqual(await assertNoStore(response), { userId: '17', sessionVersion: 3 });
+  const body = await assertNoStore(response);
+  assert.deepEqual(body, {
+    userId: '17', sessionVersion: 3,
+    username: 'test@chadwickswitchboards.com.au', displayName: 'Fixture Planner',
+  });
+  assert.deepEqual(Object.keys(body).sort(), ['displayName', 'sessionVersion', 'userId', 'username']);
+  assert.doesNotMatch(JSON.stringify(body), /passwordHash|role|token/i);
   assert.deepEqual(f.calls.map(c => c[0]), ['load', 'limit', 'identity']);
 });
+
+test('revalidate returns the current profile after an Ops name/username change', async () => {
+  const f = fixture({ latest: { ...active, username: 'changed@chadwickswitchboards.com.au', name: 'Changed Name' } });
+  const response = await f.revalidate(request({ userId: '17', sessionVersion: 3 }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await assertNoStore(response), {
+    userId: '17', sessionVersion: 3,
+    username: 'changed@chadwickswitchboards.com.au', displayName: 'Changed Name',
+  });
+});
+
+test('both endpoints return the identical validated response structure', async () => {
+  const f = fixture();
+  const login = await f.authenticate(request());
+  const check = await f.revalidate(request({ userId: '17', sessionVersion: 3 }));
+  assert.equal(login.status, 200);
+  assert.equal(check.status, 200);
+  const [loginBody, checkBody] = [await login.clone().json(), await check.clone().json()];
+  assert.deepEqual(Object.keys(loginBody).sort(), Object.keys(checkBody).sort());
+  assert.deepEqual(loginBody, checkBody);
+});
+
+for (const operation of ['authenticate', 'revalidate']) {
+  for (const [name, profile] of [
+    ['empty username', { username: '' }],
+    ['whitespace username', { username: '   ' }],
+    ['oversized username', { username: 'a'.repeat(256) }],
+    ['control characters in username', { username: 'test@chadwickswitchboards.com.au\n' }],
+    ['missing username', { username: undefined }],
+    ['non-string username', { username: 17 }],
+    ['empty name', { name: '' }],
+    ['whitespace name', { name: '\t\t' }],
+    ['oversized name', { name: 'n'.repeat(256) }],
+    ['control characters in name', { name: 'Fixture\u0000Person' }],
+    ['missing name', { name: undefined }],
+    ['non-string name', { name: null }],
+  ]) test(`${operation}: malformed verified profile fails closed (${name})`, async () => {
+    const f = fixture({ user: { ...active, ...profile }, latest: { ...active, ...profile } });
+    const response = operation === 'authenticate'
+      ? await f.authenticate(request())
+      : await f.revalidate(request({ userId: '17', sessionVersion: 3 }));
+    assert.equal(response.status, 401);
+    assert.deepEqual(await assertNoStore(response), { error: 'Identity verification failed' });
+  });
+}
 
 for (const user of [undefined, { ...active, isActive: false }, { ...active, sessionVersion: 4 }]) {
   test(`deleted/inactive/version-revoked identity is denied (${user?.isActive}/${user?.sessionVersion})`, async () => {
@@ -345,7 +414,7 @@ test('SQL adapter uses atomic bounded counters and selects only required account
   await identityStore.findCredentials('test@chadwickswitchboards.com.au');
   await identityStore.findIdentity(17);
   assert.deepEqual(Object.keys(selections[0].columns).sort(), ['id', 'isActive', 'passwordHash', 'sessionVersion']);
-  assert.deepEqual(Object.keys(selections[1].columns).sort(), ['id', 'isActive', 'sessionVersion']);
+  assert.deepEqual(Object.keys(selections[1].columns).sort(), ['id', 'isActive', 'name', 'sessionVersion', 'username']);
   assert.equal(selections[0].with, undefined);
   assert.equal(selections[1].with, undefined);
 });

@@ -11,16 +11,24 @@ export interface CredentialUser extends IdentityUser {
   passwordHash: string;
 }
 
+/** Verified profile fields returned with every successful response. */
+export interface VerifiedIdentity extends IdentityUser {
+  username: string;
+  name: string;
+}
+
 export interface IdentityStore {
   consumeRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean>;
   findCredentials(username: string): Promise<CredentialUser | undefined>;
-  findIdentity(id: number): Promise<IdentityUser | undefined>;
+  findIdentity(id: number): Promise<VerifiedIdentity | undefined>;
 }
 
 type Environment = Record<string, string | undefined>;
 type Operation = 'authenticate' | 'revalidate';
 const BODY_LIMIT = 4096;
 const FAILURE = { error: 'Identity verification failed' };
+const PROFILE_FIELD_LIMIT = 255;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 let dummyHash: Promise<string> | undefined;
 
 function reply(body: object, status: number, retryAfter?: number): Response {
@@ -88,9 +96,30 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
   }
 }
 
-function current(user: IdentityUser | undefined): user is IdentityUser {
+function current<T extends IdentityUser>(user: T | undefined): user is T {
   return !!user && user.isActive === true && Number.isSafeInteger(user.id) && user.id > 0
     && Number.isSafeInteger(user.sessionVersion) && user.sessionVersion >= 1;
+}
+
+/** Nonempty, at most 255 characters, no control characters; never used for authorization. */
+function validProfileField(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+    && value.length <= PROFILE_FIELD_LIMIT && !CONTROL_CHARACTERS.test(value);
+}
+
+/**
+ * The single successful response shape for authenticate and revalidate. Only the fresh
+ * verified ID/version and the fresh database username/name are returned; malformed profile
+ * data fails closed rather than degrading to a partial or unverified identity.
+ */
+function identityResponse(user: VerifiedIdentity): Response {
+  if (!validProfileField(user.username) || !validProfileField(user.name)) return reply(FAILURE, 401);
+  return reply({
+    userId: String(user.id),
+    sessionVersion: user.sessionVersion,
+    username: user.username,
+    displayName: user.name,
+  }, 200);
 }
 
 /** No NextAuth dependency: never creates an Ops session, updates a user or loads roles. */
@@ -137,7 +166,8 @@ export function createIdentityHandler(
         // Catch password reset/deactivation during the expensive password comparison.
         const latest = await store.findIdentity(user.id);
         if (!current(latest) || latest.id !== user.id || latest.sessionVersion !== user.sessionVersion) return reply(FAILURE, 401);
-        return reply({ userId: String(latest.id), sessionVersion: latest.sessionVersion }, 200);
+        // The profile comes from the final verified reread, never from the login body.
+        return identityResponse(latest);
       }
 
       if (Object.keys(body).some(key => key !== 'userId' && key !== 'sessionVersion')
@@ -148,7 +178,7 @@ export function createIdentityHandler(
       }
       const user = await store.findIdentity(Number(body.userId));
       if (!current(user) || user.id !== Number(body.userId) || user.sessionVersion !== body.sessionVersion) return reply(FAILURE, 401);
-      return reply({ userId: String(user.id), sessionVersion: user.sessionVersion }, 200);
+      return identityResponse(user);
     } catch {
       // Deliberately no logging: errors may embed query parameters, passwords or bodies.
       return reply({ error: 'Identity service unavailable' }, 503);
