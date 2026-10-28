@@ -4,12 +4,8 @@ import { validateSession } from "@/lib/auth-helpers";
 
 export async function generatePageAISummary(page: "wip" | "capacity" | "procurement", context: Record<string, any>) {
   // We use checkAuth equivalent
-  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
-    const session = await validateSession();
-    if (!session) {
-      throw new Error("Unauthorized.");
-    }
-  }
+  const session = await validateSession();
+  if (!session) { throw new Error("Unauthorized."); }
 
   try {
     const contextString = Object.entries(context)
@@ -90,12 +86,8 @@ export async function interpretNaturalLanguageFilter(
     todayDate: string;
   }
 ) {
-  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
-    const session = await validateSession();
-    if (!session) {
-      return null;
-    }
-  }
+  const session = await validateSession();
+  if (!session) { return null; }
 
   try {
     const prompt = `Act as a filter interpreter for a project management dashboard.
@@ -155,12 +147,8 @@ The JSON object should have these optional fields: searchText (string), pm (stri
 }
 
 export async function generateProjectNarrative(context: Record<string, any>) {
-  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
-    const session = await validateSession();
-    if (!session) {
-      throw new Error("Unauthorized.");
-    }
-  }
+  const session = await validateSession();
+  if (!session) { throw new Error("Unauthorized."); }
 
   try {
     const contextString = Object.entries(context)
@@ -227,12 +215,8 @@ Summary:`;
 }
 
 export async function generateGroupNarrative(context: Record<string, any>) {
-  if (process.env.BYPASS_AUTH_FOR_TEST !== "true") {
-    const session = await validateSession();
-    if (!session) {
-      throw new Error("Unauthorized.");
-    }
-  }
+  const session = await validateSession();
+  if (!session) { throw new Error("Unauthorized."); }
 
   try {
     const contextString = Object.entries(context)

@@ -1,3 +1,4 @@
+import { hasPermission, type Permission } from "./permissions";
 import { cache } from "react";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -10,7 +11,7 @@ import { redirect } from "next/navigation";
 export const validateSession = cache(async () => {
   try {
     const session = await auth();
-    if (!session?.user?.id) return null;
+    if (!session?.user?.id || !Number.isSafeInteger(Number(session.user.id)) || Number(session.user.id) <= 0) return null;
 
     const dbUser = await db.query.users.findFirst({
       where: eq(users.id, Number(session.user.id)),
@@ -56,3 +57,15 @@ export function requireRoles(session: Session | null, roleNames: string[]) {
   }
 }
 
+
+/** Call at the server boundary; never accept a session or role from action arguments. */
+export async function getAuthorizedSession(permission: Permission) {
+  const session = await validateSession();
+  return session && hasPermission(session, permission) ? session : null;
+}
+
+export async function requireSession() {
+  const session = await validateSession();
+  if (!session) throw new Error("Unauthorized");
+  return session;
+}

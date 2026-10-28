@@ -1,5 +1,7 @@
 'use server';
 
+import { getAuthorizedSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import {
     projects,
@@ -7,7 +9,6 @@ import {
     projectFinancialSnapshots
 } from '@/db/schema';
 import { eq, and, desc, or } from 'drizzle-orm';
-import { ProjectFinancialService } from '@/lib/financials';
 import { validateSession } from '@/lib/auth-helpers';
 
 import { subMonths, format, parseISO, endOfMonth } from 'date-fns';
@@ -185,7 +186,7 @@ import { SyncService } from '@/lib/sync';
 import { decrypt } from '@/lib/crypto';
 
 export async function syncProjectFinancials(projectId: number) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('sync');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }
@@ -214,8 +215,7 @@ export async function syncProjectFinancials(projectId: number) {
         const syncService = new SyncService(decryptedKey, decryptedSecret);
         await syncService.syncProjectById(project.workguruId);
 
-        // 4. Recalculate (Already called inside syncProjectById, but doing it again to be safe/explicit)
-        await ProjectFinancialService.recalculateAll(projectId);
+        // Snapshot recalculation is performed inside syncProjectById under its lease.
 
         return { success: true };
     } catch (error: any) {

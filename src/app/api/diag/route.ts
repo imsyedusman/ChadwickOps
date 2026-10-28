@@ -5,12 +5,16 @@ import { decrypt } from '@/lib/crypto';
 import { eq, isNotNull } from 'drizzle-orm';
 import { SyncService } from '@/lib/sync';
 import axios from 'axios';
-import { validateSession } from '@/lib/auth-helpers';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function GET() {
   const session = await validateSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!hasRole(session, 'admin')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -81,9 +85,7 @@ export async function GET() {
       itemsTrace,
       fullProject: project 
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-    return NextResponse.json({ error: message, stack }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Diagnostic request failed' }, { status: 500 });
   }
 }

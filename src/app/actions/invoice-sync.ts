@@ -1,5 +1,7 @@
 'use server';
 
+import { getAuthorizedSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import { systemConfig } from '@/db/schema';
 import { invoiceSyncLogs } from '@/db/schema';
@@ -10,7 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { validateSession } from '@/lib/auth-helpers';
 
 export async function triggerInvoiceSync() {
-  const session = await validateSession();
+  const session = await getAuthorizedSession('sync');
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }

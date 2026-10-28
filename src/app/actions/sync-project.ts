@@ -1,5 +1,7 @@
 "use server";
 
+import { getAuthorizedSession } from '@/lib/auth-helpers';
+
 import { revalidatePath } from 'next/cache';
 import { SyncService } from '@/lib/sync';
 import { db } from '@/db';
@@ -8,6 +10,9 @@ import { eq } from 'drizzle-orm';
 import { decrypt } from '@/lib/crypto';
 
 export async function handleSyncProject(workguruId: string) {
+  const session = await getAuthorizedSession('sync');
+  if (!session) return { success: false, error: 'Unauthorized' };
+
   console.log(`[Action] Triggering manual sync for WG ID: ${workguruId}`);
 
   try {

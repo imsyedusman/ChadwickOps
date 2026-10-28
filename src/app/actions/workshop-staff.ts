@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { staffEfficiency, systemConfig, staffAbsences } from "@/db/schema";
 import { eq, asc, desc } from "drizzle-orm";
 import { validateSession, hasRole } from "@/lib/auth-helpers";
+import { hasPermission } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import axios from "axios";
 import { decrypt } from "@/lib/crypto";
@@ -27,13 +28,13 @@ async function checkAdminAuth() {
 }
 
 export async function getWorkshopStaff() {
-  await checkAuth();
+  const session = await checkAuth();
 
   try {
     const list = await db.query.staffEfficiency.findMany({
       orderBy: [asc(staffEfficiency.fullName)]
     });
-    return { success: true, data: list };
+    return { success: true, data: hasPermission(session, "finance") ? list : list.map(person => ({ ...person, hourlyRate: null })) };
   } catch (error: any) {
     console.error("[getWorkshopStaff] Error:", error);
     throw new Error(error.message || "Failed to load staff list.");

@@ -1,5 +1,7 @@
 'use server';
 
+import { getAuthorizedSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import { systemConfig } from '@/db/schema';
 import { ProfitabilitySyncService } from '@/lib/profitability-sync';
@@ -10,7 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { validateSession } from '@/lib/auth-helpers';
 
 export async function triggerProfitabilitySync() {
-  const session = await validateSession();
+  const session = await getAuthorizedSession('sync');
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }

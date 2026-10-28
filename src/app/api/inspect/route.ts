@@ -4,12 +4,16 @@ import { systemConfig } from '@/db/schema';
 import { decrypt } from '@/lib/crypto';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
-import { validateSession } from '@/lib/auth-helpers';
+import { validateSession, hasRole } from '@/lib/auth-helpers';
 
 export async function GET() {
   const session = await validateSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!hasRole(session, 'admin')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -56,9 +60,7 @@ export async function GET() {
       locationFindings,
       fullProject: project
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    const data = (error as { response?: { data?: unknown } })?.response?.data;
-    return NextResponse.json({ error: message, data });
+  } catch {
+    return NextResponse.json({ error: 'Diagnostic request failed' }, { status: 500 });
   }
 }

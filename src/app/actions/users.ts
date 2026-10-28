@@ -44,7 +44,9 @@ export async function createUser(data: {
 }) {
   await checkAdminAuth();
 
-  const { name, username, roles: userRoleNames, password = "TempPassword123!" } = data;
+  const { name, username, roles: userRoleNames, password } = data;
+
+  if (!password || password.length < 12) throw new Error("An explicit password of at least 12 characters is required.");
 
   // Enforce domain check
   const usernameStr = username.trim().toLowerCase();

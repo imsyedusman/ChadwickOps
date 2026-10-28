@@ -1,5 +1,7 @@
 'use server';
 
+import { getAuthorizedSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import { projects, purchaseOrders, purchaseOrderLines, systemConfig, procurementSyncLogs, masterSuppliers, projectSuppliers, clients } from '@/db/schema';
 import { eq, and, desc, sql, lt, ne, inArray, count } from 'drizzle-orm';
@@ -21,7 +23,7 @@ import { validateSession } from '@/lib/auth-helpers';
  * Adds a manual supplier record to a project.
  */
 export async function addSupplier(projectId: number, data: any) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('procurement');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }
@@ -50,7 +52,7 @@ export async function addSupplier(projectId: number, data: any) {
  * Updates a manual supplier record.
  */
 export async function updateSupplier(supplierId: number, data: any) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('procurement');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }
@@ -81,7 +83,7 @@ export async function updateSupplier(supplierId: number, data: any) {
  * Deletes a manual supplier record.
  */
 export async function deleteSupplier(supplierId: number) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('procurement');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }
@@ -100,7 +102,7 @@ export async function deleteSupplier(supplierId: number) {
  * Adds a new master supplier.
  */
 export async function addMasterSupplier(name: string) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('procurement');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }
@@ -125,7 +127,7 @@ export async function addMasterSupplier(name: string) {
  * Updates project-level procurement fields.
  */
 export async function updateProjectProcurement(projectId: number, data: { procurementStatus?: string, procurementNotes?: string }) {
-    const session = await validateSession();
+    const session = await getAuthorizedSession('procurement');
     if (!session) {
         return { success: false, error: 'Unauthorized' };
     }

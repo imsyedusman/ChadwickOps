@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { systemConfig } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { validateSession } from "@/lib/auth-helpers";
+import { validateSession, getAuthorizedSession } from "@/lib/auth-helpers";
 
 export interface CapacitySettings {
   staff: number;
@@ -51,7 +51,7 @@ export async function getCapacitySettings(): Promise<CapacitySettings> {
 }
 
 export async function updateCapacitySettings(data: CapacitySettings) {
-  const session = await validateSession();
+  const session = await getAuthorizedSession('capacity');
   if (!session) {
     throw new Error("Unauthorized");
   }

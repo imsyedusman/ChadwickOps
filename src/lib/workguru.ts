@@ -365,6 +365,7 @@ export class WorkGuruClient {
     let skipCount = 0;
     const maxResultCount = 1000;
     let totalCount = 0;
+    let remoteTotalCount: number | undefined;
 
     try {
       do {
@@ -377,13 +378,18 @@ export class WorkGuruClient {
         const result = response.data.result || response.data;
         const items = result.items || [];
         totalCount = result.totalCount || items.length;
+        if (remoteTotalCount === undefined && typeof result.totalCount === 'number') {
+          remoteTotalCount = result.totalCount;
+        }
         
         allItems = [...allItems, ...items];
         skipCount += maxResultCount;
         
       } while (allItems.length < totalCount && skipCount < totalCount);
 
-      return { result: { items: allItems, totalCount: allItems.length } };
+      // Report the authoritative remote total when known so the caller can detect
+      // truncated pagination (returned rows < remote total).
+      return { result: { items: allItems, totalCount: remoteTotalCount ?? allItems.length } };
     } catch (error: any) {
       this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
       throw error;

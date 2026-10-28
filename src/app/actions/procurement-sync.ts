@@ -1,5 +1,7 @@
 'use server';
 
+import { getAuthorizedSession, requireSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import { systemConfig, procurementSyncLogs, purchaseOrders } from '@/db/schema';
 import { ProcurementSyncService } from '@/lib/procurement-sync';
@@ -8,6 +10,9 @@ import { eq, desc, inArray, count } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' | 'RETRY_FAILED' = 'INCREMENTAL') {
+  const session = await getAuthorizedSession('sync');
+  if (!session) return { success: false, error: 'Unauthorized' };
+
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'WORKGURU_API_CREDENTIALS'),
@@ -33,6 +38,8 @@ export async function triggerProcurementSync(mode: 'INCREMENTAL' | 'FULL' | 'RET
 }
 
 export async function getLatestProcurementSyncStatus() {
+  await requireSession();
+
   try {
     const latestLog = await db.query.procurementSyncLogs.findFirst({
       orderBy: [desc(procurementSyncLogs.timestamp)],
@@ -60,6 +67,8 @@ export async function getLatestProcurementSyncStatus() {
 }
 
 export async function getProcurementSyncProgress() {
+  await requireSession();
+
   try {
     const config = await db.query.systemConfig.findFirst({
       where: eq(systemConfig.key, 'PROCUREMENT_SYNC_PROGRESS'),

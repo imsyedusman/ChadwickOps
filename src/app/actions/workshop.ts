@@ -1,5 +1,7 @@
 'use server';
 
+import { requireSession } from '@/lib/auth-helpers';
+
 import { db } from '@/db';
 import { purchaseOrders, purchaseOrderLines, projects } from '@/db/schema';
 import { eq, and, or, sql } from 'drizzle-orm';
@@ -7,6 +9,8 @@ import { determineLineAction } from '@/lib/procurement-logic';
 import { differenceInDays, startOfDay } from 'date-fns';
 
 export async function getWorkshopArrivals() {
+  await requireSession();
+
     // Arrivals: open purchase orders where supplier is exactly "HI SWITCH" or "PM SWITCHBOARDS(NSW)P/L"
     const arrivalsData = await db.select({
         line: purchaseOrderLines,
@@ -68,6 +72,8 @@ export async function getWorkshopArrivals() {
 }
 
 export async function getWorkshopInProgress() {
+  await requireSession();
+
     const inProgressProjects = await db.select()
         .from(projects)
         .where(eq(projects.isArchived, false)); // Drop inactive projects
@@ -114,6 +120,8 @@ export async function getWorkshopInProgress() {
 }
 
 export async function getWorkshopDepartures() {
+  await requireSession();
+
     const dispatchProjects = await db.select()
         .from(projects)
         .where(and(
@@ -195,6 +203,8 @@ export async function getWorkshopDepartures() {
 }
 
 export async function getWorkshopTesting() {
+  await requireSession();
+
     const testingProjects = await db.select()
         .from(projects)
         .where(and(

@@ -1,8 +1,38 @@
+import { randomUUID } from 'crypto';
 import { db } from '@/db';
 import { clients, projects, tasks, timeEntries, syncLogs, systemConfig, purchaseOrders, invoices, projectFinancialSnapshots } from '@/db/schema';
 import { WorkGuruClient } from './workguru';
 import { eq, sql, asc, inArray, and, notInArray, lt, or, gt, isNull } from 'drizzle-orm';
 import { ProjectFinancialService } from './financials';
+import {
+  assessCollection,
+  canRunLegacyCleanup,
+  findVerifiedLegacyDuplicates,
+  planOrphanCleanup,
+  withSyncLock,
+  SYNC_LOCK_TTL_MS,
+  type LeaseGuard,
+} from './sync-safety';
+import { createPostgresSyncLock } from './sync-lock';
+
+/** Page size used by the WorkGuru list endpoints called from this service. */
+const WORKGURU_PAGE_LIMIT = 1000;
+/** Page size requested by `getAllProjects` (MaxResultCount: 5000). */
+const WORKGURU_PROJECT_PAGE_LIMIT = 5000;
+
+export interface SyncStats {
+  syncedCount: number;
+  restoredCount: number;
+  archivedCount: number;
+  processedCount: number;
+  failedCount: number;
+  mismatchCount: number;
+  totalToProcess: number;
+}
+
+export type SyncRunResult =
+  | { success: true; mode: 'QUICK' | 'FULL'; stats: SyncStats }
+  | { success: false; code: 'SYNC_ALREADY_RUNNING'; error: string };
 
 // Deterministic Custom Field IDs from WorkGuru
 const CF_IDS = {
@@ -23,9 +53,21 @@ const CF_IDS = {
 
 export class SyncService {
   private client: WorkGuruClient;
+  /**
+   * Set while a leased run is in progress. Every destructive write checks it so a
+   * run that loses the lease cannot keep deleting data. Both full and manual
+   * single-project sync entry points install this guard for their leased work.
+   */
+  private leaseGuard: LeaseGuard | null = null;
 
   constructor(apiKey: string, apiSecret: string) {
     this.client = new WorkGuruClient(apiKey, apiSecret);
+  }
+
+  /** Fails closed before a destructive write when this run holds a lease. */
+  private async requireLease(): Promise<void> {
+    if (!this.leaseGuard) return;
+    await this.leaseGuard.assertHeld();
   }
 
   private async sleep(ms: number) {
@@ -100,7 +142,42 @@ export class SyncService {
     return items;
   }
 
-  async runSync(mode: 'QUICK' | 'FULL' = 'QUICK') {
+  /**
+   * Entry point. Guards against concurrent sync runs using a PostgreSQL-backed
+   * lease (see `sync-lock.ts`), so the guard holds across processes and instances,
+   * not just within one Node process.
+   */
+  async runSync(mode: 'QUICK' | 'FULL' = 'QUICK'): Promise<SyncRunResult> {
+    const ownerId = randomUUID();
+    const outcome = await withSyncLock(
+      createPostgresSyncLock(),
+      ownerId,
+      SYNC_LOCK_TTL_MS,
+      (guard) => this.executeSync(mode, guard),
+      {
+        onHeartbeatFailure: (error) => {
+          console.error('[Sync] Failed to refresh the sync lease:', error);
+        },
+        onReleaseFailure: (error) => {
+          console.error('[Sync] Failed to release the sync lease; it will expire automatically:', error);
+        },
+      }
+    );
+
+    if (!outcome.acquired) {
+      console.warn('[Sync] Another sync is already running. This request was skipped.');
+      return {
+        success: false,
+        code: 'SYNC_ALREADY_RUNNING',
+        error: 'A sync is already in progress. Please wait for it to finish.',
+      };
+    }
+
+    return outcome.result as SyncRunResult;
+  }
+
+  private async executeSync(mode: 'QUICK' | 'FULL', guard: LeaseGuard) {
+    this.leaseGuard = guard;
     const startTime = new Date();
     const stats = {
       syncedCount: 0,
@@ -122,7 +199,19 @@ export class SyncService {
       if (projectData) {
         const remoteProjects = this.extractItems<import('./workguru').WorkGuruProject>(projectData, 'Project');
         console.log(`[Sync] WorkGuru API returned ${remoteProjects.length} projects.`);
-        await this.cleanDatabase();
+        const remoteProjectIds = new Set(
+          remoteProjects
+            .map((p) => (p.id || p.ProjectID)?.toString())
+            .filter((id): id is string => Boolean(id))
+        );
+        // The project list is only used as evidence for deletions, so require it to
+        // be structurally valid and provably complete.
+        const projectList = assessCollection<import('./workguru').WorkGuruProject>(
+          projectData,
+          'Project',
+          { requestedLimit: WORKGURU_PROJECT_PAGE_LIMIT }
+        );
+        await this.cleanDatabase(remoteProjectIds, projectList.complete);
         await this.syncProjects(remoteProjects, stats);
       }
 
@@ -174,6 +263,8 @@ export class SyncService {
         details: JSON.stringify({ error: error instanceof Error ? error.message : String(error), timestamp: startTime.toISOString() }),
       });
       throw error;
+    } finally {
+      this.leaseGuard = null;
     }
   }
 
@@ -729,20 +820,47 @@ export class SyncService {
     return { totalActual, totalApproved, hasUnapproved };
   }
 
-  private async cleanDatabase() {
-    console.log('[Sync] Cleaning up legacy duplicate records...');
+  /**
+   * Removes legacy duplicate projects whose `workguru_id` is a slash-containing
+   * projectNo rather than the numeric WorkGuru ID.
+   *
+   * Deletion is NO LONGER unconditional. A row is deleted only when WorkGuru has
+   * verified, in this same run, that the numeric ID belongs to the same project
+   * number and that the slash form is not a live identifier. Anything that cannot
+   * be proven is kept and logged.
+   */
+  private async cleanDatabase(remoteProjectIds: ReadonlySet<string>, remoteListComplete: boolean) {
+    console.log('[Sync] Checking for verified legacy duplicate projects...');
+
+    const permission = canRunLegacyCleanup({ remoteListComplete, remoteProjectIds });
+    if (!permission.allowed) {
+      console.log(`[Sync] Skipping legacy project cleanup: ${permission.reason}.`);
+      return;
+    }
+
     try {
-        // Delete projects where workguruId contains a slash (legacy projectNo format)
-        const deletedProjects = await db.delete(projects)
-            .where(sql`workguru_id LIKE '%/%'`)
-            .returning({ id: projects.id });
-        
-        if (deletedProjects.length > 0) {
-            console.log(`[Sync] Removed ${deletedProjects.length} legacy duplicate projects.`);
+        const rows = await db.select({
+            id: projects.id,
+            workguruId: projects.workguruId,
+            projectNumber: projects.projectNumber,
+        }).from(projects);
+
+        const plan = findVerifiedLegacyDuplicates(rows, remoteProjectIds);
+
+        if (plan.deleteIds.length === 0) {
+            if (plan.kept.length > 0) {
+                console.log(`[Sync] Kept ${plan.kept.length} slash-containing project ID(s): not verified as duplicates.`);
+            }
+            return;
         }
 
-        // Also clean orphaned tasks and time entries if necessary
-        // (Though cascade delete should handle it if defined, but our schema doesn't have it on all)
+        await this.requireLease();
+        await db.delete(projects).where(inArray(projects.id, plan.deleteIds));
+        console.log(`[Sync] Removed ${plan.deleteIds.length} verified legacy duplicate project(s).`);
+
+        if (plan.kept.length > 0) {
+            console.log(`[Sync] Kept ${plan.kept.length} slash-containing project ID(s): not verified as duplicates.`);
+        }
     } catch (error) {
         console.error('[Sync] Database cleanup failed:', error);
     }
@@ -753,8 +871,21 @@ export class SyncService {
    * Bypasses the queue and force-updates all calculated fields.
    */
   public async syncProjectById(workguruId: string) {
-    console.log(`[Sync] Manual sync requested for project ${workguruId}`);
-    return this.processProjectDetail(workguruId);
+    // Share the OPS-1 lease with full syncs, including financial action callers.
+    const outcome = await withSyncLock(
+      createPostgresSyncLock(), randomUUID(), SYNC_LOCK_TTL_MS,
+      async (guard) => {
+        this.leaseGuard = guard;
+        try {
+          await guard.assertHeld();
+          return await this.processProjectDetail(workguruId);
+        } finally {
+          this.leaseGuard = null;
+        }
+      }
+    );
+    if (!outcome.acquired) throw new Error('A sync is already in progress. Please wait for it to finish.');
+    return outcome.result!;
   }
 
   /**
@@ -906,32 +1037,58 @@ export class SyncService {
     let remotePOs: any[] = []; // We will always overwrite this from dedicated endpoint
     let remoteInvoices = remoteDetails.invoices || [];
 
+    // Completeness evidence. Orphan deletion is only allowed for a collection whose
+    // remote retrieval was verified complete in THIS run. A nested payload that is
+    // non-empty is treated as complete, matching the original behaviour; an empty
+    // or failed retrieval never authorises a delete.
+    let timesheetsVerified = remoteTimesheets.length > 0;
+    let invoicesVerified = remoteInvoices.length > 0;
+    let posVerified = false;
+
     if (!workguruId) {
-        console.warn(`[Sync] Cannot perform dedicated fetch for project ${localProjectId}: Missing WorkGuru ID.`);
+        console.warn(`[Sync] Cannot perform dedicated fetch for project ${localProjectId}: Missing WorkGuru ID. Financial orphan cleanup skipped.`);
+        timesheetsVerified = false;
+        invoicesVerified = false;
     } else {
         try {
             // ALWAYS fetch POs from dedicated endpoint to get true receivedDate
             const poRes = await this.client.getProjectPurchaseOrders(workguruId);
-            const allPOs = this.extractItems<any>(poRes, 'PurchaseOrder');
-            // LOCAL FILTER: API sometimes ignores projectId param if it's passed globally
-            remotePOs = allPOs.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
-            console.log(`[Sync] ✅ Fetched ${remotePOs.length} authoritative purchase orders for project ${workguruId}.`);
+            const poAssessment = assessCollection<any>(poRes, 'PurchaseOrder');
+            if (poAssessment.complete) {
+                // LOCAL FILTER: API sometimes ignores projectId param if it's passed globally
+                remotePOs = poAssessment.items.filter((p: any) => String(p.projectId || p.ProjectID) === String(workguruId));
+                posVerified = true;
+                console.log(`[Sync] ✅ Fetched ${remotePOs.length} authoritative purchase orders for project ${workguruId}.`);
+            } else {
+                console.error(`[Sync] ⚠️ Purchase order payload for project ${workguruId} not verified complete (${poAssessment.issue}${poAssessment.detail ? `: ${poAssessment.detail}` : ''}). Existing purchase orders will be preserved.`);
+            }
 
             // For Timesheets and Invoices, we fallback if nested list is empty OR we can always fetch them too for safety.
             // Given the discovery with POs, always fetching is safer for financial integrity.
             if (remoteTimesheets.length === 0) {
                 const tsRes = await this.client.getProjectTimeEntries(workguruId);
-                const allTs = this.extractItems<any>(tsRes, 'TimeSheet');
-                remoteTimesheets = allTs.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
+                const tsAssessment = assessCollection<any>(tsRes, 'TimeSheet', { requestedLimit: WORKGURU_PAGE_LIMIT });
+                if (tsAssessment.complete) {
+                    remoteTimesheets = tsAssessment.items.filter((t: any) => String(t.projectId || t.ProjectID) === String(workguruId));
+                    timesheetsVerified = true;
+                } else {
+                    console.error(`[Sync] ⚠️ Timesheet payload for project ${workguruId} not verified complete (${tsAssessment.issue}${tsAssessment.detail ? `: ${tsAssessment.detail}` : ''}). Existing timesheets will be preserved.`);
+                }
             }
             
             // 2. AUTHORITATIVE Invoice Fetch (ALWAYS fetch from dedicated endpoint)
             const invRes = await this.client.getProjectInvoices(workguruId);
-            const allInvs = this.extractItems<any>(invRes, 'Invoice');
-            remoteInvoices = allInvs.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
-            console.log(`[Sync] ✅ Fetched ${remoteInvoices.length} authoritative invoices for project ${workguruId}.`);
+            const invAssessment = assessCollection<any>(invRes, 'Invoice', { requestedLimit: WORKGURU_PAGE_LIMIT });
+            if (invAssessment.complete) {
+                remoteInvoices = invAssessment.items.filter((i: any) => String(i.projectId || i.ProjectID) === String(workguruId));
+                invoicesVerified = true;
+                console.log(`[Sync] ✅ Fetched ${remoteInvoices.length} authoritative invoices for project ${workguruId}.`);
+            } else {
+                console.error(`[Sync] ⚠️ Invoice payload for project ${workguruId} not verified complete (${invAssessment.issue}${invAssessment.detail ? `: ${invAssessment.detail}` : ''}). Existing invoices will be preserved.`);
+            }
         } catch (fallbackError: any) {
             console.error(`[Sync] ❌ Dedicated fetch FAILED for project ${workguruId}:`, fallbackError.message);
+            console.error(`[Sync] Financial orphan cleanup skipped for project ${localProjectId}: remote data unverified.`);
         }
     }
 
@@ -977,11 +1134,21 @@ export class SyncService {
             });
     }
 
-    // Delete orphans
-    const orphans = localTimesheets.filter(t => !timesheetIdsToKeep.has(t.workguruId));
-    if (orphans.length > 0) {
-        console.log(`[Sync] Removing ${orphans.length} deleted timesheets for project ${localProjectId}`);
-        await db.delete(timeEntries).where(inArray(timeEntries.id, orphans.map(o => o.id)));
+    // Delete orphans — only when the remote timesheet collection was verified complete
+    const orphanPlan = planOrphanCleanup({
+        local: localTimesheets,
+        verified: timesheetsVerified,
+        keepIds: timesheetIdsToKeep,
+        getWorkguruId: (entry) => entry.workguruId,
+        reason: 'timesheet payload not verified complete',
+    });
+
+    if (orphanPlan.delete.length > 0) {
+        await this.requireLease();
+        console.log(`[Sync] Removing ${orphanPlan.delete.length} deleted timesheets for project ${localProjectId}`);
+        await db.delete(timeEntries).where(inArray(timeEntries.id, orphanPlan.delete.map(o => o.id)));
+    } else if (orphanPlan.skipped) {
+        console.warn(`[Sync] Preserved ${localTimesheets.length} local timesheets for project ${localProjectId}: ${orphanPlan.reason}.`);
     }
 
     // 2. Sync Purchase Orders
@@ -1021,9 +1188,19 @@ export class SyncService {
     }
 
     const localPOs = await db.select().from(purchaseOrders).where(eq(purchaseOrders.projectId, localProjectId));
-    const poOrphans = localPOs.filter(p => !poIdsToKeep.has(p.workguruId));
-    if (poOrphans.length > 0) {
-        await db.delete(purchaseOrders).where(inArray(purchaseOrders.id, poOrphans.map(o => o.id)));
+    const poOrphanPlan = planOrphanCleanup({
+        local: localPOs,
+        verified: posVerified,
+        keepIds: poIdsToKeep,
+        getWorkguruId: (po) => po.workguruId,
+        reason: 'purchase order payload not verified complete',
+    });
+
+    if (poOrphanPlan.delete.length > 0) {
+        await this.requireLease();
+        await db.delete(purchaseOrders).where(inArray(purchaseOrders.id, poOrphanPlan.delete.map(o => o.id)));
+    } else if (poOrphanPlan.skipped) {
+        console.warn(`[Sync] Preserved ${localPOs.length} local purchase orders for project ${localProjectId}: ${poOrphanPlan.reason}.`);
     }
 
     // 3. Sync Invoices
@@ -1058,9 +1235,19 @@ export class SyncService {
     }
 
     const localInvoices = await db.select().from(invoices).where(eq(invoices.projectId, localProjectId));
-    const invOrphans = localInvoices.filter(i => !invIdsToKeep.has(i.workguruId));
-    if (invOrphans.length > 0) {
-        await db.delete(invoices).where(inArray(invoices.id, invOrphans.map(o => o.id)));
+    const invOrphanPlan = planOrphanCleanup({
+        local: localInvoices,
+        verified: invoicesVerified,
+        keepIds: invIdsToKeep,
+        getWorkguruId: (invoice) => invoice.workguruId,
+        reason: 'invoice payload not verified complete',
+    });
+
+    if (invOrphanPlan.delete.length > 0) {
+        await this.requireLease();
+        await db.delete(invoices).where(inArray(invoices.id, invOrphanPlan.delete.map(o => o.id)));
+    } else if (invOrphanPlan.skipped) {
+        console.warn(`[Sync] Preserved ${localInvoices.length} local invoices for project ${localProjectId}: ${invOrphanPlan.reason}.`);
     }
   }
 }

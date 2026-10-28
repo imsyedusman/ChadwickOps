@@ -1,4 +1,6 @@
 'use server';
+
+import { getAuthorizedSession } from '@/lib/auth-helpers';
 // Trigger re-compilation
 
 import { db } from '@/db';
@@ -22,7 +24,12 @@ export async function triggerFullSync() {
 async function handleSync() {
   const session = await validateSession();
   if (!session) {
-    return { success: false, error: 'Unauthorized' };
+    return { success: false as const, error: 'Unauthorized' };
+  }
+
+  // Sync mutates production data, so it requires an explicit admin action.
+  if (!hasRole(session, 'admin')) {
+    return { success: false as const, error: 'Unauthorized. Administrator role required to run a sync.' };
   }
 
   const mode = 'FULL';
@@ -41,17 +48,22 @@ async function handleSync() {
 
     const syncService = new SyncService(decryptedKey, decryptedSecret);
     const result = await syncService.runSync(mode);
+
+    if (!result.success) {
+      // e.g. another sync already holds the lease
+      return { success: false as const, error: result.error };
+    }
     
     revalidatePath('/');
-    return { success: true, mode, stats: result.stats };
+    return { success: true as const, mode, stats: result.stats };
   } catch (error) {
     console.error(`WorkGuru Sync error:`, error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false as const, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 export async function testApiConnection(apiKey: string, apiSecret: string) {
-  const session = await validateSession();
+  const session = await getAuthorizedSession('administration');
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }
@@ -127,7 +139,7 @@ export async function updateApiCredentials(apiKey: string, apiSecret: string) {
 }
 
 export async function initializeSystem() {
-  const session = await validateSession();
+  const session = await getAuthorizedSession('administration');
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }

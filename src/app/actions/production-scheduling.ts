@@ -3,7 +3,8 @@
 import { db } from "@/db";
 import { projects, tasks, projectStageHours, productionSchedule, projectSuppliers, timeEntries, staffEfficiency, workerAssignments, systemConfig, staffAbsences } from "@/db/schema";
 import { eq, and, inArray, notInArray, not, like, isNotNull, sql, lte, gte } from "drizzle-orm";
-import { validateSession, hasRole } from "@/lib/auth-helpers";
+import { validateSession, hasRole, getAuthorizedSession } from "@/lib/auth-helpers";
+import { hasPermission } from "@/lib/permissions";
 import { getStageCapacityPerWeek, getWeeklyCapacityBreakdown } from "@/lib/stage-capacity";
 import { format, parseISO, addDays } from "date-fns";
 import { generateAutoSchedule, getSchedulingSummary, type AutoScheduleResult, type SchedulingSummary } from "@/lib/auto-scheduler";
@@ -19,9 +20,6 @@ export type InsightItem = {
 }
 
 async function checkAuth() {
-  if (process.env.BYPASS_AUTH_FOR_TEST === "true") {
-    return { user: { id: "1", role: "admin", roles: ["admin"] }, expires: new Date().toISOString() } as any;
-  }
   const session = await validateSession();
   if (!session) {
     throw new Error("Unauthorized.");
@@ -397,7 +395,7 @@ export async function saveProjectStageHours(projectId: number, stageHours: Recor
 }
 
 export async function getProjectedLabourCost(projectId: number) {
-  await checkAuth();
+  if (!await getAuthorizedSession("finance")) return { success: false, error: "Unauthorized" };
 
   try {
     const stageHoursRes = await getProjectStageHours(projectId);
@@ -606,7 +604,7 @@ export async function getBulkLabourCosts(projectIds: number[]) {
 }
 
 export async function getWorkerSuggestionsForProject(projectId: number, stageWindows?: Record<string, { start: string, end: string }>) {
-  await checkAuth();
+  const session = await checkAuth();
 
   try {
     const staff = await db.query.staffEfficiency.findMany({
@@ -716,7 +714,9 @@ export async function getWorkerSuggestionsForProject(projectId: number, stageWin
         });
       }
 
-      result[stage.name] = stageWorkers;
+      result[stage.name] = hasPermission(session, "finance") ? stageWorkers : stageWorkers.map(worker => ({
+        ...worker, implied_hourly_rate: null, cost_effectiveness_score: null,
+      }));
     });
 
     return {
@@ -1369,7 +1369,7 @@ export async function undoAutoSchedule(): Promise<{ success: true; data: { clear
 }
 
 export async function getWorkerDetail(staffId: number) {
-  await checkAuth();
+  const session = await checkAuth();
 
   try {
     const staff = await db.query.staffEfficiency.findFirst({
@@ -1424,7 +1424,7 @@ export async function getWorkerDetail(staffId: number) {
     return {
       success: true,
       data: {
-        staff,
+        staff: hasPermission(session, "finance") ? staff : { ...staff, hourlyRate: null },
         assignments,
         absences,
         capacityBreakdown

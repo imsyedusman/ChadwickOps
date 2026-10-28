@@ -134,7 +134,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.isActive = false; // User deleted
           }
         } catch (e) {
-          console.error("[auth] Error fetching user in jwt callback:", e);
+          token.isActive = false; // Fail closed when current account state cannot be verified.
+          console.error("[auth] Unable to verify current account state");
         }
       }
 
