@@ -138,8 +138,13 @@ function LoginForm() {
         }
       } else {
         // Successful login
-        router.push("/");
-        router.refresh();
+        if (searchParams.get("sso") === "1") {
+          // API redirects must be top-level navigations, not App Router RSC fetches.
+          window.location.assign("/api/sso/resume");
+        } else {
+          router.push("/");
+          router.refresh();
+        }
       }
     } catch (err) {
       console.error("[Login] Exception:", err);

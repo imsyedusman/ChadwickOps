@@ -63,8 +63,15 @@ export function Header({ user, lastUpdatedText }: HeaderProps) {
   };
 
   const handleLogout = async () => {
-    toast.loading("Signing out...");
-    await signOut({ callbackUrl: "/login" });
+    const notification = toast.loading("Signing out...");
+    try {
+      await signOut({ redirect: false });
+      const check = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!check.ok || (await check.json())?.user) throw new Error("Sign-out unconfirmed");
+      window.location.assign("/api/sso/logout?from=ops");
+    } catch {
+      toast.error("Could not confirm ChadwickOps sign out. Retry before leaving; Production may still be signed in.", { id: notification });
+    }
   };
 
   return (
