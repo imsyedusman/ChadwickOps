@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   Clock3,
   MapPin,
@@ -12,12 +11,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Tooltip } from "@/components/ui/Tooltip";
 import {
   evaluateTimingReview,
-  formatSydneyDateTime,
   hasGenuineAttendanceLocation,
   type AttendanceFlag,
+  type AttendanceFlagType,
 } from "@/lib/attendance-logic";
 
 type DateLike = Date | string | null;
@@ -44,82 +42,71 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const flagStyles: Record<string, { className: string; icon: typeof AlertTriangle; label: string }> = {
+const flagStyles: Record<AttendanceFlagType, { className: string; icon: typeof AlertTriangle; label: string }> = {
   OVERLAPPING: {
     className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800",
     icon: AlertCircle,
-    label: "Overlap",
+    label: "Overlaps another entry",
   },
   INVALID_DURATION: {
     className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800",
     icon: AlertCircle,
-    label: "Invalid duration",
+    label: "Duration looks wrong",
   },
   MISSING_TIMES: {
     className: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
     icon: Clock,
-    label: "Missing time",
+    label: "Times missing",
   },
   LONG_SHIFT: {
     className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800",
     icon: Timer,
-    label: "Long shift",
+    label: "Over 12 hours",
   },
 };
 
-export function ReviewFlagPills({
-  flags,
-  timingNeedsReview = false,
-}: {
-  flags: AttendanceFlag[];
-  timingNeedsReview?: boolean;
-}) {
-  if ((!flags || flags.length === 0) && !timingNeedsReview) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-        <CheckCircle2 className="h-3 w-3 text-emerald-500/80" /> Clean
-      </span>
-    );
-  }
+const fallbackFlagStyle = {
+  className:
+    "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
+  icon: AlertTriangle,
+  label: "Check this entry",
+};
+
+export function ReviewFlags({ flags }: { flags: AttendanceFlag[] }) {
+  if (!flags || flags.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {timingNeedsReview && (
-        <Tooltip content="Creation time is more than the review threshold before the start or after the finish.">
-          <span className="inline-flex cursor-help items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-            Timing
-          </span>
-        </Tooltip>
-      )}
+    <>
       {flags.map((flag, index) => {
         const style = flagStyles[flag.type] ?? {
-          className:
-            "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
-          icon: AlertTriangle,
+          ...fallbackFlagStyle,
           label: flag.type.replace(/_/g, " ").toLowerCase(),
         };
         const Icon = style.icon;
 
         return (
-          <Tooltip key={`${flag.type}-${index}`} content={flag.message}>
-            <span
-              className={cn(
-                "inline-flex cursor-help items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]",
-                style.className
-              )}
-            >
-              <Icon className="h-2.5 w-2.5 shrink-0" />
-              {style.label}
-            </span>
-          </Tooltip>
+          <span
+            key={`${flag.type}-${index}`}
+            className={cn(
+              "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
+              style.className
+            )}
+          >
+            <Icon className="h-2.5 w-2.5 shrink-0" />
+            {style.label}
+          </span>
         );
       })}
-    </div>
+    </>
   );
 }
 
-export function TimingBadge({
+/**
+ * States when the timesheet was added, relative to the task's entered start.
+ * The exact difference is always visible; the amber accent only appears when
+ * the configurable review rule is met, never for every delayed entry.
+ */
+export function TimingNote({
   startTime,
   finishTime,
   creationTime,
@@ -149,30 +136,45 @@ export function TimingBadge({
           : "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
 
   return (
-    <Tooltip
-      content={
-        <>
-          {timing.detail}
-          <span className="mt-1 block text-slate-300">
-            Created {formatSydneyDateTime(creationTime)}
-          </span>
-        </>
-      }
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
+        className
+      )}
     >
-      <span
-        className={cn(
-          "inline-flex cursor-help items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
-          className
-        )}
-      >
-        {timing.needsReview ? (
-          <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-        ) : (
-          <Clock3 className="h-2.5 w-2.5 shrink-0" />
-        )}
-        {timing.label}
-      </span>
-    </Tooltip>
+      {timing.needsReview ? (
+        <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+      ) : (
+        <Clock3 className="h-2.5 w-2.5 shrink-0" />
+      )}
+      {timing.label}
+    </span>
+  );
+}
+
+export function ReviewCell({
+  startTime,
+  finishTime,
+  creationTime,
+  thresholdMinutes,
+  flags,
+}: {
+  startTime: DateLike;
+  finishTime: DateLike;
+  creationTime: DateLike;
+  thresholdMinutes: number;
+  flags: AttendanceFlag[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <TimingNote
+        startTime={startTime}
+        finishTime={finishTime}
+        creationTime={creationTime}
+        thresholdMinutes={thresholdMinutes}
+      />
+      <ReviewFlags flags={flags} />
+    </div>
   );
 }
 
@@ -185,21 +187,20 @@ export function LocationBadge({
 }) {
   if (latitude !== null && longitude !== null && hasGenuineAttendanceLocation(latitude, longitude)) {
     return (
-      <Tooltip content={`${latitude.toFixed(5)}, ${longitude.toFixed(5)} — returned by WorkGuru.`}>
-        <span className="inline-flex cursor-help items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-          <MapPin className="h-2.5 w-2.5 shrink-0" />
-          GPS
-        </span>
-      </Tooltip>
+      <span
+        className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+        title={`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`}
+      >
+        <MapPin className="h-2.5 w-2.5 shrink-0" />
+        GPS
+      </span>
     );
   }
 
   return (
-    <Tooltip content="WorkGuru returned no GPS coordinates for this entry. This is not a review flag.">
-      <span className="inline-flex cursor-help items-center gap-1 rounded border border-transparent px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-        <MapPinOff className="h-2.5 w-2.5 shrink-0" />
-        No GPS
-      </span>
-    </Tooltip>
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+      <MapPinOff className="h-2.5 w-2.5 shrink-0" />
+      Not recorded
+    </span>
   );
 }

@@ -18,6 +18,7 @@ import { AttendanceTable, type AttendanceRecordRow } from "./_components/Attenda
 import {
   formatSydneyDateTime,
   getTimingThresholdMinutes,
+  normalizeAttendancePageSize,
   type AttendanceFlag,
 } from "@/lib/attendance-logic";
 import {
@@ -103,7 +104,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
   const baseWhere = buildAttendanceBaseWhere(filters);
 
   const page = Math.max(1, parseInt(params.page || "1", 10));
-  const pageSize = Math.max(10, Math.min(100, parseInt(params.pageSize || "25", 10)));
+  const pageSize = normalizeAttendancePageSize(params.pageSize);
 
   let latestSync: typeof attendanceSyncLogs.$inferSelect | null = null;
   try {
@@ -243,7 +244,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             Time &amp; Attendance
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
-            Staff timesheets, hours and timing checks.
+            Timesheets, hours worked and entries that need a second look.
           </p>
         </div>
 
@@ -330,7 +331,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
           <div className="mt-1.5 flex flex-wrap gap-1">
             {timingCount > 0 && (
               <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-                {timingCount} timing
+                {timingCount} added time
               </span>
             )}
             {overlappingCount > 0 && (
@@ -350,7 +351,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             )}
             {longShiftCount > 0 && (
               <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:border-purple-800 dark:bg-purple-950/60 dark:text-purple-400">
-                {longShiftCount} long
+                {longShiftCount} over 12h
               </span>
             )}
             {flaggedCount === 0 && (
@@ -359,7 +360,9 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
               </span>
             )}
           </div>
-          <p className="mt-1 text-[10px] text-slate-400">Date, employee, project and status only</p>
+          <p className="mt-1 text-[10px] text-slate-400">
+            All matching records · review filter not applied
+          </p>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CalendarDays, Clock3, MapPin, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock3, Layers, MapPin } from "lucide-react";
 
 import { getEmployeeAttendanceDetail } from "@/app/actions/attendance";
 import type { AttendanceDetailRecord } from "@/lib/attendance-types";
@@ -19,12 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  LocationBadge,
-  ReviewFlagPills,
-  StatusBadge,
-  TimingBadge,
-} from "./AttendanceBadges";
+import { LocationBadge, ReviewCell, StatusBadge } from "./AttendanceBadges";
 
 export interface AttendanceSheetFilters {
   period: string;
@@ -70,6 +65,33 @@ function SummaryTile({
       </div>
       <div className="mt-1 text-lg font-bold tabular-nums text-foreground">{value}</div>
       <p className="text-[10px] text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+function TimeField({
+  label,
+  value,
+  muted = false,
+  className,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={`truncate text-[11px] font-medium tabular-nums ${
+          muted ? "text-muted-foreground" : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -124,7 +146,6 @@ function EmployeeSheetBody({
 
   const summary = useMemo(() => {
     let totalHours = 0;
-    let timingReviews = 0;
     let reviewCount = 0;
     let gpsCount = 0;
 
@@ -145,7 +166,6 @@ function EmployeeSheetBody({
         timingThresholdMinutes
       );
 
-      if (timing.needsReview) timingReviews += 1;
       if (record.hasFlags || timing.needsReview) reviewCount += 1;
       if (hasGenuineAttendanceLocation(record.latitude, record.longitude)) gpsCount += 1;
 
@@ -164,7 +184,6 @@ function EmployeeSheetBody({
 
     return {
       totalHours,
-      timingReviews,
       reviewCount,
       gpsCount,
       days: Array.from(days.values()),
@@ -188,7 +207,7 @@ function EmployeeSheetBody({
           {[0, 1, 2].map((item) => (
             <div
               key={item}
-              className="h-28 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800"
+              className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800"
             />
           ))}
         </div>
@@ -232,16 +251,16 @@ function EmployeeSheetBody({
           icon={<CalendarDays className="h-3.5 w-3.5" />}
         />
         <SummaryTile
-          label="Timing flags"
-          value={String(summary.timingReviews)}
-          hint="Outside threshold"
-          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          label="Entries"
+          value={String(records.length)}
+          hint="In this view"
+          icon={<Layers className="h-3.5 w-3.5" />}
         />
         <SummaryTile
           label="Need review"
           value={String(summary.reviewCount)}
-          hint="Flags or timing"
-          icon={<Users className="h-3.5 w-3.5" />}
+          hint="Checks or added time"
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
         />
       </div>
 
@@ -250,9 +269,7 @@ function EmployeeSheetBody({
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Daily breakdown
           </h3>
-          <span className="text-[10px] text-muted-foreground">
-            Threshold {timingThresholdMinutes} min
-          </span>
+          <span className="text-[10px] text-muted-foreground">Sydney time</span>
         </div>
         <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/70 dark:divide-slate-800 dark:border-slate-800">
           {summary.days.map((day) => (
@@ -283,7 +300,7 @@ function EmployeeSheetBody({
             Timesheets
           </h3>
           <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <MapPin className="h-3 w-3" /> {summary.gpsCount} of {records.length} with GPS
+            <MapPin className="h-3 w-3" /> {summary.gpsCount} of {records.length} have a location
           </span>
         </div>
 
@@ -307,17 +324,14 @@ function EmployeeSheetBody({
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-foreground">
                       {formatSydneyDateOnly(record.date, "EEE d MMM yyyy")}
-                      <span className="ml-2 font-normal tabular-nums text-muted-foreground">
-                        {formatSydneyTime(record.startTime)} – {formatSydneyTime(record.finishTime)}
-                      </span>
                     </p>
                     <p className="mt-0.5 truncate text-xs font-medium text-foreground">
                       {record.projectNumber ? `${record.projectNumber} · ` : ""}
                       {record.projectName || "No project name"}
                     </p>
                     <p className="truncate text-[11px] text-muted-foreground">
-                      Task: {record.taskName || "—"}
-                      {record.workguruTaskId ? ` (WG task ${record.workguruTaskId})` : ""}
+                      {record.taskName || "No task name"}
+                      {record.workguruTaskId ? ` · Task ${record.workguruTaskId}` : ""}
                     </p>
                   </div>
                   <div className="text-right">
@@ -326,14 +340,35 @@ function EmployeeSheetBody({
                   </div>
                 </div>
 
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg bg-slate-50/70 px-2.5 py-2 dark:bg-slate-800/40">
+                  <TimeField
+                    label="Task start"
+                    value={record.startTime ? formatSydneyTime(record.startTime) : "Not set"}
+                    muted={!record.startTime}
+                  />
+                  <TimeField
+                    label="Task finish"
+                    value={record.finishTime ? formatSydneyTime(record.finishTime) : "Not set"}
+                    muted={!record.finishTime}
+                  />
+                  <TimeField
+                    className="col-span-2"
+                    label="Timesheet added"
+                    value={
+                      record.creationTime ? formatSydneyDateTime(record.creationTime) : "Not recorded"
+                    }
+                    muted={!record.creationTime}
+                  />
+                </div>
+
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <TimingBadge
+                  <ReviewCell
                     startTime={record.startTime}
                     finishTime={record.finishTime}
                     creationTime={record.creationTime}
                     thresholdMinutes={timingThresholdMinutes}
+                    flags={record.flags}
                   />
-                  <ReviewFlagPills flags={record.flags} timingNeedsReview={timing.needsReview} />
                   <LocationBadge latitude={record.latitude} longitude={record.longitude} />
                 </div>
 
@@ -346,8 +381,8 @@ function EmployeeSheetBody({
                 )}
 
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Created {formatSydneyDateTime(record.creationTime)} · Updated{" "}
-                  {formatSydneyDateTime(record.lastModifiedTime)} · WG #{record.workguruId}
+                  Last updated {formatSydneyDateTime(record.lastModifiedTime)} · WorkGuru #
+                  {record.workguruId}
                 </p>
               </article>
             );
@@ -394,7 +429,7 @@ export function AttendanceEmployeeSheet({
             {employee}
           </SheetTitle>
           <SheetDescription className="text-xs">
-            Timesheets matching the date, project, status and review filters.
+            Every timesheet for this employee that matches the current date range and filters.
           </SheetDescription>
         </SheetHeader>
 

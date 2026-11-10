@@ -35,6 +35,11 @@ function toDateString(date: Date | undefined): string {
   return date ? format(date, "yyyy-MM-dd") : "";
 }
 
+/** Drops the "(9 Nov – 15 Nov 2026)" suffix so the label can sit on its own line. */
+function stripRangeSuffix(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
 export function RangeDatePicker({
   period,
   from,
@@ -75,6 +80,21 @@ export function RangeDatePicker({
     setOpen(false);
   };
 
+  // Always resolve the visible range, so a preset never shows a blank picker.
+  const resolvedRange =
+    from && to
+      ? { from, to }
+      : period === "custom"
+        ? getAttendancePresetRange("this-week")
+        : getAttendancePresetRange(period);
+  const fromDate = parseDateString(resolvedRange.from);
+  const toDate = parseDateString(resolvedRange.to);
+  const rangeText =
+    fromDate && toDate
+      ? `${format(fromDate, "d MMM yyyy")} – ${format(toDate, "d MMM yyyy")}`
+      : "All dates";
+  const labelText = period === "custom" ? "Custom range" : stripRangeSuffix(activeLabel) || "This Week";
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -82,14 +102,19 @@ export function RangeDatePicker({
           type="button"
           variant="outline"
           className={cn(
-            "h-9 max-w-[260px] justify-start gap-2 px-3 text-xs font-medium shadow-xs",
+            "h-auto min-h-9 w-[240px] justify-start gap-2 px-3 py-1.5 text-left text-xs font-medium shadow-xs",
             className
           )}
-          aria-label="Date range"
+          aria-label={`Date range: ${labelText}, ${rangeText}`}
         >
-          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{activeLabel}</span>
-          <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+          <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate font-semibold">{labelText}</span>
+            <span className="truncate text-[10px] font-normal tabular-nums text-muted-foreground">
+              {rangeText}
+            </span>
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -127,12 +152,12 @@ export function RangeDatePicker({
               selected={draft}
               onSelect={setDraft}
               numberOfMonths={1}
-              className="p-3"
+              className="w-[260px] p-3"
             />
             <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
-              <span className="text-[11px] text-muted-foreground">
-                {draft?.from ? format(draft.from, "d MMM") : "Start"} –{" "}
-                {draft?.to ? format(draft.to, "d MMM yyyy") : "End"}
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {draft?.from ? format(draft.from, "d MMM yyyy") : "Start date"} –{" "}
+                {draft?.to ? format(draft.to, "d MMM yyyy") : "End date"}
               </span>
               <Button type="button" size="sm" className="h-7 px-2.5 text-[11px]" disabled={!canApply} onClick={applyCustom}>
                 Apply

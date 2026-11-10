@@ -436,8 +436,8 @@ export function evaluateTimingReview(
       differenceMinutes: null,
       thresholdMinutes: threshold,
       needsReview: false,
-      label: 'No creation time',
-      detail: 'WorkGuru did not return a creation time for this entry.',
+      label: 'No added time recorded',
+      detail: 'WorkGuru did not return a time for when this entry was added.',
     };
   }
 
@@ -447,8 +447,8 @@ export function evaluateTimingReview(
       differenceMinutes: null,
       thresholdMinutes: threshold,
       needsReview: false,
-      label: 'No times to compare',
-      detail: 'A start or finish time is needed to compare with the creation time.',
+      label: 'No task times entered',
+      detail: 'A task start or finish time is needed to compare with when this entry was added.',
     };
   }
 
@@ -463,8 +463,8 @@ export function evaluateTimingReview(
       differenceMinutes: difference,
       thresholdMinutes: threshold,
       needsReview: difference > threshold,
-      label: `In advance · ${formatTimingMinutes(difference)}`,
-      detail: `Created ${formatTimingMinutes(difference)} before the task started (threshold ${formatTimingMinutes(threshold)}).`,
+      label: `Added ${formatTimingMinutes(difference)} before start`,
+      detail: `Added to WorkGuru ${formatTimingMinutes(difference)} before the entered task start.`,
     };
   }
 
@@ -475,8 +475,8 @@ export function evaluateTimingReview(
       differenceMinutes: difference,
       thresholdMinutes: threshold,
       needsReview: difference > threshold,
-      label: `After task · ${formatTimingMinutes(difference)}`,
-      detail: `Created ${formatTimingMinutes(difference)} after the task finished (threshold ${formatTimingMinutes(threshold)}).`,
+      label: `Added ${formatTimingMinutes(difference)} after finish`,
+      detail: `Added to WorkGuru ${formatTimingMinutes(difference)} after the entered task finish.`,
     };
   }
 
@@ -487,8 +487,8 @@ export function evaluateTimingReview(
       differenceMinutes: difference,
       thresholdMinutes: threshold,
       needsReview: false,
-      label: 'During task',
-      detail: `Created ${formatTimingMinutes(difference)} before the task finished, while it was open.`,
+      label: `Added during task · ${formatTimingMinutes(difference)} before finish`,
+      detail: `Added to WorkGuru ${formatTimingMinutes(difference)} before the entered task finish, while the task was open.`,
     };
   }
 
@@ -498,8 +498,8 @@ export function evaluateTimingReview(
     differenceMinutes: difference,
     thresholdMinutes: threshold,
     needsReview: false,
-    label: 'During task',
-    detail: `Created ${formatTimingMinutes(difference)} after the task started, while it was open.`,
+    label: `Added during task · ${formatTimingMinutes(difference)} after start`,
+    detail: `Added to WorkGuru ${formatTimingMinutes(difference)} after the entered task start, while the task was open.`,
   };
 }
 
@@ -692,12 +692,24 @@ export function getAttendancePeriodBounds(
 export const ATTENDANCE_FLAG_PRESETS = [
   { label: 'All records', value: 'all' },
   { label: 'Needs review', value: 'needs-review' },
-  { label: 'Timing review', value: 'timing-review' },
+  { label: 'Added early or late', value: 'timing-review' },
   { label: 'Overlapping', value: 'overlapping' },
   { label: 'Missing times', value: 'missing-times' },
   { label: 'Invalid duration', value: 'invalid-duration' },
-  { label: 'Long shift (>12h)', value: 'long-shift' },
+  { label: 'Over 12 hours', value: 'long-shift' },
 ] as const;
+
+export const ATTENDANCE_PAGE_SIZES = [25, 50, 100, 200] as const;
+
+export type AttendancePageSize = (typeof ATTENDANCE_PAGE_SIZES)[number];
+
+/** Only the sizes offered in the table footer are accepted from the URL. */
+export function normalizeAttendancePageSize(value?: string | null): AttendancePageSize {
+  const parsed = Number(value);
+  return (ATTENDANCE_PAGE_SIZES as readonly number[]).includes(parsed)
+    ? (parsed as AttendancePageSize)
+    : 25;
+}
 
 export type AttendanceFlagSlug = (typeof ATTENDANCE_FLAG_PRESETS)[number]['value'];
 
@@ -828,7 +840,7 @@ export function evaluateAttendanceFlags(
       entryFlags.push({
         type: 'LONG_SHIFT',
         severity: 'warning',
-        message: `Unusually long shift: ${entry.durationHours.toFixed(2)} hrs (threshold: 12 hrs)`,
+        message: `Entry is longer than 12 hours: ${entry.durationHours.toFixed(2)} hrs`,
       });
     }
 

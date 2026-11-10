@@ -353,6 +353,40 @@ test('evaluateTimingReview classifies advance, during and after without treating
   assert.strictEqual(noTimes.status, 'unknown');
 });
 
+test('timing labels state the exact difference in plain language without threshold wording', () => {
+  const start = parseWorkGuruWallClockDate('2026-11-10', '07:00:00')!;
+  const finish = parseWorkGuruWallClockDate('2026-11-10', '15:00:00')!;
+  const at = (offsetMinutes: number) => new Date(start.getTime() + offsetMinutes * 60000);
+
+  const before = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(-45) },
+    30
+  );
+  assert.strictEqual(before.label, 'Added 45 min before start');
+
+  const during = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(60) },
+    30
+  );
+  assert.strictEqual(during.label, 'Added during task · 1h after start');
+
+  const afterSoon = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(8 * 60 + 10) },
+    30
+  );
+  assert.strictEqual(afterSoon.label, 'Added 10 min after finish');
+
+  const afterLate = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(8 * 60 + 90) },
+    30
+  );
+  assert.strictEqual(afterLate.label, 'Added 1h 30m after finish');
+
+  for (const timing of [before, during, afterSoon, afterLate]) {
+    assert.ok(!/threshold|shift/i.test(`${timing.label} ${timing.detail}`));
+  }
+});
+
 test('getAttendancePresetRange returns the Sydney Monday-Sunday week', () => {
   const ref = new Date('2026-11-10T22:00:00.000Z');
   assert.deepStrictEqual(getAttendancePresetRange('this-week', ref), {
