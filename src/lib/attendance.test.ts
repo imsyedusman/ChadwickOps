@@ -4,6 +4,8 @@ import {
   parseWorkGuruUtcDate,
   parseWorkGuruWallClockDate,
   evaluateAttendanceFlags,
+  extractEmployeeName,
+  extractEmployeeId,
   SYDNEY_TZ,
 } from './attendance-logic';
 import { toZonedTime } from 'date-fns-tz';
@@ -187,4 +189,32 @@ test('evaluateAttendanceFlags flags OVERLAPPING shifts for same employee without
   assert.ok(job1Flags && job1Flags.some((f) => f.type === 'OVERLAPPING' && f.message.includes('job-2')));
   assert.ok(job2Flags && job2Flags.some((f) => f.type === 'OVERLAPPING' && f.message.includes('job-1')));
   assert.ok(frankFlags && !frankFlags.some((f) => f.type === 'OVERLAPPING'));
+});
+
+test('extractEmployeeName safely handles object payload (ALEX ALVARADO)', () => {
+  const remote = {
+    userId: 18454,
+    user: {
+      tenantId: 2309,
+      name: 'ALEX',
+      surname: 'ALVARADO',
+      fullName: 'ALEX ALVARADO',
+      userName: 'alexalvapsn@hotmail.com',
+    },
+  };
+
+  const name = extractEmployeeName(remote);
+  const id = extractEmployeeId(remote);
+
+  assert.strictEqual(name, 'ALEX ALVARADO');
+  assert.strictEqual(id, '18454');
+});
+
+test('extractEmployeeName safely handles string and fallback shapes', () => {
+  assert.strictEqual(extractEmployeeName({ user: 'John Smith' }), 'John Smith');
+  assert.strictEqual(extractEmployeeName({ userName: 'jane.doe@example.com' }), 'jane.doe@example.com');
+  assert.strictEqual(extractEmployeeName({ staffName: 'Bob Builder' }), 'Bob Builder');
+  assert.strictEqual(extractEmployeeName({ user: { name: 'Peter', surname: 'Hong' } }), 'Peter Hong');
+  assert.strictEqual(extractEmployeeName(null), 'Unassigned Staff');
+  assert.strictEqual(extractEmployeeName({}), 'Unassigned Staff');
 });

@@ -14,6 +14,8 @@ import {
   parseWorkGuruUtcDate,
   parseWorkGuruWallClockDate,
   evaluateAttendanceFlags,
+  extractEmployeeName,
+  extractEmployeeId,
 } from './attendance-logic';
 
 export {
@@ -24,6 +26,8 @@ export {
   parseWorkGuruUtcDate,
   parseWorkGuruWallClockDate,
   evaluateAttendanceFlags,
+  extractEmployeeName,
+  extractEmployeeId,
 };
 
 export const ATTENDANCE_SYNC_LOCK_KEY = 'SYNC_LOCK:ATTENDANCE';
@@ -233,18 +237,47 @@ export class AttendanceSyncService {
       const parsedEntries: ParsedTimesheetEntry[] = [];
 
       for (const [id, remote] of uniqueRemoteMap.entries()) {
-        const remoteProjectId = (remote.projectId || remote.ProjectId || remote.ProjectID)?.toString();
-        const remoteTaskId = (remote.taskId || remote.TaskId || remote.TaskID)?.toString();
+        const rObj = remote as any;
+        const projectObj = rObj.project || rObj.Project;
+        const remoteProjectId = (
+          remote.projectId ||
+          remote.ProjectId ||
+          remote.ProjectID ||
+          projectObj?.id ||
+          projectObj?.projectId
+        )?.toString();
+
+        const taskObj = rObj.task || rObj.Task;
+        const remoteTaskId = (
+          remote.taskId ||
+          remote.TaskId ||
+          remote.TaskID ||
+          taskObj?.id ||
+          taskObj?.taskId
+        )?.toString();
 
         // Project Resolution
         let localProject = remoteProjectId ? projectByWgId.get(remoteProjectId) : undefined;
-        const projectNumCandidate = (remote.projectNo || remote.ProjectNo || remote.projectNumber || remote.ProjectNumber)?.toString().trim();
+        const projectNumCandidate = (
+          remote.projectNo ||
+          remote.ProjectNo ||
+          remote.projectNumber ||
+          remote.ProjectNumber ||
+          projectObj?.projectNo ||
+          projectObj?.projectNumber
+        )?.toString().trim();
         if (!localProject && projectNumCandidate) {
           localProject = projectByNumber.get(projectNumCandidate.toLowerCase());
         }
 
         // Task Resolution
         const localTask = remoteTaskId ? taskByWgId.get(remoteTaskId) : undefined;
+        const taskNameCandidate = (
+          remote.taskName ||
+          remote.TaskName ||
+          taskObj?.name ||
+          taskObj?.taskName
+        )?.toString().trim();
 
         // Date and Time Parsing
         const rawDate = remote.date || remote.Date;
@@ -272,17 +305,8 @@ export class AttendanceSyncService {
           remote.lastModificationTime || remote.LastModificationTime || remote.lastModifierTime || remote.creationTime
         );
 
-        const employeeName = (
-          remote.user ||
-          remote.User ||
-          remote.userName ||
-          remote.UserName ||
-          remote.staffName ||
-          remote.StaffName ||
-          'Unassigned Staff'
-        ).trim();
-
-        const employeeId = (remote.userId || remote.UserId)?.toString() || null;
+        const employeeName = extractEmployeeName(remote);
+        const employeeId = extractEmployeeId(remote);
 
         parsedEntries.push({
           workguruId: id,
@@ -291,10 +315,10 @@ export class AttendanceSyncService {
           projectId: localProject?.id ?? null,
           workguruProjectId: remoteProjectId || null,
           projectNumber: localProject?.projectNumber || projectNumCandidate || null,
-          projectName: localProject?.name || remote.projectName || remote.ProjectName || null,
+          projectName: localProject?.name || remote.projectName || remote.ProjectName || projectObj?.name || projectObj?.projectName || null,
           taskId: localTask?.id ?? null,
           workguruTaskId: remoteTaskId || null,
-          taskName: localTask?.name || remote.taskName || remote.TaskName || null,
+          taskName: localTask?.name || taskNameCandidate || null,
           date,
           startTime,
           finishTime,

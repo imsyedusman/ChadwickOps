@@ -34,6 +34,82 @@ export interface ParsedTimesheetEntry {
 }
 
 /**
+ * Safely extracts employee name from WorkGuru timesheet payload.
+ * WorkGuru timesheets may return:
+ *   - `user` as an object: { fullName: "ALEX ALVARADO", name: "ALEX", surname: "ALVARADO", userName: "..." }
+ *   - `user` as a string: "ALEX ALVARADO"
+ *   - `userName` / `staffName` as string
+ */
+export function extractEmployeeName(remote: unknown): string {
+  if (!remote || typeof remote !== 'object') return 'Unassigned Staff';
+  const r = remote as Record<string, unknown>;
+
+  // 1. If user property is an object
+  const userObj = r.user || r.User;
+  if (userObj && typeof userObj === 'object') {
+    const u = userObj as Record<string, unknown>;
+    const fullName = u.fullName || u.FullName;
+    if (typeof fullName === 'string' && fullName.trim()) {
+      return fullName.trim();
+    }
+    const name = String(u.name || u.Name || '').trim();
+    const surname = String(u.surname || u.Surname || '').trim();
+    const combined = `${name} ${surname}`.trim();
+    if (combined) {
+      return combined;
+    }
+    const userName = u.userName || u.UserName || u.emailAddress || u.EmailAddress;
+    if (typeof userName === 'string' && userName.trim()) {
+      return userName.trim();
+    }
+  } else if (typeof userObj === 'string' && userObj.trim()) {
+    return userObj.trim();
+  }
+
+  // 2. Direct string properties
+  const candidates = [
+    r.userName,
+    r.UserName,
+    r.staffName,
+    r.StaffName,
+    r.employeeName,
+    r.EmployeeName,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) {
+      return c.trim();
+    }
+  }
+
+  return 'Unassigned Staff';
+}
+
+/**
+ * Safely extracts employee ID from WorkGuru payload.
+ */
+export function extractEmployeeId(remote: unknown): string | null {
+  if (!remote || typeof remote !== 'object') return null;
+  const r = remote as Record<string, unknown>;
+
+  const idVal = r.userId || r.UserId;
+  if (idVal !== undefined && idVal !== null) {
+    return String(idVal);
+  }
+
+  const userObj = r.user || r.User;
+  if (userObj && typeof userObj === 'object') {
+    const u = userObj as Record<string, unknown>;
+    const uId = u.id || u.Id || u.userId || u.UserId;
+    if (uId !== undefined && uId !== null) {
+      return String(uId);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Parses WorkGuru creation and last modified timestamps.
  * WorkGuru timestamps (e.g. "2026-11-10T06:30:00") are stored in UTC on the server
  * but serialized without a timezone offset ("Z").
