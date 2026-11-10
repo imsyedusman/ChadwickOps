@@ -6,6 +6,7 @@ export const permissionRoles = {
   project: ["admin", "scheduler"],
   finance: ["admin", "finance"],
   capacity: ["admin", "scheduler"],
+  attendance: ["admin", "scheduler", "finance", "viewer"],
 } as const;
 export type Permission = keyof typeof permissionRoles;
 

@@ -225,6 +225,13 @@
       "when": 1789011319541,
       "tag": "0031_youthful_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794299777602,
+      "tag": "0032_spotty_bucky",
+      "breakpoints": true
     }
   ]
 }

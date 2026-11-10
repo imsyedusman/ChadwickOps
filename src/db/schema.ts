@@ -269,6 +269,57 @@ export const procurementFailures = pgTable('procurement_failures', {
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
+export const attendanceRecords = pgTable('attendance_records', {
+  id: serial('id').primaryKey(),
+  workguruId: varchar('workguru_id', { length: 255 }).notNull().unique(),
+  employeeName: varchar('employee_name', { length: 255 }).notNull(),
+  employeeId: varchar('employee_id', { length: 100 }),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  workguruProjectId: varchar('workguru_project_id', { length: 255 }),
+  projectNumber: varchar('project_number', { length: 100 }),
+  projectName: text('project_name'),
+  taskId: integer('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+  workguruTaskId: varchar('workguru_task_id', { length: 255 }),
+  taskName: text('task_name'),
+  date: timestamp('date').notNull(),
+  startTime: timestamp('start_time'),
+  finishTime: timestamp('finish_time'),
+  durationHours: doublePrecision('duration_hours').default(0).notNull(),
+  status: varchar('status', { length: 50 }).default('Draft').notNull(),
+  cost: doublePrecision('cost').default(0).notNull(),
+  notes: text('notes'),
+  creationTime: timestamp('creation_time'),
+  lastModifiedTime: timestamp('last_modified_time'),
+  hasFlags: boolean('has_flags').default(false).notNull(),
+  flagTypes: jsonb('flag_types').$type<string[]>().default([]).notNull(),
+  flags: jsonb('flags').$type<Array<{ type: string; severity: 'warning' | 'error'; message: string }>>().default([]).notNull(),
+  rawPayload: jsonb('raw_payload'),
+  lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return [
+    index('attendance_emp_idx').on(table.employeeName),
+    index('attendance_date_idx').on(table.date),
+    index('attendance_start_idx').on(table.startTime),
+    index('attendance_project_idx').on(table.projectId),
+    index('attendance_status_idx').on(table.status),
+    index('attendance_has_flags_idx').on(table.hasFlags),
+  ];
+});
+
+export const attendanceSyncLogs = pgTable('attendance_sync_logs', {
+  id: serial('id').primaryKey(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  status: varchar('status', { length: 50 }).notNull(), // SUCCESS, FAILURE, PARTIAL
+  totalFetched: integer('total_fetched').default(0).notNull(),
+  totalUpserted: integer('total_upserted').default(0).notNull(),
+  totalDeleted: integer('total_deleted').default(0).notNull(),
+  flaggedCount: integer('flagged_count').default(0).notNull(),
+  durationMs: integer('duration_ms').default(0).notNull(),
+  details: text('details'),
+});
+
 export const roles = pgTable('roles', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 50 }).notNull().unique(),
@@ -418,7 +469,13 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   displayStage: one(displayStages, { fields: [projects.displayStageId], references: [displayStages.id] }),
   tasks: many(tasks),
   timeEntries: many(timeEntries),
+  attendanceRecords: many(attendanceRecords),
   suppliers: many(projectSuppliers),
+}));
+
+export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({
+  project: one(projects, { fields: [attendanceRecords.projectId], references: [projects.id] }),
+  task: one(tasks, { fields: [attendanceRecords.taskId], references: [tasks.id] }),
 }));
 
 export const projectSuppliersRelations = relations(projectSuppliers, ({ one }) => ({

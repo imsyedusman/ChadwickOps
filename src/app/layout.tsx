@@ -34,7 +34,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
-          scriptProps={{ suppressHydrationWarning: true }}
+          scriptProps={{ async: true, suppressHydrationWarning: true }}
         >
           {children}
           <Toaster position="top-right" closeButton richColors />

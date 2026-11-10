@@ -18,18 +18,19 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpen,
-  PieChart,
   TrendingUp,
   ShoppingBag,
   Monitor,
   Truck,
   SlidersHorizontal,
-  ChartPie
+  ChartPie,
+  Clock,
 } from "lucide-react";
 
 const navigation = [
   { name: 'WIP Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Workshop Board', href: '/workshop', icon: Monitor },
+  { name: 'Time & Attendance', href: '/attendance', icon: Clock },
   { name: 'Procurement', href: '/procurement', icon: Truck },
   { name: 'Capacity & Risk', href: '/risk', icon: SlidersHorizontal },
   { name: 'Production Scheduling', href: '/production-scheduling', icon: CalendarDays },

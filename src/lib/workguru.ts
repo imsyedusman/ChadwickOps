@@ -132,27 +132,68 @@ export interface WorkGuruTask {
 
 export interface WorkGuruTimeSheet {
   id?: number;
+  Id?: number;
   TimeSheetID?: number;
+  timeSheetId?: number;
+  timesheetId?: number;
   id_Internal?: number;
   projectId?: number;
+  ProjectId?: number;
   ProjectID?: number;
+  projectNo?: string;
+  ProjectNo?: string;
+  projectNumber?: string;
+  ProjectNumber?: string;
+  projectName?: string;
+  ProjectName?: string;
   taskId?: number;
+  TaskId?: number;
   TaskID?: number;
+  taskName?: string;
+  TaskName?: string;
   length?: number;
+  Length?: number;
   Hours?: number;
   hours?: number;
+  duration?: number;
+  Duration?: number;
   status?: string;
   Status?: string;
   date?: string;
   Date?: string;
   startTime?: string;
+  StartTime?: string;
+  start?: string;
+  Start?: string;
+  endTime?: string;
+  EndTime?: string;
+  finishTime?: string;
+  FinishTime?: string;
+  end?: string;
+  End?: string;
   user?: string;
+  User?: string;
+  userName?: string;
   UserName?: string;
+  staffName?: string;
   StaffName?: string;
+  userId?: number;
+  UserId?: number;
   cost?: number;
   Cost?: number;
   internalCosting?: number;
   InternalCosting?: number;
+  comments?: string;
+  Comments?: string;
+  notes?: string;
+  Notes?: string;
+  description?: string;
+  Description?: string;
+  creationTime?: string;
+  CreationTime?: string;
+  lastModificationTime?: string;
+  LastModificationTime?: string;
+  lastModifierTime?: string;
 }
 
 export interface WorkGuruApiResponse<T> {
@@ -450,6 +491,45 @@ export class WorkGuruClient {
     const params = { start, end };
     this.logRequest(url, 'GET', params);
     
+    try {
+      const response = await axios.get(url, { headers, params });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getTimeSheetsPaged(params: {
+    projectId?: string;
+    startDate?: string;
+    endDate?: string;
+    SkipCount?: number;
+    MaxResultCount?: number;
+    Sorting?: string;
+  } = {}) {
+    const url = `${BASE_URL}/api/services/app/TimeSheet/GetTimeSheets`;
+    const headers = await this.getAuthHeader();
+    const finalParams = { MaxResultCount: 1000, ...params };
+    this.logRequest(url, 'GET', finalParams);
+    
+    try {
+      const response = await axios.get(url, { headers, params: finalParams });
+      this.logResponse(url, response.status, response.data);
+      return response.data;
+    } catch (error: any) {
+      this.logResponse(url, error.response?.status || 0, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async getTimeSheetsInDateRange(startDate: string, endDate: string) {
+    const url = `${BASE_URL}/api/services/app/TimeSheet/GetAllTimeSheetsInDateRange`;
+    const headers = await this.getAuthHeader();
+    const params = { startDate, endDate };
+    this.logRequest(url, 'GET', params);
+
     try {
       const response = await axios.get(url, { headers, params });
       this.logResponse(url, response.status, response.data);

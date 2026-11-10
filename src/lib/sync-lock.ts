@@ -18,7 +18,7 @@ import { SYNC_LOCK_KEY, type SyncLockStore } from './sync-safety';
  * lexicographic comparison below is safe and cannot raise a cast error on a
  * malformed legacy value.
  */
-export function createPostgresSyncLock(): SyncLockStore {
+export function createPostgresSyncLock(lockKey: string = SYNC_LOCK_KEY): SyncLockStore {
   return {
     async acquire(ownerId: string, ttlMs: number): Promise<boolean> {
       const nowIso = new Date().toISOString();
@@ -27,7 +27,7 @@ export function createPostgresSyncLock(): SyncLockStore {
       const rows = (await db.execute(sql`
         INSERT INTO system_config (key, value, created_at, updated_at)
         VALUES (
-          ${SYNC_LOCK_KEY},
+          ${lockKey},
           jsonb_build_object('owner', ${ownerId}::text, 'expiresAt', ${expiresAt}::text),
           now(),
           now()
@@ -51,7 +51,7 @@ export function createPostgresSyncLock(): SyncLockStore {
         UPDATE system_config
            SET value = jsonb_set(value, '{expiresAt}', to_jsonb(${expiresAt}::text)),
                updated_at = now()
-         WHERE key = ${SYNC_LOCK_KEY}
+         WHERE key = ${lockKey}
            AND value->>'owner' = ${ownerId}
         RETURNING id
       `)) as unknown as unknown[];
@@ -63,7 +63,7 @@ export function createPostgresSyncLock(): SyncLockStore {
       const rows = (await db.execute(sql`
         SELECT id
           FROM system_config
-         WHERE key = ${SYNC_LOCK_KEY}
+         WHERE key = ${lockKey}
            AND value->>'owner' = ${ownerId}
          LIMIT 1
       `)) as unknown as unknown[];
@@ -74,7 +74,7 @@ export function createPostgresSyncLock(): SyncLockStore {
     async release(ownerId: string): Promise<void> {
       await db.execute(sql`
         DELETE FROM system_config
-         WHERE key = ${SYNC_LOCK_KEY}
+         WHERE key = ${lockKey}
            AND value->>'owner' = ${ownerId}
       `);
     },
