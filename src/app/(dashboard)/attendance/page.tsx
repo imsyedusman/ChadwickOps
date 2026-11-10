@@ -11,9 +11,7 @@ import {
   AlertTriangle,
   Briefcase,
   Layers,
-  TrendingUp,
   CheckCircle2,
-  ShieldAlert,
   Timer,
   AlertCircle
 } from "lucide-react";
@@ -23,15 +21,16 @@ import { AttendanceTable, type AttendanceRecordRow } from "./_components/Attenda
 import {
   SYDNEY_TZ,
   formatSydneyDateTime,
+  getAttendancePeriodBounds,
+  normalizeFlagSlug,
   type AttendanceFlag
 } from "@/lib/attendance-logic";
-import { subDays, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from "date-fns";
-import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
 
 interface AttendancePageProps {
   searchParams: Promise<{
+    period?: string;
     p?: string;
     from?: string;
     to?: string;
@@ -53,42 +52,18 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
   const canSync = hasPermission(session, "sync");
   const params = await searchParams;
 
-  const preset = params.p || "past_60";
+  // 1. Calculate Date Range in Sydney Local Time (Defaults to 'this-week')
+  const periodParam = params.period || params.p;
   const customFrom = params.from;
   const customTo = params.to;
+  const bounds = getAttendancePeriodBounds(periodParam, customFrom, customTo);
+
   const employeeFilter = params.employee;
   const projectFilter = params.project;
   const statusFilter = params.status;
-  const flagFilter = params.flag || "all";
+  const flagSlug = normalizeFlagSlug(params.flag);
   const page = Math.max(1, parseInt(params.page || "1", 10));
   const pageSize = Math.max(10, Math.min(100, parseInt(params.pageSize || "25", 10)));
-
-  // 1. Calculate Date Range in Sydney Local Time
-  const nowSydney = toZonedTime(new Date(), SYDNEY_TZ);
-  let dateFrom: Date | null = null;
-  let dateTo: Date | null = null;
-
-  if (customFrom && customTo) {
-    dateFrom = fromZonedTime(`${customFrom}T00:00:00`, SYDNEY_TZ);
-    dateTo = fromZonedTime(`${customTo}T23:59:59.999`, SYDNEY_TZ);
-  } else if (preset === "past_7") {
-    dateFrom = fromZonedTime(startOfDay(subDays(nowSydney, 7)), SYDNEY_TZ);
-    dateTo = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
-  } else if (preset === "past_14") {
-    dateFrom = fromZonedTime(startOfDay(subDays(nowSydney, 14)), SYDNEY_TZ);
-    dateTo = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
-  } else if (preset === "this_month") {
-    dateFrom = fromZonedTime(startOfMonth(nowSydney), SYDNEY_TZ);
-    dateTo = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
-  } else if (preset === "last_month") {
-    const prevMonth = subMonths(nowSydney, 1);
-    dateFrom = fromZonedTime(startOfMonth(prevMonth), SYDNEY_TZ);
-    dateTo = fromZonedTime(endOfMonth(prevMonth), SYDNEY_TZ);
-  } else if (preset === "past_60") {
-    dateFrom = fromZonedTime(startOfDay(subDays(nowSydney, 60)), SYDNEY_TZ);
-    dateTo = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
-  }
-  // If preset === "all", dateFrom and dateTo remain null
 
   // 2. Fetch Latest Sync Log for Freshness Indicator
   let latestSync: any = null;
@@ -107,31 +82,38 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
   // 3. Build Query Filter Conditions
   const conditions: any[] = [];
 
-  if (dateFrom) {
-    conditions.push(gte(attendanceRecords.date, dateFrom));
+  if (bounds.dateFrom) {
+    conditions.push(gte(attendanceRecords.date, bounds.dateFrom));
   }
-  if (dateTo) {
-    conditions.push(lte(attendanceRecords.date, dateTo));
+  if (bounds.dateTo) {
+    conditions.push(lte(attendanceRecords.date, bounds.dateTo));
   }
-  if (employeeFilter) {
+  if (employeeFilter && employeeFilter !== "all") {
     conditions.push(eq(attendanceRecords.employeeName, employeeFilter));
   }
-  if (projectFilter) {
+  if (projectFilter && projectFilter !== "all") {
     conditions.push(eq(attendanceRecords.projectNumber, projectFilter));
   }
-  if (statusFilter) {
+  if (statusFilter && statusFilter !== "all") {
     conditions.push(eq(attendanceRecords.status, statusFilter));
   }
-  if (flagFilter === "flagged") {
+
+  if (flagSlug === "needs-review") {
     conditions.push(eq(attendanceRecords.hasFlags, true));
-  } else if (flagFilter && flagFilter !== "all") {
-    conditions.push(sql`${attendanceRecords.flagTypes} @> ${JSON.stringify([flagFilter])}::jsonb`);
+  } else if (flagSlug === "overlapping") {
+    conditions.push(sql`${attendanceRecords.flagTypes} @> '["OVERLAPPING"]'::jsonb`);
+  } else if (flagSlug === "missing-times") {
+    conditions.push(sql`${attendanceRecords.flagTypes} @> '["MISSING_TIMES"]'::jsonb`);
+  } else if (flagSlug === "invalid-duration") {
+    conditions.push(sql`${attendanceRecords.flagTypes} @> '["INVALID_DURATION"]'::jsonb`);
+  } else if (flagSlug === "long-shift") {
+    conditions.push(sql`${attendanceRecords.flagTypes} @> '["LONG_SHIFT"]'::jsonb`);
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // 4. Query KPI Summary Metrics & Records Safely
-    let totalHours = 0;
+  // 4. Query KPI Summary Metrics & Records Safely
+  let totalHours = 0;
   let totalRecords = 0;
   let activeStaff = 0;
   let flaggedCount = 0;
@@ -157,51 +139,51 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
           .from(attendanceRecords)
           .where(whereClause),
 
-    db
-      .select({
-        overlappingCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["OVERLAPPING"]'::jsonb then 1 end)`,
-        missingTimesCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["MISSING_TIMES"]'::jsonb then 1 end)`,
-        invalidDurationCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["INVALID_DURATION"]'::jsonb then 1 end)`,
-        longShiftCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["LONG_SHIFT"]'::jsonb then 1 end)`,
-      })
-      .from(attendanceRecords)
-      .where(whereClause),
+        db
+          .select({
+            overlappingCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["OVERLAPPING"]'::jsonb then 1 end)`,
+            missingTimesCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["MISSING_TIMES"]'::jsonb then 1 end)`,
+            invalidDurationCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["INVALID_DURATION"]'::jsonb then 1 end)`,
+            longShiftCount: sql<number>`count(case when ${attendanceRecords.flagTypes} @> '["LONG_SHIFT"]'::jsonb then 1 end)`,
+          })
+          .from(attendanceRecords)
+          .where(whereClause),
 
-    db
-      .select({ count: count() })
-      .from(attendanceRecords)
-      .where(whereClause),
+        db
+          .select({ count: count() })
+          .from(attendanceRecords)
+          .where(whereClause),
 
-    db
-      .select({
-        id: attendanceRecords.id,
-        workguruId: attendanceRecords.workguruId,
-        employeeName: attendanceRecords.employeeName,
-        projectNumber: attendanceRecords.projectNumber,
-        projectName: attendanceRecords.projectName,
-        taskName: attendanceRecords.taskName,
-        date: attendanceRecords.date,
-        startTime: attendanceRecords.startTime,
-        finishTime: attendanceRecords.finishTime,
-        durationHours: attendanceRecords.durationHours,
-        status: attendanceRecords.status,
-        creationTime: attendanceRecords.creationTime,
-        lastModifiedTime: attendanceRecords.lastModifiedTime,
-        hasFlags: attendanceRecords.hasFlags,
-        flagTypes: attendanceRecords.flagTypes,
-        flags: attendanceRecords.flags,
-      })
-      .from(attendanceRecords)
-      .where(whereClause)
-      .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.startTime), desc(attendanceRecords.id))
-      .limit(pageSize)
-      .offset((page - 1) * pageSize),
+        db
+          .select({
+            id: attendanceRecords.id,
+            workguruId: attendanceRecords.workguruId,
+            employeeName: attendanceRecords.employeeName,
+            projectNumber: attendanceRecords.projectNumber,
+            projectName: attendanceRecords.projectName,
+            taskName: attendanceRecords.taskName,
+            date: attendanceRecords.date,
+            startTime: attendanceRecords.startTime,
+            finishTime: attendanceRecords.finishTime,
+            durationHours: attendanceRecords.durationHours,
+            status: attendanceRecords.status,
+            creationTime: attendanceRecords.creationTime,
+            lastModifiedTime: attendanceRecords.lastModifiedTime,
+            hasFlags: attendanceRecords.hasFlags,
+            flagTypes: attendanceRecords.flagTypes,
+            flags: attendanceRecords.flags,
+          })
+          .from(attendanceRecords)
+          .where(whereClause)
+          .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.startTime), desc(attendanceRecords.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
 
-    db
-      .select({ name: attendanceRecords.employeeName })
-      .from(attendanceRecords)
-      .groupBy(attendanceRecords.employeeName)
-      .orderBy(attendanceRecords.employeeName),
+        db
+          .select({ name: attendanceRecords.employeeName })
+          .from(attendanceRecords)
+          .groupBy(attendanceRecords.employeeName)
+          .orderBy(attendanceRecords.employeeName),
 
         db
           .select({
@@ -249,19 +231,11 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">
-              Workforce Intelligence
-            </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-              Phase 2B Read-Only
-            </span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Time & Attendance Audit
+            Time & Attendance
           </h1>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            WorkGuru timesheet synchronization, shift validation, and operational exception tracking.
+            Weekly staff timesheets, project allocations and shift review.
           </p>
         </div>
 
@@ -270,7 +244,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-xs text-xs">
             <div className={`h-2 w-2 rounded-full ${latestSync?.status === "SUCCESS" ? "bg-emerald-500" : latestSync ? "bg-amber-500" : "bg-slate-400"}`} />
             <span className="text-slate-500 dark:text-slate-400">Last Synced:</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">{lastSyncText}</span>
+            <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">{lastSyncText}</span>
           </div>
 
           {/* Sync Button */}
@@ -281,9 +255,9 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Hours */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Total Logged Hours
             </span>
             <div className="p-2 bg-blue-50 dark:bg-blue-950/50 rounded-xl text-blue-600 dark:text-blue-400">
@@ -291,20 +265,20 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl md:text-3xl font-black font-mono text-slate-900 dark:text-white">
+            <span className="text-2xl md:text-3xl font-black tabular-nums text-slate-900 dark:text-white">
               {totalHours.toLocaleString("en-AU", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
             </span>
             <span className="text-xs text-slate-400 font-medium">hrs</span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            Sum of all valid duration hours in current view
+            Logged hours in selected view
           </p>
         </div>
 
         {/* Active Staff */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Active Employees
             </span>
             <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-600 dark:text-emerald-400">
@@ -312,20 +286,20 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">
+            <span className="text-2xl md:text-3xl font-black tabular-nums text-slate-900 dark:text-white">
               {activeStaff}
             </span>
             <span className="text-xs text-slate-400 font-medium">staff members</span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            Distinct workers with timesheets in period
+            Staff with timesheets in period
           </p>
         </div>
 
         {/* Total Timesheets */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Total Timesheets
             </span>
             <div className="p-2 bg-purple-50 dark:bg-purple-950/50 rounded-xl text-purple-600 dark:text-purple-400">
@@ -333,35 +307,35 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl md:text-3xl font-black font-mono text-slate-900 dark:text-white">
+            <span className="text-2xl md:text-3xl font-black tabular-nums text-slate-900 dark:text-white">
               {totalRecords.toLocaleString("en-AU")}
             </span>
             <span className="text-xs text-slate-400 font-medium">entries</span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            WorkGuru time entries recorded in selected window
+            Recorded timesheet entries
           </p>
         </div>
 
-        {/* Flagged Exceptions */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-sm">
+        {/* Needs Review */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Flagged Exceptions
+            <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              Needs Review
             </span>
             <div className={`p-2 rounded-xl ${flaggedCount > 0 ? "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"}`}>
               {flaggedCount > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className={`text-2xl md:text-3xl font-black font-mono ${flaggedCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+            <span className={`text-2xl md:text-3xl font-black tabular-nums ${flaggedCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
               {flaggedCount}
             </span>
             <span className="text-xs text-slate-400 font-medium">requiring review</span>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {overlappingCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
                 {overlappingCount} Overlap
               </span>
             )}
@@ -395,14 +369,15 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
         projects={projectOptions}
         statuses={statusOptions}
         currentParams={{
-          p: preset,
+          period: bounds.period,
           from: customFrom,
           to: customTo,
           employee: employeeFilter,
           project: projectFilter,
           status: statusFilter,
-          flag: flagFilter,
+          flag: flagSlug,
         }}
+        activeRangeLabel={bounds.label}
       />
 
       {/* Attendance Records Table */}
@@ -415,4 +390,3 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
     </div>
   );
 }
-

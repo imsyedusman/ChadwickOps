@@ -6,6 +6,8 @@ import {
   evaluateAttendanceFlags,
   extractEmployeeName,
   extractEmployeeId,
+  getAttendancePeriodBounds,
+  formatSydneyDateTime,
   SYDNEY_TZ,
 } from './attendance-logic';
 import { toZonedTime } from 'date-fns-tz';
@@ -217,4 +219,41 @@ test('extractEmployeeName safely handles string and fallback shapes', () => {
   assert.strictEqual(extractEmployeeName({ user: { name: 'Peter', surname: 'Hong' } }), 'Peter Hong');
   assert.strictEqual(extractEmployeeName(null), 'Unassigned Staff');
   assert.strictEqual(extractEmployeeName({}), 'Unassigned Staff');
+});
+
+test('getAttendancePeriodBounds defaults to This Week (Mon-Sun in Sydney)', () => {
+  // Reference date: Wednesday 11 Nov 2026, 09:00:00 AEDT (= 2026-11-10T22:00:00.000Z)
+  const ref = new Date('2026-11-10T22:00:00.000Z');
+  const bounds = getAttendancePeriodBounds(undefined, null, null, ref);
+
+  assert.strictEqual(bounds.period, 'this-week');
+  assert.strictEqual(bounds.isDefault, true);
+  assert.ok(bounds.dateFrom !== null);
+  assert.ok(bounds.dateTo !== null);
+
+  // In Sydney (AEDT UTC+11):
+  // Monday 9 Nov 00:00:00 AEDT = 2026-11-08T13:00:00.000Z
+  assert.strictEqual(bounds.dateFrom.toISOString(), '2026-11-08T13:00:00.000Z');
+  // Sunday 15 Nov 23:59:59.999 AEDT = 2026-11-15T12:59:59.999Z
+  assert.strictEqual(bounds.dateTo.toISOString(), '2026-11-15T12:59:59.999Z');
+  assert.ok(bounds.label.includes('9 Nov'));
+  assert.ok(bounds.label.includes('15 Nov'));
+});
+
+test('getAttendancePeriodBounds calculates Last Week accurately', () => {
+  const ref = new Date('2026-11-10T22:00:00.000Z'); // Wed 11 Nov
+  const bounds = getAttendancePeriodBounds('last-week', null, null, ref);
+
+  assert.strictEqual(bounds.period, 'last-week');
+  // Previous Monday 2 Nov 00:00:00 AEDT = 2026-11-01T13:00:00.000Z
+  assert.strictEqual(bounds.dateFrom?.toISOString(), '2026-11-01T13:00:00.000Z');
+  // Previous Sunday 8 Nov 23:59:59.999 AEDT = 2026-11-08T12:59:59.999Z
+  assert.strictEqual(bounds.dateTo?.toISOString(), '2026-11-08T12:59:59.999Z');
+});
+
+test('formatSydneyDateTime displays Sydney time correctly without double offset', () => {
+  // Sync log timestamp from DB: 10 Nov 2026 8:12 PM AEDT (= 2026-11-10T09:12:02.913Z)
+  const syncUtc = new Date('2026-11-10T09:12:02.913Z');
+  const formatted = formatSydneyDateTime(syncUtc);
+  assert.strictEqual(formatted, '10 Nov 2026, 8:12 PM');
 });

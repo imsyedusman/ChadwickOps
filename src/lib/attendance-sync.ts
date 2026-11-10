@@ -190,6 +190,7 @@ export class AttendanceSyncService {
       if (allRawItems.length === 0) {
         stats.durationMs = Date.now() - startTime;
         await db.insert(attendanceSyncLogs).values({
+          timestamp: new Date(),
           status: 'SUCCESS',
           totalFetched: 0,
           totalUpserted: 0,
@@ -446,6 +447,7 @@ export class AttendanceSyncService {
 
       // 10. Record Sync Log
       await db.insert(attendanceSyncLogs).values({
+        timestamp: new Date(),
         status: isVerifiedComplete ? 'SUCCESS' : 'PARTIAL',
         totalFetched: stats.fetched,
         totalUpserted: stats.upserted,
@@ -463,6 +465,7 @@ export class AttendanceSyncService {
 
       try {
         await db.insert(attendanceSyncLogs).values({
+          timestamp: new Date(),
           status: 'FAILURE',
           totalFetched: stats.fetched,
           totalUpserted: stats.upserted,

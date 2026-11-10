@@ -161,10 +161,10 @@ export function AttendanceTable({
               <th className="py-3 px-3">Date</th>
               <th className="py-3 px-3">Project</th>
               <th className="py-3 px-3">Task</th>
-              <th className="py-3 px-3">Entered Start / Finish</th>
+              <th className="py-3 px-3">Start / Finish</th>
               <th className="py-3 px-3 text-right">Duration</th>
               <th className="py-3 px-3 text-center">Status</th>
-              <th className="py-3 px-3">Flags / Audit</th>
+              <th className="py-3 px-3">Review Flags</th>
               <th className="py-3 px-3">Created</th>
               <th className="py-3 px-3">Last Modified</th>
             </tr>
@@ -217,7 +217,7 @@ export function AttendanceTable({
                     <td className="py-2.5 px-3">
                       {r.projectNumber ? (
                         <div className="flex flex-col">
-                          <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
                             {r.projectNumber}
                           </span>
                           {r.projectName && (
@@ -227,7 +227,7 @@ export function AttendanceTable({
                           )}
                         </div>
                       ) : (
-                        <span className="text-slate-400 font-mono">—</span>
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
 
@@ -236,7 +236,7 @@ export function AttendanceTable({
                       {r.taskName || "—"}
                     </td>
 
-                    {/* Entered Start / Finish */}
+                    {/* Start / Finish */}
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       {hasMissingTimes ? (
                         <div className="flex items-center gap-1.5">
@@ -252,7 +252,7 @@ export function AttendanceTable({
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                        <div className="flex items-center gap-1.5 tabular-nums text-[11px] text-slate-700 dark:text-slate-300">
                           <span>{startStr}</span>
                           <span className="text-slate-400">→</span>
                           <span>{finishStr}</span>
@@ -261,7 +261,7 @@ export function AttendanceTable({
                     </td>
 
                     {/* Duration */}
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                    <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-slate-900 dark:text-white whitespace-nowrap">
                       {r.durationHours.toFixed(2)} hrs
                     </td>
 

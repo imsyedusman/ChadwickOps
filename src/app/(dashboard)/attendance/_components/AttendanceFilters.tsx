@@ -10,16 +10,34 @@ import {
   AlertTriangle, 
   X, 
   Filter,
-  Check
+  Check,
+  CalendarRange,
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
+import {
+  ATTENDANCE_PERIOD_PRESETS,
+  ATTENDANCE_FLAG_PRESETS,
+  normalizePeriodSlug,
+  normalizeFlagSlug,
+  type AttendancePeriodValue,
+  type AttendanceFlagSlug,
+} from "@/lib/attendance-logic";
 
 interface AttendanceFiltersProps {
   employees: string[];
   projects: Array<{ number: string; name?: string | null }>;
   statuses: string[];
   currentParams: {
-    p?: string;
+    period?: string;
     from?: string;
     to?: string;
     employee?: string;
@@ -27,56 +45,43 @@ interface AttendanceFiltersProps {
     status?: string;
     flag?: string;
   };
+  activeRangeLabel: string;
 }
-
-const PRESETS = [
-  { label: "Past 7 Days", value: "past_7" },
-  { label: "Past 14 Days", value: "past_14" },
-  { label: "This Month", value: "this_month" },
-  { label: "Last Month", value: "last_month" },
-  { label: "Past 60 Days", value: "past_60" },
-  { label: "All Records", value: "all" },
-];
-
-const FLAG_FILTERS = [
-  { label: "All Records", value: "all" },
-  { label: "Flagged Only", value: "flagged" },
-  { label: "Overlapping", value: "OVERLAPPING" },
-  { label: "Missing Times", value: "MISSING_TIMES" },
-  { label: "Invalid Duration", value: "INVALID_DURATION" },
-  { label: "Long Shift (>12h)", value: "LONG_SHIFT" },
-];
 
 export function AttendanceFilters({
   employees,
   projects,
   statuses,
   currentParams,
+  activeRangeLabel,
 }: AttendanceFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const [selectedPreset, setSelectedPreset] = useState(currentParams.p || "past_60");
+  const activePeriod = normalizePeriodSlug(currentParams.period);
+  const activeFlag = normalizeFlagSlug(currentParams.flag);
+
+  const [selectedPeriod, setSelectedPeriod] = useState<AttendancePeriodValue>(activePeriod);
+  const [selectedFlag, setSelectedFlag] = useState<AttendanceFlagSlug>(activeFlag);
   const [selectedEmployee, setSelectedEmployee] = useState(currentParams.employee || "");
   const [selectedProject, setSelectedProject] = useState(currentParams.project || "");
   const [selectedStatus, setSelectedStatus] = useState(currentParams.status || "");
-  const [selectedFlag, setSelectedFlag] = useState(currentParams.flag || "all");
   const [customFrom, setCustomFrom] = useState(currentParams.from || "");
   const [customTo, setCustomTo] = useState(currentParams.to || "");
 
   useEffect(() => {
-    setSelectedPreset(currentParams.p || "past_60");
+    setSelectedPeriod(normalizePeriodSlug(currentParams.period));
+    setSelectedFlag(normalizeFlagSlug(currentParams.flag));
     setSelectedEmployee(currentParams.employee || "");
     setSelectedProject(currentParams.project || "");
     setSelectedStatus(currentParams.status || "");
-    setSelectedFlag(currentParams.flag || "all");
     setCustomFrom(currentParams.from || "");
     setCustomTo(currentParams.to || "");
   }, [currentParams]);
 
   const updateFilters = (newVals: Partial<{
-    p: string;
+    period: string;
     from: string;
     to: string;
     employee: string;
@@ -85,12 +90,10 @@ export function AttendanceFilters({
     flag: string;
   }>) => {
     startTransition(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      // Reset page when filters change
-      params.delete("page");
+      const params = new URLSearchParams();
 
       const merged = {
-        p: selectedPreset,
+        period: selectedPeriod,
         from: customFrom,
         to: customTo,
         employee: selectedEmployee,
@@ -100,74 +103,113 @@ export function AttendanceFilters({
         ...newVals,
       };
 
-      Object.entries(merged).forEach(([key, val]) => {
-        if (!val || val === "all" || (key === "p" && val === "past_60" && !merged.from)) {
-          params.delete(key);
-        } else {
-          params.set(key, val);
-        }
-      });
+      // 1. Period & Custom Dates
+      const targetPeriod = merged.period;
+      if (targetPeriod === "custom") {
+        params.set("period", "custom");
+        if (merged.from) params.set("from", merged.from);
+        if (merged.to) params.set("to", merged.to);
+      } else if (targetPeriod && targetPeriod !== "this-week") {
+        // Omit default 'this-week' from URL for clean human-readable URLs
+        params.set("period", targetPeriod);
+      }
 
-      router.push(`/attendance?${params.toString()}`);
+      // 2. Flag
+      if (merged.flag && merged.flag !== "all") {
+        params.set("flag", merged.flag);
+      }
+
+      // 3. Employee
+      if (merged.employee && merged.employee !== "all") {
+        params.set("employee", merged.employee);
+      }
+
+      // 4. Project
+      if (merged.project && merged.project !== "all") {
+        params.set("project", merged.project);
+      }
+
+      // 5. Status
+      if (merged.status && merged.status !== "all") {
+        params.set("status", merged.status);
+      }
+
+      // Reset page when filters change
+      const queryString = params.toString();
+      router.push(queryString ? `/attendance?${queryString}` : "/attendance");
     });
   };
 
-  const handleClearAll = () => {
+  const handlePeriodChange = (preset: AttendancePeriodValue) => {
+    setSelectedPeriod(preset);
+    if (preset !== "custom") {
+      setCustomFrom("");
+      setCustomTo("");
+      updateFilters({ period: preset, from: "", to: "" });
+    } else {
+      updateFilters({ period: "custom" });
+    }
+  };
+
+  const handleCustomRangeChange = (start: string, end: string) => {
+    setCustomFrom(start);
+    setCustomTo(end);
+    setSelectedPeriod("custom");
+    updateFilters({ period: "custom", from: start, to: end });
+  };
+
+  const handleReset = () => {
     startTransition(() => {
       router.push("/attendance");
     });
   };
 
   const hasActiveFilters = Boolean(
-    (currentParams.p && currentParams.p !== "past_60") ||
-    currentParams.from ||
-    currentParams.to ||
-    currentParams.employee ||
-    currentParams.project ||
-    currentParams.status ||
-    (currentParams.flag && currentParams.flag !== "all")
+    (selectedPeriod !== "this-week" && selectedPeriod !== undefined) ||
+    customFrom ||
+    customTo ||
+    selectedEmployee ||
+    selectedProject ||
+    selectedStatus ||
+    (selectedFlag !== "all" && selectedFlag !== undefined)
   );
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 md:p-5 shadow-sm space-y-4">
-      {/* Top Row: Presets and Flag Filter Chips */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/60">
-        {/* Presets */}
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 md:p-5 shadow-xs space-y-4">
+      {/* Top Section: Period Presets & Review State Chips */}
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+        {/* Period Presets */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1.5 flex items-center gap-1">
-            <Calendar className="h-3 w-3" /> Period:
+          <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5" /> Period
           </span>
-          {PRESETS.map((preset) => {
-            const isActive = selectedPreset === preset.value && !customFrom;
+          {ATTENDANCE_PERIOD_PRESETS.map((p) => {
+            const isActive = selectedPeriod === p.value;
             return (
               <button
-                key={preset.value}
-                onClick={() => {
-                  setSelectedPreset(preset.value);
-                  setCustomFrom("");
-                  setCustomTo("");
-                  updateFilters({ p: preset.value, from: "", to: "" });
-                }}
+                key={p.value}
+                onClick={() => handlePeriodChange(p.value)}
                 className={cn(
                   "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
                   isActive
                     ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 )}
               >
-                {preset.label}
+                {p.label}
               </button>
             );
           })}
         </div>
 
-        {/* Flag Filters */}
+        {/* Review Flag Filter Chips */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1.5 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-amber-500" /> Exceptions:
+          <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Review
           </span>
-          {FLAG_FILTERS.map((item) => {
+          {ATTENDANCE_FLAG_PRESETS.map((item) => {
             const isActive = selectedFlag === item.value;
+            const isWarningItem = item.value !== "all";
             return (
               <button
                 key={item.value}
@@ -178,10 +220,10 @@ export function AttendanceFilters({
                 className={cn(
                   "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
                   isActive
-                    ? item.value === "all"
-                      ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                      : "bg-amber-500 text-white dark:bg-amber-500 dark:text-slate-950 font-bold shadow-xs"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    ? isWarningItem
+                      ? "bg-amber-500 text-slate-950 font-semibold shadow-xs"
+                      : "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                    : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 )}
               >
                 {item.label}
@@ -191,118 +233,119 @@ export function AttendanceFilters({
         </div>
       </div>
 
-      {/* Bottom Row: Granular Dropdown Selectors */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-center">
-        {/* Employee Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <User className="h-2.5 w-2.5" /> Employee
-          </label>
-          <select
-            value={selectedEmployee}
-            onChange={(e) => {
-              setSelectedEmployee(e.target.value);
-              updateFilters({ employee: e.target.value });
-            }}
-            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
+      {/* Middle Bar: Active Range Indicator & Quick Reset */}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/50 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 font-medium">
+            <CalendarRange className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Range: {activeRangeLabel}</span>
+          </div>
+
+          {selectedPeriod === "custom" && (
+            <DateRangePicker
+              label="Select Custom Dates"
+              startDate={customFrom}
+              endDate={customTo}
+              onRangeChange={handleCustomRangeChange}
+              className="shrink-0"
+            />
+          )}
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={handleReset}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer font-medium"
           >
-            <option value="">All Employees ({employees.length})</option>
-            {employees.map((emp) => (
-              <option key={emp} value={emp}>
-                {emp}
-              </option>
-            ))}
-          </select>
+            <RotateCcw className="h-3 w-3" />
+            <span>Reset filters</span>
+          </button>
+        )}
+      </div>
+
+      {/* Bottom Row: Granular Shadcn Dropdown Selectors */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {/* Employee Selector */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
+            <User className="h-3 w-3" /> Employee
+          </label>
+          <Select
+            value={selectedEmployee || "all"}
+            onValueChange={(val) => {
+              const mapped = val === "all" ? "" : val;
+              setSelectedEmployee(mapped);
+              updateFilters({ employee: mapped });
+            }}
+          >
+            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="all">All Employees ({employees.length})</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp} value={emp}>
+                  {emp}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Project Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Briefcase className="h-2.5 w-2.5" /> Project
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
+            <Briefcase className="h-3 w-3" /> Project
           </label>
-          <select
-            value={selectedProject}
-            onChange={(e) => {
-              setSelectedProject(e.target.value);
-              updateFilters({ project: e.target.value });
+          <Select
+            value={selectedProject || "all"}
+            onValueChange={(val) => {
+              const mapped = val === "all" ? "" : val;
+              setSelectedProject(mapped);
+              updateFilters({ project: mapped });
             }}
-            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
           >
-            <option value="">All Projects ({projects.length})</option>
-            {projects.map((proj) => (
-              <option key={proj.number} value={proj.number}>
-                {proj.number} {proj.name ? `— ${proj.name}` : ""}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
+              <SelectValue placeholder="All Projects" />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="all">All Projects ({projects.length})</SelectItem>
+              {projects.map((proj) => (
+                <SelectItem key={proj.number} value={proj.number}>
+                  {proj.number} {proj.name ? `— ${proj.name}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Status Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Tag className="h-2.5 w-2.5" /> Status
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
+            <Tag className="h-3 w-3" /> Approval Status
           </label>
-          <select
-            value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              updateFilters({ status: e.target.value });
+          <Select
+            value={selectedStatus || "all"}
+            onValueChange={(val) => {
+              const mapped = val === "all" ? "" : val;
+              setSelectedStatus(mapped);
+              updateFilters({ status: mapped });
             }}
-            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
           >
-            <option value="">All Statuses</option>
-            {statuses.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Custom Date Range From/To */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            From Date
-          </label>
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(e) => {
-              setCustomFrom(e.target.value);
-              setSelectedPreset("custom");
-              updateFilters({ p: "custom", from: e.target.value });
-            }}
-            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              To Date
-            </label>
-            {hasActiveFilters && (
-              <button
-                onClick={handleClearAll}
-                className="text-[10px] text-rose-500 hover:text-rose-600 font-semibold flex items-center gap-0.5 cursor-pointer"
-              >
-                <X className="h-2.5 w-2.5" /> Reset
-              </button>
-            )}
-          </div>
-          <input
-            type="date"
-            value={customTo}
-            onChange={(e) => {
-              setCustomTo(e.target.value);
-              setSelectedPreset("custom");
-              updateFilters({ p: "custom", to: e.target.value });
-            }}
-            className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
-          />
+            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="all">All Statuses</SelectItem>
+              {statuses.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>
   );
 }
-

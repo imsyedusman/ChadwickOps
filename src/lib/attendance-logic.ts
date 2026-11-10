@@ -1,4 +1,15 @@
-import { toZonedTime, fromZonedTime, format } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
+import {
+  startOfWeek,
+  endOfWeek,
+  subWeeks,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  subDays,
+  startOfDay,
+  endOfDay,
+} from 'date-fns';
 
 export const SYDNEY_TZ = 'Australia/Sydney';
 
@@ -226,27 +237,250 @@ export function formatSydneyTime(date: Date | string | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return format(toZonedTime(d, SYDNEY_TZ), 'h:mm a', { timeZone: SYDNEY_TZ });
+  return formatInTimeZone(d, SYDNEY_TZ, 'h:mm a');
 }
 
 /**
- * Formats a Date object in Sydney local time as "dd MMM yyyy, h:mm a".
+ * Formats a Date object in Sydney local time as "d MMM yyyy, h:mm a".
  */
 export function formatSydneyDateTime(date: Date | string | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return format(toZonedTime(d, SYDNEY_TZ), 'dd MMM yyyy, h:mm a', { timeZone: SYDNEY_TZ });
+  return formatInTimeZone(d, SYDNEY_TZ, 'd MMM yyyy, h:mm a');
 }
 
 /**
- * Formats a Date object in Sydney local time as "dd MMM yyyy" or "EEE, dd MMM".
+ * Formats a Date object in Sydney local time as "EEE, d MMM yyyy" or custom pattern.
  */
-export function formatSydneyDateOnly(date: Date | string | null, pattern = 'EEE, dd MMM yyyy'): string {
+export function formatSydneyDateOnly(date: Date | string | null, pattern = 'EEE, d MMM yyyy'): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return format(toZonedTime(d, SYDNEY_TZ), pattern, { timeZone: SYDNEY_TZ });
+  return formatInTimeZone(d, SYDNEY_TZ, pattern);
+}
+
+export const ATTENDANCE_PERIOD_PRESETS = [
+  { label: 'Today', value: 'today' },
+  { label: 'Yesterday', value: 'yesterday' },
+  { label: 'This Week', value: 'this-week' },
+  { label: 'Last Week', value: 'last-week' },
+  { label: 'This Month', value: 'this-month' },
+  { label: 'Last Month', value: 'last-month' },
+  { label: 'Last 30 Days', value: 'last-30-days' },
+  { label: 'Custom Range', value: 'custom' },
+] as const;
+
+export type AttendancePeriodValue = (typeof ATTENDANCE_PERIOD_PRESETS)[number]['value'] | 'all';
+
+export interface AttendancePeriodBounds {
+  dateFrom: Date | null;
+  dateTo: Date | null;
+  label: string;
+  period: AttendancePeriodValue;
+  isDefault: boolean;
+}
+
+/**
+ * Maps legacy period query values to modern lowercase slugs.
+ */
+export function normalizePeriodSlug(val?: string | null): AttendancePeriodValue {
+  if (!val) return 'this-week';
+  const lower = val.toLowerCase().replace(/_/g, '-');
+  switch (lower) {
+    case 'today':
+      return 'today';
+    case 'yesterday':
+      return 'yesterday';
+    case 'this-week':
+    case 'week':
+      return 'this-week';
+    case 'last-week':
+    case 'prev-week':
+      return 'last-week';
+    case 'this-month':
+      return 'this-month';
+    case 'last-month':
+    case 'prev-month':
+      return 'last-month';
+    case 'last-30-days':
+    case 'past-30':
+    case '30-days':
+      return 'last-30-days';
+    case 'custom':
+      return 'custom';
+    case 'all':
+      return 'all';
+    // Backwards compatibility for Phase 2B slugs:
+    case 'past-7':
+    case 'past-14':
+    case 'past-60':
+      return 'this-week';
+    default:
+      return 'this-week';
+  }
+}
+
+/**
+ * Calculates start and end boundaries for an attendance period in Sydney time.
+ * Default period is 'this-week' (Monday 00:00:00 to Sunday 23:59:59.999 Australia/Sydney).
+ */
+export function getAttendancePeriodBounds(
+  periodParam?: string | null,
+  customFrom?: string | null,
+  customTo?: string | null,
+  refDate: Date = new Date()
+): AttendancePeriodBounds {
+  // If custom date range is provided with valid from/to
+  if (customFrom && customTo) {
+    const fromInstant = fromZonedTime(`${customFrom}T00:00:00`, SYDNEY_TZ);
+    const toInstant = fromZonedTime(`${customTo}T23:59:59.999`, SYDNEY_TZ);
+    return {
+      dateFrom: fromInstant,
+      dateTo: toInstant,
+      label: `${formatSydneyDateOnly(fromInstant, 'd MMM')} – ${formatSydneyDateOnly(toInstant, 'd MMM yyyy')}`,
+      period: 'custom',
+      isDefault: false,
+    };
+  }
+
+  const period = normalizePeriodSlug(periodParam);
+  const nowSydney = toZonedTime(refDate, SYDNEY_TZ);
+
+  switch (period) {
+    case 'today': {
+      const from = fromZonedTime(startOfDay(nowSydney), SYDNEY_TZ);
+      const to = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `Today (${formatSydneyDateOnly(from, 'd MMM yyyy')})`,
+        period: 'today',
+        isDefault: false,
+      };
+    }
+    case 'yesterday': {
+      const y = subDays(nowSydney, 1);
+      const from = fromZonedTime(startOfDay(y), SYDNEY_TZ);
+      const to = fromZonedTime(endOfDay(y), SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `Yesterday (${formatSydneyDateOnly(from, 'd MMM yyyy')})`,
+        period: 'yesterday',
+        isDefault: false,
+      };
+    }
+    case 'last-week': {
+      const prevWeek = subWeeks(nowSydney, 1);
+      const mon = startOfWeek(prevWeek, { weekStartsOn: 1 });
+      const sun = endOfWeek(prevWeek, { weekStartsOn: 1 });
+      const from = fromZonedTime(mon, SYDNEY_TZ);
+      const to = fromZonedTime(sun, SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `Last Week (${formatSydneyDateOnly(from, 'd MMM')} – ${formatSydneyDateOnly(to, 'd MMM yyyy')}`,
+        period: 'last-week',
+        isDefault: false,
+      };
+    }
+    case 'this-month': {
+      const from = fromZonedTime(startOfMonth(nowSydney), SYDNEY_TZ);
+      const to = fromZonedTime(endOfMonth(nowSydney), SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `This Month (${formatSydneyDateOnly(from, 'MMM yyyy')})`,
+        period: 'this-month',
+        isDefault: false,
+      };
+    }
+    case 'last-month': {
+      const prevMonth = subMonths(nowSydney, 1);
+      const from = fromZonedTime(startOfMonth(prevMonth), SYDNEY_TZ);
+      const to = fromZonedTime(endOfMonth(prevMonth), SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `Last Month (${formatSydneyDateOnly(from, 'MMM yyyy')})`,
+        period: 'last-month',
+        isDefault: false,
+      };
+    }
+    case 'last-30-days': {
+      const d30 = subDays(nowSydney, 29);
+      const from = fromZonedTime(startOfDay(d30), SYDNEY_TZ);
+      const to = fromZonedTime(endOfDay(nowSydney), SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `Last 30 Days (${formatSydneyDateOnly(from, 'd MMM')} – ${formatSydneyDateOnly(to, 'd MMM yyyy')})`,
+        period: 'last-30-days',
+        isDefault: false,
+      };
+    }
+    case 'all': {
+      return {
+        dateFrom: null,
+        dateTo: null,
+        label: 'All Records',
+        period: 'all',
+        isDefault: false,
+      };
+    }
+    case 'this-week':
+    default: {
+      const mon = startOfWeek(nowSydney, { weekStartsOn: 1 });
+      const sun = endOfWeek(nowSydney, { weekStartsOn: 1 });
+      const from = fromZonedTime(mon, SYDNEY_TZ);
+      const to = fromZonedTime(sun, SYDNEY_TZ);
+      return {
+        dateFrom: from,
+        dateTo: to,
+        label: `This Week (${formatSydneyDateOnly(from, 'd MMM')} – ${formatSydneyDateOnly(to, 'd MMM yyyy')})`,
+        period: 'this-week',
+        isDefault: true,
+      };
+    }
+  }
+}
+
+export const ATTENDANCE_FLAG_PRESETS = [
+  { label: 'All Records', value: 'all' },
+  { label: 'Needs Review', value: 'needs-review' },
+  { label: 'Overlapping', value: 'overlapping' },
+  { label: 'Missing Times', value: 'missing-times' },
+  { label: 'Invalid Duration', value: 'invalid-duration' },
+  { label: 'Long Shift (>12h)', value: 'long-shift' },
+] as const;
+
+export type AttendanceFlagSlug = (typeof ATTENDANCE_FLAG_PRESETS)[number]['value'];
+
+export const FLAG_SLUG_MAP: Record<string, AttendanceFlagType | 'all' | 'needs-review'> = {
+  all: 'all',
+  'needs-review': 'needs-review',
+  flagged: 'needs-review',
+  overlapping: 'OVERLAPPING',
+  OVERLAPPING: 'OVERLAPPING',
+  'missing-times': 'MISSING_TIMES',
+  MISSING_TIMES: 'MISSING_TIMES',
+  'invalid-duration': 'INVALID_DURATION',
+  INVALID_DURATION: 'INVALID_DURATION',
+  'long-shift': 'LONG_SHIFT',
+  LONG_SHIFT: 'LONG_SHIFT',
+};
+
+export function normalizeFlagSlug(slug?: string | null): AttendanceFlagSlug {
+  if (!slug) return 'all';
+  const val = FLAG_SLUG_MAP[slug];
+  if (!val || val === 'all') return 'all';
+  if (val === 'needs-review') return 'needs-review';
+  if (val === 'OVERLAPPING') return 'overlapping';
+  if (val === 'MISSING_TIMES') return 'missing-times';
+  if (val === 'INVALID_DURATION') return 'invalid-duration';
+  if (val === 'LONG_SHIFT') return 'long-shift';
+  return 'all';
 }
 
 /**
