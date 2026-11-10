@@ -1,20 +1,12 @@
 "use client";
 
-import { useTransition, useState, useEffect } from "react";
+import { useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  Calendar, 
-  User, 
-  Briefcase, 
-  Tag, 
-  AlertTriangle, 
-  X, 
-  Filter,
-  Check,
-  CalendarRange,
-  RotateCcw
-} from "lucide-react";
+import { AlertTriangle, Briefcase, RotateCcw, Tag, User } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -22,14 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DateRangePicker } from "@/components/ui/DateRangePicker";
+import { RangeDatePicker } from "@/components/ui/range-date-picker";
 import {
-  ATTENDANCE_PERIOD_PRESETS,
   ATTENDANCE_FLAG_PRESETS,
-  normalizePeriodSlug,
   normalizeFlagSlug,
+  normalizePeriodSlug,
   type AttendancePeriodValue,
-  type AttendanceFlagSlug,
 } from "@/lib/attendance-logic";
 
 interface AttendanceFiltersProps {
@@ -48,6 +38,16 @@ interface AttendanceFiltersProps {
   activeRangeLabel: string;
 }
 
+interface FilterState {
+  period: AttendancePeriodValue;
+  from: string;
+  to: string;
+  employee: string;
+  project: string;
+  status: string;
+  flag: string;
+}
+
 export function AttendanceFilters({
   employees,
   projects,
@@ -59,292 +59,158 @@ export function AttendanceFilters({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const activePeriod = normalizePeriodSlug(currentParams.period);
-  const activeFlag = normalizeFlagSlug(currentParams.flag);
+  const period: AttendancePeriodValue =
+    currentParams.from && currentParams.to
+      ? "custom"
+      : normalizePeriodSlug(currentParams.period);
+  const employee = currentParams.employee || "all";
+  const project = currentParams.project || "all";
+  const status = currentParams.status || "all";
+  const flag = normalizeFlagSlug(currentParams.flag);
 
-  const [selectedPeriod, setSelectedPeriod] = useState<AttendancePeriodValue>(activePeriod);
-  const [selectedFlag, setSelectedFlag] = useState<AttendanceFlagSlug>(activeFlag);
-  const [selectedEmployee, setSelectedEmployee] = useState(currentParams.employee || "");
-  const [selectedProject, setSelectedProject] = useState(currentParams.project || "");
-  const [selectedStatus, setSelectedStatus] = useState(currentParams.status || "");
-  const [customFrom, setCustomFrom] = useState(currentParams.from || "");
-  const [customTo, setCustomTo] = useState(currentParams.to || "");
+  const employeeOptions = [
+    { value: "all", label: `All employees (${employees.length})` },
+    ...employees.map((name) => ({ value: name, label: name })),
+  ];
 
-  useEffect(() => {
-    setSelectedPeriod(normalizePeriodSlug(currentParams.period));
-    setSelectedFlag(normalizeFlagSlug(currentParams.flag));
-    setSelectedEmployee(currentParams.employee || "");
-    setSelectedProject(currentParams.project || "");
-    setSelectedStatus(currentParams.status || "");
-    setCustomFrom(currentParams.from || "");
-    setCustomTo(currentParams.to || "");
-  }, [currentParams]);
+  const projectOptions = [
+    { value: "all", label: `All projects (${projects.length})` },
+    ...projects.map((item) => ({
+      value: item.number,
+      label: item.name ? `${item.number} · ${item.name}` : item.number,
+    })),
+  ];
 
-  const updateFilters = (newVals: Partial<{
-    period: string;
-    from: string;
-    to: string;
-    employee: string;
-    project: string;
-    status: string;
-    flag: string;
-  }>) => {
-    startTransition(() => {
-      const params = new URLSearchParams();
+  const statusOptions = [
+    { value: "all", label: "All statuses" },
+    ...statuses.map((value) => ({ value, label: value })),
+  ];
 
-      const merged = {
-        period: selectedPeriod,
-        from: customFrom,
-        to: customTo,
-        employee: selectedEmployee,
-        project: selectedProject,
-        status: selectedStatus,
-        flag: selectedFlag,
-        ...newVals,
-      };
+  const isDirty =
+    period !== "this-week" ||
+    employee !== "all" ||
+    project !== "all" ||
+    status !== "all" ||
+    flag !== "all";
 
-      // 1. Period & Custom Dates
-      const targetPeriod = merged.period;
-      if (targetPeriod === "custom") {
-        params.set("period", "custom");
-        if (merged.from) params.set("from", merged.from);
-        if (merged.to) params.set("to", merged.to);
-      } else if (targetPeriod && targetPeriod !== "this-week") {
-        // Omit default 'this-week' from URL for clean human-readable URLs
-        params.set("period", targetPeriod);
-      }
+  const pushFilters = (patch: Partial<FilterState>) => {
+    const merged: FilterState = {
+      period,
+      from: currentParams.from || "",
+      to: currentParams.to || "",
+      employee,
+      project,
+      status,
+      flag,
+      ...patch,
+    };
 
-      // 2. Flag
-      if (merged.flag && merged.flag !== "all") {
-        params.set("flag", merged.flag);
-      }
-
-      // 3. Employee
-      if (merged.employee && merged.employee !== "all") {
-        params.set("employee", merged.employee);
-      }
-
-      // 4. Project
-      if (merged.project && merged.project !== "all") {
-        params.set("project", merged.project);
-      }
-
-      // 5. Status
-      if (merged.status && merged.status !== "all") {
-        params.set("status", merged.status);
-      }
-
-      // Reset page when filters change
-      const queryString = params.toString();
-      router.push(queryString ? `/attendance?${queryString}` : "/attendance");
-    });
-  };
-
-  const handlePeriodChange = (preset: AttendancePeriodValue) => {
-    setSelectedPeriod(preset);
-    if (preset !== "custom") {
-      setCustomFrom("");
-      setCustomTo("");
-      updateFilters({ period: preset, from: "", to: "" });
-    } else {
-      updateFilters({ period: "custom" });
+    const params = new URLSearchParams();
+    if (merged.period !== "this-week") params.set("period", merged.period);
+    if (merged.period === "custom") {
+      if (merged.from) params.set("from", merged.from);
+      if (merged.to) params.set("to", merged.to);
     }
-  };
+    if (merged.employee !== "all") params.set("employee", merged.employee);
+    if (merged.project !== "all") params.set("project", merged.project);
+    if (merged.status !== "all") params.set("status", merged.status);
+    if (merged.flag !== "all") params.set("flag", merged.flag);
 
-  const handleCustomRangeChange = (start: string, end: string) => {
-    setCustomFrom(start);
-    setCustomTo(end);
-    setSelectedPeriod("custom");
-    updateFilters({ period: "custom", from: start, to: end });
-  };
+    const pageSize = searchParams.get("pageSize");
+    if (pageSize) params.set("pageSize", pageSize);
 
-  const handleReset = () => {
+    const query = params.toString();
     startTransition(() => {
-      router.push("/attendance");
+      router.push(query ? `/attendance?${query}` : "/attendance");
     });
   };
-
-  const hasActiveFilters = Boolean(
-    (selectedPeriod !== "this-week" && selectedPeriod !== undefined) ||
-    customFrom ||
-    customTo ||
-    selectedEmployee ||
-    selectedProject ||
-    selectedStatus ||
-    (selectedFlag !== "all" && selectedFlag !== undefined)
-  );
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-4 md:p-5 shadow-xs space-y-4">
-      {/* Top Section: Period Presets & Review State Chips */}
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
-        {/* Period Presets */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5" /> Period
-          </span>
-          {ATTENDANCE_PERIOD_PRESETS.map((p) => {
-            const isActive = selectedPeriod === p.value;
-            return (
-              <button
-                key={p.value}
-                onClick={() => handlePeriodChange(p.value)}
-                className={cn(
-                  "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
-                  isActive
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-                    : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                )}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
+    <div
+      className={cn(
+        "rounded-2xl border border-slate-200/60 bg-white p-3 shadow-xs dark:border-slate-800/60 dark:bg-slate-900",
+        isPending && "opacity-70"
+      )}
+      aria-busy={isPending}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <RangeDatePicker
+          period={period}
+          from={currentParams.from || ""}
+          to={currentParams.to || ""}
+          activeLabel={activeRangeLabel}
+          onChange={(next) => {
+            pushFilters({ period: next.period, from: next.from, to: next.to });
+          }}
+        />
 
-        {/* Review Flag Filter Chips */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Review
-          </span>
-          {ATTENDANCE_FLAG_PRESETS.map((item) => {
-            const isActive = selectedFlag === item.value;
-            const isWarningItem = item.value !== "all";
-            return (
-              <button
-                key={item.value}
-                onClick={() => {
-                  setSelectedFlag(item.value);
-                  updateFilters({ flag: item.value });
-                }}
-                className={cn(
-                  "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
-                  isActive
-                    ? isWarningItem
-                      ? "bg-amber-500 text-slate-950 font-semibold shadow-xs"
-                      : "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                    : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                )}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        <Combobox
+          options={employeeOptions}
+          value={employee}
+          onValueChange={(value) => pushFilters({ employee: value })}
+          placeholder="All employees"
+          searchPlaceholder="Search employees…"
+          icon={<User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          className="w-[170px]"
+          ariaLabel="Employee"
+        />
 
-      {/* Middle Bar: Active Range Indicator & Quick Reset */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/50 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 font-medium">
-            <CalendarRange className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-            <span>Range: {activeRangeLabel}</span>
-          </div>
+        <Combobox
+          options={projectOptions}
+          value={project}
+          onValueChange={(value) => pushFilters({ project: value })}
+          placeholder="All projects"
+          searchPlaceholder="Search projects…"
+          icon={<Briefcase className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          className="w-[220px]"
+          ariaLabel="Project"
+        />
 
-          {selectedPeriod === "custom" && (
-            <DateRangePicker
-              label="Select Custom Dates"
-              startDate={customFrom}
-              endDate={customTo}
-              onRangeChange={handleCustomRangeChange}
-              className="shrink-0"
-            />
-          )}
-        </div>
-
-        {hasActiveFilters && (
-          <button
-            onClick={handleReset}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer font-medium"
+        <Select value={status} onValueChange={(value) => pushFilters({ status: value })}>
+          <SelectTrigger
+            className="h-9 w-[145px] rounded-md text-xs font-medium shadow-xs"
+            aria-label="Status"
           >
-            <RotateCcw className="h-3 w-3" />
-            <span>Reset filters</span>
-          </button>
-        )}
-      </div>
+            <Tag className="mr-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            {statusOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      {/* Bottom Row: Granular Shadcn Dropdown Selectors */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* Employee Selector */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <User className="h-3 w-3" /> Employee
-          </label>
-          <Select
-            value={selectedEmployee || "all"}
-            onValueChange={(val) => {
-              const mapped = val === "all" ? "" : val;
-              setSelectedEmployee(mapped);
-              updateFilters({ employee: mapped });
-            }}
+        <Select value={flag} onValueChange={(value) => pushFilters({ flag: value })}>
+          <SelectTrigger
+            className="h-9 w-[165px] rounded-md text-xs font-medium shadow-xs"
+            aria-label="Review filter"
           >
-            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
-              <SelectValue placeholder="All Employees" />
-            </SelectTrigger>
-            <SelectContent className="max-h-64">
-              <SelectItem value="all">All Employees ({employees.length})</SelectItem>
-              {employees.map((emp) => (
-                <SelectItem key={emp} value={emp}>
-                  {emp}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            <AlertTriangle className="mr-1 h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <SelectValue placeholder="All records" />
+          </SelectTrigger>
+          <SelectContent>
+            {ATTENDANCE_FLAG_PRESETS.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        {/* Project Selector */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <Briefcase className="h-3 w-3" /> Project
-          </label>
-          <Select
-            value={selectedProject || "all"}
-            onValueChange={(val) => {
-              const mapped = val === "all" ? "" : val;
-              setSelectedProject(mapped);
-              updateFilters({ project: mapped });
-            }}
-          >
-            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
-              <SelectValue placeholder="All Projects" />
-            </SelectTrigger>
-            <SelectContent className="max-h-64">
-              <SelectItem value="all">All Projects ({projects.length})</SelectItem>
-              {projects.map((proj) => (
-                <SelectItem key={proj.number} value={proj.number}>
-                  {proj.number} {proj.name ? `— ${proj.name}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Status Selector */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <Tag className="h-3 w-3" /> Approval Status
-          </label>
-          <Select
-            value={selectedStatus || "all"}
-            onValueChange={(val) => {
-              const mapped = val === "all" ? "" : val;
-              setSelectedStatus(mapped);
-              updateFilters({ status: mapped });
-            }}
-          >
-            <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 rounded-xl text-xs h-9 font-medium">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent className="max-h-64">
-              <SelectItem value="all">All Statuses</SelectItem>
-              {statuses.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 px-2.5 text-xs"
+          onClick={() => startTransition(() => router.push("/attendance"))}
+          disabled={!isDirty}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset
+        </Button>
       </div>
     </div>
   );

@@ -149,8 +149,18 @@ export interface WorkGuruTimeSheet {
   taskId?: number;
   TaskId?: number;
   TaskID?: number;
+  taskLineItemId?: number;
+  TaskLineItemId?: number;
+  taskLineItem?: {
+    id?: number;
+    name?: string;
+    taskName?: string;
+    [key: string]: unknown;
+  };
   taskName?: string;
   TaskName?: string;
+  taskDescription?: string;
+  TaskDescription?: string;
   length?: number;
   Length?: number;
   Hours?: number;
@@ -194,6 +204,10 @@ export interface WorkGuruTimeSheet {
   lastModificationTime?: string;
   LastModificationTime?: string;
   lastModifierTime?: string;
+  latitude?: number | null;
+  Latitude?: number | null;
+  longitude?: number | null;
+  Longitude?: number | null;
 }
 
 export interface WorkGuruApiResponse<T> {

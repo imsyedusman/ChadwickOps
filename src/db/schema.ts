@@ -290,6 +290,8 @@ export const attendanceRecords = pgTable('attendance_records', {
   notes: text('notes'),
   creationTime: timestamp('creation_time', { withTimezone: true }),
   lastModifiedTime: timestamp('last_modified_time', { withTimezone: true }),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
   hasFlags: boolean('has_flags').default(false).notNull(),
   flagTypes: jsonb('flag_types').$type<string[]>().default([]).notNull(),
   flags: jsonb('flags').$type<Array<{ type: string; severity: 'warning' | 'error'; message: string }>>().default([]).notNull(),

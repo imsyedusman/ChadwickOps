@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { attendanceRecords, attendanceSyncLogs, projects, tasks } from '@/db/schema';
-import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm';
+import { and, gte, lte, sql, inArray } from 'drizzle-orm';
 import { WorkGuruClient, type WorkGuruTimeSheet } from './workguru';
 import { assessCollection, planOrphanCleanup } from './sync-safety';
 import { createPostgresSyncLock } from './sync-lock';
@@ -16,6 +16,8 @@ import {
   evaluateAttendanceFlags,
   extractEmployeeName,
   extractEmployeeId,
+  extractTimesheetTask,
+  extractTimesheetCoordinates,
 } from './attendance-logic';
 
 export {
@@ -28,6 +30,8 @@ export {
   evaluateAttendanceFlags,
   extractEmployeeName,
   extractEmployeeId,
+  extractTimesheetTask,
+  extractTimesheetCoordinates,
 };
 
 export const ATTENDANCE_SYNC_LOCK_KEY = 'SYNC_LOCK:ATTENDANCE';
@@ -248,14 +252,10 @@ export class AttendanceSyncService {
           projectObj?.projectId
         )?.toString();
 
-        const taskObj = rObj.task || rObj.Task;
-        const remoteTaskId = (
-          remote.taskId ||
-          remote.TaskId ||
-          remote.TaskID ||
-          taskObj?.id ||
-          taskObj?.taskId
-        )?.toString();
+        // WorkGuru timesheets expose the task as `taskLineItem` / `taskLineItemId`
+        // (not `task`), so read every documented shape before giving up on a name.
+        const extractedTask = extractTimesheetTask(remote);
+        const remoteTaskId = extractedTask.workguruTaskId;
 
         // Project Resolution
         let localProject = remoteProjectId ? projectByWgId.get(remoteProjectId) : undefined;
@@ -273,12 +273,7 @@ export class AttendanceSyncService {
 
         // Task Resolution
         const localTask = remoteTaskId ? taskByWgId.get(remoteTaskId) : undefined;
-        const taskNameCandidate = (
-          remote.taskName ||
-          remote.TaskName ||
-          taskObj?.name ||
-          taskObj?.taskName
-        )?.toString().trim();
+        const taskNameCandidate = extractedTask.taskName;
 
         // Date and Time Parsing
         const rawDate = remote.date || remote.Date;
@@ -306,6 +301,9 @@ export class AttendanceSyncService {
           remote.lastModificationTime || remote.LastModificationTime || remote.lastModifierTime || remote.creationTime
         );
 
+        // Only coordinates explicitly returned by WorkGuru; never inferred.
+        const coordinates = extractTimesheetCoordinates(remote);
+
         const employeeName = extractEmployeeName(remote);
         const employeeId = extractEmployeeId(remote);
 
@@ -329,6 +327,8 @@ export class AttendanceSyncService {
           notes: remote.notes || remote.Notes || remote.description || remote.Description || remote.comments || null,
           creationTime,
           lastModifiedTime,
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
           rawPayload: remote,
         });
       }
@@ -364,6 +364,8 @@ export class AttendanceSyncService {
           notes: entry.notes,
           creationTime: entry.creationTime,
           lastModifiedTime: entry.lastModifiedTime,
+          latitude: entry.latitude ?? null,
+          longitude: entry.longitude ?? null,
           hasFlags,
           flagTypes,
           flags: entryFlags,
@@ -401,6 +403,8 @@ export class AttendanceSyncService {
               notes: sql`excluded.notes`,
               creationTime: sql`excluded.creation_time`,
               lastModifiedTime: sql`excluded.last_modified_time`,
+              latitude: sql`excluded.latitude`,
+              longitude: sql`excluded.longitude`,
               hasFlags: sql`excluded.has_flags`,
               flagTypes: sql`excluded.flag_types`,
               flags: sql`excluded.flags`,

@@ -2,7 +2,7 @@
 
 import { getAuthorizedSession } from '@/lib/auth-helpers';
 import { db } from '@/db';
-import { systemConfig, attendanceSyncLogs, attendanceRecords } from '@/db/schema';
+import { systemConfig, attendanceSyncLogs } from '@/db/schema';
 import { AttendanceSyncService } from '@/lib/attendance-sync';
 import { decrypt } from '@/lib/crypto';
 import { eq, desc } from 'drizzle-orm';
@@ -42,6 +42,11 @@ export async function triggerAttendanceSync(options: { daysBack?: number; startD
 }
 
 export async function getLatestAttendanceSyncStatus() {
+  const session = await getAuthorizedSession('attendance');
+  if (!session) {
+    return { success: false, error: 'You do not have access to attendance records.' };
+  }
+
   try {
     const latestLog = await db.query.attendanceSyncLogs.findFirst({
       orderBy: [desc(attendanceSyncLogs.timestamp)],

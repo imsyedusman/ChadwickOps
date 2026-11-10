@@ -7,7 +7,11 @@ import {
   extractEmployeeName,
   extractEmployeeId,
   getAttendancePeriodBounds,
+  getAttendancePresetRange,
   formatSydneyDateTime,
+  extractTimesheetTask,
+  extractTimesheetCoordinates,
+  evaluateTimingReview,
   SYDNEY_TZ,
 } from './attendance-logic';
 import { toZonedTime } from 'date-fns-tz';
@@ -256,4 +260,103 @@ test('formatSydneyDateTime displays Sydney time correctly without double offset'
   const syncUtc = new Date('2026-11-10T09:12:02.913Z');
   const formatted = formatSydneyDateTime(syncUtc);
   assert.strictEqual(formatted, '10 Nov 2026, 8:12 PM');
+});
+
+test('extractTimesheetTask reads the WorkGuru taskLineItem shape', () => {
+  assert.deepStrictEqual(
+    extractTimesheetTask({ taskLineItemId: 5604586, taskLineItem: { id: 5604586, name: '07 - Wiring' } }),
+    { workguruTaskId: '5604586', taskName: '07 - Wiring' }
+  );
+  assert.deepStrictEqual(
+    extractTimesheetTask({ taskId: 42, task: { id: 42, name: 'Install' } }),
+    { workguruTaskId: '42', taskName: 'Install' }
+  );
+  assert.deepStrictEqual(
+    extractTimesheetTask({ task: 'Site work' }),
+    { workguruTaskId: null, taskName: 'Site work' }
+  );
+  assert.deepStrictEqual(extractTimesheetTask({}), { workguruTaskId: null, taskName: null });
+});
+
+test('extractTimesheetCoordinates reads only explicit API coordinates', () => {
+  assert.deepStrictEqual(
+    extractTimesheetCoordinates({ latitude: -33.8688, longitude: 151.2093 }),
+    { latitude: -33.8688, longitude: 151.2093 }
+  );
+  assert.deepStrictEqual(
+    extractTimesheetCoordinates({ location: { latitude: 1, longitude: 2 } }),
+    { latitude: 1, longitude: 2 }
+  );
+  assert.deepStrictEqual(
+    extractTimesheetCoordinates({ coordinates: { lat: -33.8, lon: 151.2 } }),
+    { latitude: -33.8, longitude: 151.2 }
+  );
+  assert.strictEqual(extractTimesheetCoordinates({ latitude: null, longitude: null }), null);
+  assert.strictEqual(extractTimesheetCoordinates({ creationTime: '2026-11-10T06:30:00' }), null);
+  assert.strictEqual(extractTimesheetCoordinates({ latitude: 100, longitude: 2 }), null);
+  assert.strictEqual(extractTimesheetCoordinates({ latitude: 0, longitude: 0 }), null);
+});
+
+test('evaluateTimingReview classifies advance, during and after without treating creation as clock-in', () => {
+  const start = parseWorkGuruWallClockDate('2026-11-10', '07:00:00')!;
+  const finish = parseWorkGuruWallClockDate('2026-11-10', '15:00:00')!;
+  const at = (offsetMinutes: number) => new Date(start.getTime() + offsetMinutes * 60000);
+
+  const before = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(-45) },
+    30
+  );
+  assert.strictEqual(before.status, 'in-advance');
+  assert.strictEqual(before.differenceMinutes, 45);
+  assert.strictEqual(before.needsReview, true);
+
+  const during = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(60) },
+    30
+  );
+  assert.strictEqual(during.status, 'during');
+  assert.strictEqual(during.needsReview, false);
+
+  const afterSoon = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(8 * 60 + 10) },
+    30
+  );
+  assert.strictEqual(afterSoon.status, 'after');
+  assert.strictEqual(afterSoon.differenceMinutes, 10);
+  assert.strictEqual(afterSoon.needsReview, false);
+
+  const afterLate = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: at(8 * 60 + 90) },
+    30
+  );
+  assert.strictEqual(afterLate.status, 'after');
+  assert.strictEqual(afterLate.needsReview, true);
+
+  const unknown = evaluateTimingReview(
+    { startTime: start, finishTime: finish, creationTime: null },
+    30
+  );
+  assert.strictEqual(unknown.status, 'unknown');
+
+  // A missing finish time can still be compared against the start.
+  const advanceNoFinish = evaluateTimingReview(
+    { startTime: start, finishTime: null, creationTime: at(-90) },
+    30
+  );
+  assert.strictEqual(advanceNoFinish.status, 'in-advance');
+  assert.strictEqual(advanceNoFinish.needsReview, true);
+
+  const noTimes = evaluateTimingReview(
+    { startTime: null, finishTime: null, creationTime: at(0) },
+    30
+  );
+  assert.strictEqual(noTimes.status, 'unknown');
+});
+
+test('getAttendancePresetRange returns the Sydney Monday-Sunday week', () => {
+  const ref = new Date('2026-11-10T22:00:00.000Z');
+  assert.deepStrictEqual(getAttendancePresetRange('this-week', ref), {
+    from: '2026-11-09',
+    to: '2026-11-15',
+  });
 });

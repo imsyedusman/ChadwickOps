@@ -41,6 +41,8 @@ export interface ParsedTimesheetEntry {
   notes?: string | null;
   creationTime: Date | null;
   lastModifiedTime: Date | null;
+  latitude?: number | null;
+  longitude?: number | null;
   rawPayload?: unknown;
 }
 
@@ -114,6 +116,130 @@ export function extractEmployeeId(remote: unknown): string | null {
     const uId = u.id || u.Id || u.userId || u.UserId;
     if (uId !== undefined && uId !== null) {
       return String(uId);
+    }
+  }
+
+  return null;
+}
+
+export interface ExtractedTimesheetTask {
+  workguruTaskId: string | null;
+  taskName: string | null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function firstNonEmptyString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/**
+ * Reads the task from a WorkGuru timesheet row.
+ *
+ * WorkGuru's timesheet payloads use `taskLineItemId` + `taskLineItem.name`;
+ * other endpoints use `task`/`taskName`. All accepted shapes are read here so
+ * the sync never drops a task name that the API actually returned.
+ */
+export function extractTimesheetTask(remote: unknown): ExtractedTimesheetTask {
+  const r = asRecord(remote);
+  if (!r) return { workguruTaskId: null, taskName: null };
+
+  const lineItem = asRecord(r.taskLineItem) ?? asRecord(r.TaskLineItem);
+  const taskValue = r.task ?? r.Task;
+  const task = asRecord(taskValue);
+  const taskString = typeof taskValue === 'string' ? taskValue.trim() : null;
+
+  const idValue =
+    r.taskLineItemId ??
+    r.TaskLineItemId ??
+    r.taskId ??
+    r.TaskId ??
+    r.TaskID ??
+    lineItem?.id ??
+    lineItem?.taskId ??
+    task?.id ??
+    task?.taskId;
+
+  const taskName = firstNonEmptyString([
+    lineItem?.name,
+    lineItem?.taskName,
+    task?.name,
+    task?.taskName,
+    taskString,
+    r.taskName,
+    r.TaskName,
+    r.taskDescription,
+    r.TaskDescription,
+  ]);
+
+  const workguruTaskId =
+    idValue === undefined || idValue === null || String(idValue).trim() === ''
+      ? null
+      : String(idValue).trim();
+
+  return { workguruTaskId, taskName };
+}
+
+export interface TimesheetCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * A location only counts when both coordinates are real numbers inside the
+ * valid range and are not the 0,0 "no fix" sentinel.
+ */
+export function hasGenuineAttendanceLocation(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): boolean {
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') return false;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return false;
+  return !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+}
+
+function toCoordinate(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(String(value).trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Reads only coordinates explicitly present on the WorkGuru record.
+ * Never derives a location from timestamps, project data or an address.
+ */
+export function extractTimesheetCoordinates(remote: unknown): TimesheetCoordinates | null {
+  const r = asRecord(remote);
+  if (!r) return null;
+
+  const nested =
+    asRecord(r.coordinates) ??
+    asRecord(r.Coordinates) ??
+    asRecord(r.location) ??
+    asRecord(r.Location);
+  const pairs: Array<[unknown, unknown]> = [
+    [r.latitude, r.longitude],
+    [r.Latitude, r.Longitude],
+    [r.lat, r.lng],
+    [r.Lat, r.Lng],
+    [r.lat, r.lon],
+    [nested?.latitude, nested?.longitude],
+    [nested?.Latitude, nested?.Longitude],
+    [nested?.lat, nested?.lng],
+    [nested?.lat, nested?.lon],
+  ];
+
+  for (const [rawLat, rawLng] of pairs) {
+    const latitude = toCoordinate(rawLat);
+    const longitude = toCoordinate(rawLng);
+    if (hasGenuineAttendanceLocation(latitude, longitude)) {
+      return { latitude: latitude as number, longitude: longitude as number };
     }
   }
 
@@ -260,6 +386,123 @@ export function formatSydneyDateOnly(date: Date | string | null, pattern = 'EEE,
   return formatInTimeZone(d, SYDNEY_TZ, pattern);
 }
 
+export const DEFAULT_TIMING_THRESHOLD_MINUTES = 30;
+
+/** Threshold for advance/after timing reviews. Override with ATTENDANCE_TIMING_THRESHOLD_MINUTES. */
+export function getTimingThresholdMinutes(): number {
+  const raw = typeof process !== 'undefined' ? process.env.ATTENDANCE_TIMING_THRESHOLD_MINUTES : undefined;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_TIMING_THRESHOLD_MINUTES;
+  return Math.min(24 * 60, Math.round(parsed));
+}
+
+export type TimingStatus = 'in-advance' | 'during' | 'after' | 'unknown';
+
+export interface TimingReview {
+  status: TimingStatus;
+  /** Minutes between creation and the relevant boundary (start for advance/during, finish for after). */
+  differenceMinutes: number | null;
+  thresholdMinutes: number;
+  needsReview: boolean;
+  label: string;
+  detail: string;
+}
+
+export function formatTimingMinutes(minutes: number | null): string {
+  if (minutes === null) return '—';
+  const abs = Math.abs(Math.round(minutes));
+  if (abs < 60) return `${abs} min`;
+  const hours = Math.floor(abs / 60);
+  const rest = abs % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+/**
+ * Compares the WorkGuru creation time (an audit timestamp, never a clock-in)
+ * with the manually entered start/finish. Returns a derived review flag; it is
+ * not persisted because it depends on the configured threshold.
+ */
+export function evaluateTimingReview(
+  entry: { startTime: Date | null; finishTime: Date | null; creationTime: Date | null },
+  thresholdMinutes: number = DEFAULT_TIMING_THRESHOLD_MINUTES
+): TimingReview {
+  const threshold = Number.isFinite(thresholdMinutes) && thresholdMinutes >= 0
+    ? Math.min(24 * 60, Math.round(thresholdMinutes))
+    : DEFAULT_TIMING_THRESHOLD_MINUTES;
+
+  if (!entry.creationTime) {
+    return {
+      status: 'unknown',
+      differenceMinutes: null,
+      thresholdMinutes: threshold,
+      needsReview: false,
+      label: 'No creation time',
+      detail: 'WorkGuru did not return a creation time for this entry.',
+    };
+  }
+
+  if (entry.startTime === null && entry.finishTime === null) {
+    return {
+      status: 'unknown',
+      differenceMinutes: null,
+      thresholdMinutes: threshold,
+      needsReview: false,
+      label: 'No times to compare',
+      detail: 'A start or finish time is needed to compare with the creation time.',
+    };
+  }
+
+  const created = entry.creationTime.getTime();
+  const start = entry.startTime?.getTime() ?? null;
+  const finish = entry.finishTime?.getTime() ?? null;
+
+  if (start !== null && created < start) {
+    const difference = Math.round((start - created) / 60000);
+    return {
+      status: 'in-advance',
+      differenceMinutes: difference,
+      thresholdMinutes: threshold,
+      needsReview: difference > threshold,
+      label: `In advance · ${formatTimingMinutes(difference)}`,
+      detail: `Created ${formatTimingMinutes(difference)} before the task started (threshold ${formatTimingMinutes(threshold)}).`,
+    };
+  }
+
+  if (finish !== null && created > finish) {
+    const difference = Math.round((created - finish) / 60000);
+    return {
+      status: 'after',
+      differenceMinutes: difference,
+      thresholdMinutes: threshold,
+      needsReview: difference > threshold,
+      label: `After task · ${formatTimingMinutes(difference)}`,
+      detail: `Created ${formatTimingMinutes(difference)} after the task finished (threshold ${formatTimingMinutes(threshold)}).`,
+    };
+  }
+
+  if (start === null) {
+    const difference = Math.round((finish! - created) / 60000);
+    return {
+      status: 'during',
+      differenceMinutes: difference,
+      thresholdMinutes: threshold,
+      needsReview: false,
+      label: 'During task',
+      detail: `Created ${formatTimingMinutes(difference)} before the task finished, while it was open.`,
+    };
+  }
+
+  const difference = Math.round((created - start) / 60000);
+  return {
+    status: 'during',
+    differenceMinutes: difference,
+    thresholdMinutes: threshold,
+    needsReview: false,
+    label: 'During task',
+    detail: `Created ${formatTimingMinutes(difference)} after the task started, while it was open.`,
+  };
+}
+
 export const ATTENDANCE_PERIOD_PRESETS = [
   { label: 'Today', value: 'today' },
   { label: 'Yesterday', value: 'yesterday' },
@@ -268,7 +511,7 @@ export const ATTENDANCE_PERIOD_PRESETS = [
   { label: 'This Month', value: 'this-month' },
   { label: 'Last Month', value: 'last-month' },
   { label: 'Last 30 Days', value: 'last-30-days' },
-  { label: 'Custom Range', value: 'custom' },
+  { label: 'Custom', value: 'custom' },
 ] as const;
 
 export type AttendancePeriodValue = (typeof ATTENDANCE_PERIOD_PRESETS)[number]['value'] | 'all';
@@ -380,7 +623,7 @@ export function getAttendancePeriodBounds(
       return {
         dateFrom: from,
         dateTo: to,
-        label: `Last Week (${formatSydneyDateOnly(from, 'd MMM')} – ${formatSydneyDateOnly(to, 'd MMM yyyy')}`,
+        label: `Last Week (${formatSydneyDateOnly(from, 'd MMM')} – ${formatSydneyDateOnly(to, 'd MMM yyyy')})`,
         period: 'last-week',
         isDefault: false,
       };
@@ -447,20 +690,24 @@ export function getAttendancePeriodBounds(
 }
 
 export const ATTENDANCE_FLAG_PRESETS = [
-  { label: 'All Records', value: 'all' },
-  { label: 'Needs Review', value: 'needs-review' },
+  { label: 'All records', value: 'all' },
+  { label: 'Needs review', value: 'needs-review' },
+  { label: 'Timing review', value: 'timing-review' },
   { label: 'Overlapping', value: 'overlapping' },
-  { label: 'Missing Times', value: 'missing-times' },
-  { label: 'Invalid Duration', value: 'invalid-duration' },
-  { label: 'Long Shift (>12h)', value: 'long-shift' },
+  { label: 'Missing times', value: 'missing-times' },
+  { label: 'Invalid duration', value: 'invalid-duration' },
+  { label: 'Long shift (>12h)', value: 'long-shift' },
 ] as const;
 
 export type AttendanceFlagSlug = (typeof ATTENDANCE_FLAG_PRESETS)[number]['value'];
 
-export const FLAG_SLUG_MAP: Record<string, AttendanceFlagType | 'all' | 'needs-review'> = {
+export const FLAG_SLUG_MAP: Record<string, AttendanceFlagType | 'all' | 'needs-review' | 'timing-review'> = {
   all: 'all',
   'needs-review': 'needs-review',
   flagged: 'needs-review',
+  'timing-review': 'timing-review',
+  timing: 'timing-review',
+  TIMING_REVIEW: 'timing-review',
   overlapping: 'OVERLAPPING',
   OVERLAPPING: 'OVERLAPPING',
   'missing-times': 'MISSING_TIMES',
@@ -476,11 +723,33 @@ export function normalizeFlagSlug(slug?: string | null): AttendanceFlagSlug {
   const val = FLAG_SLUG_MAP[slug];
   if (!val || val === 'all') return 'all';
   if (val === 'needs-review') return 'needs-review';
+  if (val === 'timing-review') return 'timing-review';
   if (val === 'OVERLAPPING') return 'overlapping';
   if (val === 'MISSING_TIMES') return 'missing-times';
   if (val === 'INVALID_DURATION') return 'invalid-duration';
   if (val === 'LONG_SHIFT') return 'long-shift';
   return 'all';
+}
+
+/** Returns the Sydney-local YYYY-MM-DD strings for a period preset. */
+export function getAttendancePresetRange(
+  period: AttendancePeriodValue,
+  refDate: Date = new Date()
+): { from: string; to: string } {
+  const bounds = getAttendancePeriodBounds(
+    period === 'custom' ? 'this-week' : period,
+    null,
+    null,
+    refDate
+  );
+  return {
+    from: bounds.dateFrom ? formatInTimeZone(bounds.dateFrom, SYDNEY_TZ, 'yyyy-MM-dd') : '',
+    to: bounds.dateTo ? formatInTimeZone(bounds.dateTo, SYDNEY_TZ, 'yyyy-MM-dd') : '',
+  };
+}
+
+export function getAttendancePresetLabel(period: AttendancePeriodValue): string {
+  return ATTENDANCE_PERIOD_PRESETS.find((preset) => preset.value === period)?.label ?? 'This Week';
 }
 
 /**
